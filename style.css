@@ -1,0 +1,409 @@
+* {
+    margin: 0;
+    padding: 0;
+    font-family: sans-serif;
+    box-sizing: border-box;
+}
+
+#home {
+
+}
+
+.btn-warning {
+    border-radius: 20px;
+    background-color: lightcoral;
+}
+
+.btn-warning:hover {
+    background-color: coral;
+}
+
+.navbar-brand {
+    margin-left: 300px;
+}
+
+.navbar-nav {
+    margin-left: 400px;
+}
+
+#navbarSupportedContent .btn-warning {
+    margin-right: 250px;
+}
+
+.nav-item {
+    padding-top: 10px;
+    padding-left: 30px;
+}
+
+#about {
+    width: 100%;
+    height: 92.4vh;
+}
+
+#about .chap {
+    float: left;
+    width: 50%;
+    height: 100%;
+}
+
+.chap .logo {
+    margin-top: 250px;
+    margin-bottom: 20px;
+}
+
+.chap .name {
+    font-size: 50px;
+    font-family: sans-serif;
+    letter-spacing: 1px;
+    margin-bottom: -5px;
+}
+
+.chap .jobs {
+    font-family: "Droid Sans Mono";
+    margin-bottom: 50px;
+}
+
+.buttons {
+    margin-bottom: 40px;
+}
+
+.chap .btn-warning {
+    padding: 10px 20px;
+}
+
+.chap .btn-dark {
+    border-radius: 20px;
+    padding: 10px 20px;
+}
+
+#about .ong {
+    float: right;
+    width: 50%;
+    height: 100%;
+}
+
+.ong .img {
+    width: 100%;
+    height: 100%;
+}
+
+.icon {
+    font-size: 25px;
+    background-color: white;
+    border-radius: 50px;
+}
+
+.ico {
+    margin-left: 5px;
+    border: 3px solid coral;
+    border-radius: 50%;
+    padding: 10px;
+    color: coral;
+}
+
+.ico:hover {
+    background-color: coral;
+    color: white;
+}
+
+.bottom {
+    width: 50%;
+    height: 130px;
+    box-shadow: 1px 1px 10px 1px black;
+    border-radius: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 25%;
+}
+
+.bottom .usages {
+    width: 16.5%;
+    height: 2vh;
+    margin-bottom: 60px;
+    margin-left: 80px;
+}
+
+.usages .par {
+    padding-bottom: 10px;
+}
+
+#info {
+    width: 100%;
+    height: 40vh;
+}
+
+#info .chaptaraf {
+    width: 30%;
+    height: 100%;
+    float: left;
+}
+
+.chaptaraf .img {
+    width: 300px;
+    height: 300px;
+    margin-left: 50px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: 1px solid black;
+    padding: 3px;
+}
+
+#info .ongtaraf {
+    float: right;
+    width: 70%;
+    height: 100%;
+    text-align: left;
+}
+
+#service {
+    width: 100%;
+    height: 50vh;
+    margin: auto;
+}
+
+#service .inf, .mywork {
+    text-align: center;
+    font-family: sans-serif;
+}
+
+#service .par {
+    text-align: center;
+    margin-bottom: 60px;
+}
+
+
+.cards {
+    margin-left: 30px;
+}
+
+#service .card {
+    display: inline-block;
+    width: 20%;
+    margin-left: 1%;
+}
+
+#service .cards .card .card-body i {
+    margin-left: 100px;
+    font-size: 30px;
+}
+
+.card:hover {
+    background-color: coral;
+    color: white;
+    transition: 0.5s;
+}
+
+#whychoise {
+    width: 100%;
+    height: 50vh;
+    display: inline-block;
+}
+
+#whychoise h4 {
+    text-align: center;
+    font-family: sans-serif;
+    color: #555;
+}
+
+#whychoise h3 {
+    text-align: center;
+    font-family: sans-serif;
+    font-weight: bold;
+    font-size: 32px;
+}
+
+#whychoise p {
+    text-align: center;
+    margin-bottom: 6%;
+}
+
+#whychoise .progress h5 {
+    margin-bottom: 200px;
+}
+
+#whychoise .progress {
+    width: 35%;
+    height: 3vh;
+    display: inline-block;
+    margin-left: 100px;
+    margin-top: 50px;
+    background-color: coral;
+}
+
+#portfolio {
+    width: 100%;
+    height: 60vh;
+}
+
+#portfolio h4 {
+    text-align: center;
+    font-family: sans-serif;
+    color: #555;
+}
+
+#portfolio h3 {
+    text-align: center;
+}
+
+#portfolio p {
+    text-align: center;
+    margin-bottom: 50px;
+}
+
+.png {
+    width: 30%;
+    height: 20vh;
+    display: inline-block;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+
+#testmonial {
+    width: 100%;
+    height: 60vh;
+    margin-top: 400px;
+}
+
+#testmonial h4 {
+    text-align: center;
+    color: #555555;
+}
+
+#testmonial h3 {
+    text-align: center;
+    color: #222;
+}
+
+#testmonial p {
+    text-align: center;
+    margin-bottom: 50px;
+}
+
+#testmonial .img {
+    width: 10%;
+    height: 8vh;
+    border-radius: 50%;
+    margin-left: 290px;
+    margin-bottom: 180px;
+    margin-top: 20px;
+}
+
+.carousel-inner {
+    box-shadow: 1px 1px 10px 1px black;
+    width: 50%;
+    margin-left: 320px;
+}
+
+.he {
+    text-align: center;
+    font-family: sans-serif;
+    color: #555;
+}
+
+.fun {
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 30px;
+}
+
+#blog {
+    width: 100%;
+    height: 50vh;
+
+}
+
+#blog .par {
+    text-align: center;
+    margin-bottom: 50px;
+}
+
+#blog .cards {
+    margin-left: 150px;
+}
+
+#blog .card {
+    width: 33.3%;
+    display: inline-block;
+    margin-left: 40px;
+}
+
+#blog .card-title {
+    padding-bottom: 20px;
+}
+
+#blog .hireus {
+    width: 73%;
+    height: 10vh;
+    background-color: coral;
+    margin-left: 15%;
+    margin-top: 10%;
+    display: inline-block;
+    border: 1px solid #555;
+    border-radius: 5px;
+}
+
+.hireus .hire, .hirep {
+    width: 80%;
+    float: left;
+    margin-left: 10px;
+}
+.hireus .hire{
+    margin-top: 10px;
+}
+
+.hireus .btn-light {
+    float: right;
+    margin-right: 20px;
+
+}
+
+#foot{
+    width: 100%;
+    height: 40vh;
+    margin-top: 500px;
+    background-color: #fff;
+    box-shadow: 1px 1px 10px 1px #666;
+}
+
+#foot .chap{
+    margin-top: 50px;
+    float: left;
+    width: 50%;
+    height: 100%;
+}
+
+#foot .ong{
+    float: right;
+    margin-top: 50px;
+}
+
+#foot a{
+    text-decoration: none;
+}
+
+#foot a:hover{
+    text-decoration: underline;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
