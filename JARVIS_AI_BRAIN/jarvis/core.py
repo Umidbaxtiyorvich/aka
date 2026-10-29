@@ -27,6 +27,7 @@ from .pos import POSManager
 from .research import Research, ResearchError
 from .resource_guard import ResourceGuard
 from .router import Router
+from .sandbox import Sandbox
 from .studio import Studio
 from .telegram_bot import TelegramAssistant
 from .telephony import Telephony
@@ -77,6 +78,7 @@ class JarvisCore:
         self.telephony = Telephony(self.settings, self.approvals)
         self.planner = Planner(self)
         self.decisions = DecisionJournal(self)
+        self.sandbox = Sandbox(self)
         self.improver = Improver(self)
         self.agents = AgentManager(self)
 

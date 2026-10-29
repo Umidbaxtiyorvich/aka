@@ -24,7 +24,7 @@ ACTIONS: dict[str, tuple[str, str, bool, str]] = {
     "local_draft": ("low", "B", True, "Mahalliy loyiha fayli yoki yozuv yaratiladi"),
     "shell_read": ("low", "A", True, "Faqat o'qiydigan buyruq (fayl ro'yxati, holat)"),
     "shell_command": ("medium", "C", False, "Kompyuterda buyruq bajariladi"),
-    "sandbox_run": ("medium", "C", True, "Kod cheklangan vaqtinchalik papkada ishga tushiriladi"),
+    "sandbox_run": ("low", "B", True, "Xavfsiz deb topilgan kod cheklangan vaqtinchalik papkada ishga tushiriladi"),
     "sandbox_unsafe_run": ("high", "E", False, "Xavfli deb topilgan kod cheklangan muhitda ishga tushiriladi"),
     "settings_change": ("medium", "C", True, "JARVIS sozlamasi o'zgaradi"),
     "code_change": ("medium", "C", True, "Alohida git branch'ga commit (asosiy branch o'zgarmaydi)"),

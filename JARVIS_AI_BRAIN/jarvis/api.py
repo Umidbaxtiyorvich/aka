@@ -24,6 +24,7 @@ from .memory import MemoryError_
 from .planner import PlannerError
 from .pos import POSError
 from .research import ResearchError
+from .sandbox import SandboxError
 from .studio import StudioError
 from .telegram_bot import TelegramError
 from .telephony import TelephonyError
@@ -31,7 +32,7 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError)
+               DecisionError, SandboxError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
@@ -171,6 +172,12 @@ class ProposalIn(BaseModel):
     title: str
     diff: str
     description: str = ""
+
+class SandboxIn(BaseModel):
+    code: str
+    allow_network: bool = False
+    stdin: str | None = None
+    approval_id: int | None = None
 
 class CallIn(BaseModel):
     phone: str
@@ -419,6 +426,21 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.post("/api/policy/evaluate")
     def policy_eval(body: OpIn):
         return C().policy.evaluate(body.op, body.params.get("level"), command=body.params.get("command")).public()
+
+    # Sandbox
+    @app.get("/api/sandbox")
+    def sb_info():
+        c = C()
+        return {"isolation": c.sandbox.isolation_info(), "history": c.sandbox.history(30)}
+
+    @app.post("/api/sandbox/python")
+    def sb_python(body: SandboxIn):
+        return guard(C().sandbox.run_python, body.code, allow_network=body.allow_network, stdin=body.stdin,
+                     approval_id=body.approval_id)
+
+    @app.post("/api/sandbox/command")
+    def sb_cmd(body: TextIn):
+        return guard(C().sandbox.run_command, body.text)
 
     # Planner
     @app.post("/api/plans")

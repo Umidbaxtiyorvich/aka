@@ -128,7 +128,9 @@ class Improver:
         try:
             self._apply(wt, rel, prop["diff"])
             proj = wt / rel if rel else wt
-            env = os.environ | {"JARVIS_HOME": tempfile.mkdtemp(prefix="jarvis_test_home_")}
+            # Testlar maxfiy kalitlarsiz muhitda ishlaydi (token/key/secret/password o'zgaruvchilari olib tashlanadi)
+            env = {k: v for k, v in os.environ.items() if not re.search(r"(?i)(token|key|secret|pass|credential)", k)}
+            env["JARVIS_HOME"] = tempfile.mkdtemp(prefix="jarvis_test_home_")
             p = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"], cwd=proj, env=env,
                                capture_output=True, text=True, timeout=timeout)
             ok = p.returncode == 0
