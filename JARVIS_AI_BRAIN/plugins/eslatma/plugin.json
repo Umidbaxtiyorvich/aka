@@ -1,0 +1,9 @@
+{
+  "name": "eslatma",
+  "version": "1.0.0",
+  "description": "Matndan sanali eslatmalarni ajratib, xotiraga yozishni va bildirishnoma yuborishni so'raydi.",
+  "entry": "main.py",
+  "permissions": ["memory.write", "notify"],
+  "dependencies": [],
+  "config": {}
+}

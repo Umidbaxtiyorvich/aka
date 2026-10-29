@@ -25,6 +25,7 @@ from .instagram import InstagramManager
 from .kgraph import KnowledgeGraph
 from .notify import Notifier
 from .planner import Planner
+from .plugins import PluginManager
 from .policy import PolicyEngine
 from .pos import POSManager
 from .research import Research, ResearchError
@@ -86,6 +87,7 @@ class JarvisCore:
         self.sandbox = Sandbox(self)
         self.backup = BackupManager(self)
         self.dag = TaskGraph(self)
+        self.plugins = PluginManager(self)
         self.improver = Improver(self)
         self.agents = AgentManager(self)
 

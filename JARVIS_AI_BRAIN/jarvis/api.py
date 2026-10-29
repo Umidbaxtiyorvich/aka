@@ -25,6 +25,7 @@ from .instagram import InstagramError, suggest_hashtags
 from .kgraph import KGError
 from .memory import MemoryError_
 from .planner import PlannerError
+from .plugins import PluginError
 from .pos import POSError
 from .research import ResearchError
 from .sandbox import SandboxError
@@ -35,7 +36,7 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError, DagError, KGError)
+               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
@@ -202,6 +203,12 @@ class KGLinkIn(BaseModel):
     rel: str
     dst_type: str
     dst_ref: str
+
+class PluginRunIn(BaseModel):
+    input: dict = {}
+
+class PluginStatusIn(BaseModel):
+    status: str
 
 class CallIn(BaseModel):
     phone: str
@@ -519,6 +526,35 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.post("/api/kg/rebuild")
     def kg_rebuild():
         return C().kgraph.rebuild()
+
+    # Plugins
+    @app.get("/api/plugins")
+    def pl_list():
+        return C().plugins.discover()
+
+    @app.post("/api/plugins/{name}/request-enable")
+    def pl_req(name: str):
+        return guard(C().plugins.request_enable, name)
+
+    @app.post("/api/plugins/{name}/enable")
+    def pl_enable(name: str, body: RestoreIn):
+        return guard(C().plugins.enable, name, body.approval_id)
+
+    @app.post("/api/plugins/{name}/status")
+    def pl_status(name: str, body: PluginStatusIn):
+        return guard(C().plugins.set_status, name, body.status)
+
+    @app.post("/api/plugins/{name}/config")
+    def pl_config(name: str, body: dict):
+        return guard(C().plugins.configure, name, body)
+
+    @app.post("/api/plugins/{name}/run")
+    def pl_run(name: str, body: PluginRunIn):
+        return guard(C().plugins.run, name, body.input)
+
+    @app.get("/api/plugins/{name}/logs")
+    def pl_logs(name: str):
+        return C().plugins.logs(name)
 
     # Sandbox
     @app.get("/api/sandbox")

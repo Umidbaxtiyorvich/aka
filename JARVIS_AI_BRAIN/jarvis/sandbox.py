@@ -257,6 +257,15 @@ class Sandbox:
                     purpose="Xavfli deb topilgan kodni cheklangan muhitda sinash")
                 return {"status": "needs_approval", "findings": findings, "approval": appr}
             self.core.approvals.authorize_execution(approval_id, payload)
+        return self.execute(code, allow_network=allow_network, stdin=stdin, timeout=timeout, memory_mb=memory_mb,
+                            files=files, findings=findings, approval_id=approval_id)
+
+    def execute(self, code: str, *, allow_network: bool, stdin: str | None, timeout: int, memory_mb: int,
+                files: dict[str, str] | None = None, findings: list | None = None, approval_id: int | None = None,
+                kind: str = "python") -> dict:
+        """Ichki ijro. Tasdiq/ruxsat tekshiruvi chaqiruvchida (run_python yoki PluginManager) bajariladi."""
+        s = self.core.settings
+        findings = findings if findings is not None else static_check(code, allow_network)
         limits = {"timeout_sec": timeout, "memory_mb": memory_mb, "network": allow_network}
         backend = s.sandbox_backend
         if backend == "docker" and not shutil.which("docker"):
@@ -290,7 +299,7 @@ class Sandbox:
             if res["status"] not in ("timeout", "error_infra"):
                 break
         info = self.isolation_info()
-        out = self._record("python", code, findings, res, limits, backend, info["level"], attempts, approval_id)
+        out = self._record(kind, code, findings, res, limits, backend, info["level"], attempts, approval_id)
         return out | {"created_files": res.get("files", [])}
 
     def run_command(self, command: str, *, timeout: int | None = None) -> dict:

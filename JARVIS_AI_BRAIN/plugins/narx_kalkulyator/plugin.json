@@ -1,0 +1,13 @@
+{
+  "name": "narx_kalkulyator",
+  "version": "1.0.0",
+  "description": "Tannarxdan ustama va QQS bilan sotish narxini hisoblaydi (tarmoqsiz, ruxsatsiz).",
+  "entry": "main.py",
+  "permissions": [],
+  "dependencies": [],
+  "config": {
+    "vat_percent": {"type": "number", "default": 12, "required": true, "description": "QQS foizi"},
+    "markup_percent": {"type": "number", "default": 25, "required": true, "description": "Ustama foizi"},
+    "round_to": {"type": "number", "default": 100, "required": false, "description": "Yaxlitlash (so'm)"}
+  }
+}
