@@ -120,6 +120,11 @@ class AgentManager:
             self.core.audit.error(agent.key, msg)
         finally:
             agent.current_task = None
+            if hasattr(self.core, "kgraph"):
+                try:
+                    self.core.kgraph.on_task(t)
+                except Exception:
+                    pass
 
     def task(self, tid: int) -> dict:
         return self.core.db.one("SELECT * FROM tasks WHERE id=?", (tid,))

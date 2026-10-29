@@ -54,6 +54,7 @@ class Memory:
     def __init__(self, db: Database, audit: Audit):
         self.db, self.audit = db, audit
         db.ensure_columns("memories", PROVENANCE_COLUMNS)
+        self.on_add = None      # Knowledge Graph ilgagi
 
     def add(self, content: str, kind: str = "long_term", *, project: str | None = None,
             source: str = "user", confidence: float = 1.0, info_type: str | None = None, reference: str = "",
@@ -78,6 +79,11 @@ class Memory:
              observed_at, int(verified), int(verified), stale_after_days))
         self.audit.log("memory", f"Xotiraga qo'shildi ({kind})", target=f"memory#{cur.lastrowid}", risk="B")
         row = self.get(cur.lastrowid)
+        if self.on_add:
+            try:
+                self.on_add(row)
+            except Exception as e:  # graf xatosi xotirani buzmasin
+                self.audit.error("kgraph", str(e))
         row["conflicts_with"] = [c["id"] for c in conflicts]
         return row
 

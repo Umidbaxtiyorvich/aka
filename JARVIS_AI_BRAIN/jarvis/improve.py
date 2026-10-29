@@ -97,6 +97,8 @@ class Improver:
             raise ImproveError("Testlarni o'chiruvchi patch qabul qilinmaydi")
         cur = self.core.db.execute("INSERT INTO proposals(title, description, diff) VALUES (?,?,?)", (title, description, diff))
         self.core.audit.log("self_improve", f"Taklif: {title}", target=f"proposal#{cur.lastrowid}", risk="B")
+        if hasattr(self.core, "kgraph"):
+            self.core.kgraph.on_proposal(self.get(cur.lastrowid), paths)
         return self.get(cur.lastrowid)
 
     def get(self, pid: int) -> dict:

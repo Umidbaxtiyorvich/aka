@@ -15,12 +15,14 @@ from .audit import Audit
 from .computer import ComputerAgent
 from .config import Settings
 from .db import Database
+from .dag import TaskGraph
 from .decisions import DecisionJournal
 from .files import FileIntelligence
 from .memory import Memory, MemoryError_
 from .browser import BrowserAgent
 from .improve import Improver
 from .instagram import InstagramManager
+from .kgraph import KnowledgeGraph
 from .notify import Notifier
 from .planner import Planner
 from .policy import PolicyEngine
@@ -58,7 +60,9 @@ class JarvisCore:
         self.settings = settings or Settings.load()
         self.db = Database(db_path)
         self.audit = Audit(self.db)
+        self.kgraph = KnowledgeGraph(self)
         self.memory = Memory(self.db, self.audit)
+        self.memory.on_add = self.kgraph.on_memory
         self.policy = PolicyEngine(self.settings)
         self.approvals = ApprovalEngine(self.db, self.audit, self.policy)
         self.files = FileIntelligence(self.settings)
@@ -81,6 +85,7 @@ class JarvisCore:
         self.decisions = DecisionJournal(self)
         self.sandbox = Sandbox(self)
         self.backup = BackupManager(self)
+        self.dag = TaskGraph(self)
         self.improver = Improver(self)
         self.agents = AgentManager(self)
 

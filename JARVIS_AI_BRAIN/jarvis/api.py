@@ -16,11 +16,13 @@ from .config import LOCKED_KEYS, PROJECT_ROOT
 from .core import CAPABILITIES, JarvisCore
 from .backup import BackupError
 from .bi import BIError
+from .dag import DagError
 from .decisions import DecisionError
 from .browser import BrowserError
 from .files import FileAccessError
 from .improve import ImproveError
 from .instagram import InstagramError, suggest_hashtags
+from .kgraph import KGError
 from .memory import MemoryError_
 from .planner import PlannerError
 from .pos import POSError
@@ -33,7 +35,7 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError)
+               DecisionError, SandboxError, BackupError, DagError, KGError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
@@ -186,6 +188,20 @@ class BackupIn(BaseModel):
 
 class RestoreIn(BaseModel):
     approval_id: int
+
+class DagIn(BaseModel):
+    goal: str
+    nodes: list[dict] | None = None
+
+class DagRunIn(BaseModel):
+    max_parallel: int | None = None
+
+class KGLinkIn(BaseModel):
+    src_type: str
+    src_ref: str
+    rel: str
+    dst_type: str
+    dst_ref: str
 
 class CallIn(BaseModel):
     phone: str
@@ -456,6 +472,53 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.post("/api/backups/{name}/restore")
     def bk_restore(name: str, body: RestoreIn):
         return guard(C().backup.restore, name, body.approval_id)
+
+    # Task Dependency Graph
+    @app.get("/api/dag")
+    def dag_list():
+        return C().dag.list()
+
+    @app.post("/api/dag")
+    def dag_create(body: DagIn):
+        c = C()
+        return guard(c.dag.create, body.goal, body.nodes) if body.nodes else guard(c.dag.from_text, body.goal)
+
+    @app.get("/api/dag/{rid}")
+    def dag_get(rid: int):
+        return guard(C().dag.get, rid)
+
+    @app.post("/api/dag/{rid}/run")
+    def dag_run(rid: int, body: DagRunIn):
+        return guard(C().dag.run, rid, body.max_parallel)
+
+    @app.post("/api/dag/{rid}/cancel")
+    def dag_cancel(rid: int):
+        return guard(C().dag.cancel, rid)
+
+    # Knowledge Graph
+    @app.get("/api/kg")
+    def kg_stats():
+        return C().kgraph.stats()
+
+    @app.get("/api/kg/search")
+    def kg_search(q: str = "", type: str = ""):
+        return C().kgraph.search(q, type)
+
+    @app.get("/api/kg/node/{nid}")
+    def kg_node(nid: int, depth: int = 1):
+        return C().kgraph.neighbors(nid, depth)
+
+    @app.get("/api/kg/path")
+    def kg_path(a: int, b: int):
+        return C().kgraph.path(a, b)
+
+    @app.post("/api/kg/link")
+    def kg_link(body: KGLinkIn):
+        return guard(C().kgraph.link, (body.src_type, body.src_ref, None), body.rel, (body.dst_type, body.dst_ref, None))
+
+    @app.post("/api/kg/rebuild")
+    def kg_rebuild():
+        return C().kgraph.rebuild()
 
     # Sandbox
     @app.get("/api/sandbox")
