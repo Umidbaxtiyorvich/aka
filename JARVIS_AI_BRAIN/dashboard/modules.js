@@ -20,12 +20,33 @@ async function renderVoice(v) {
         ${st.save_recordings ? "" : '<span class="muted">(Sozlamalarda yoqilmagan)</span>'}</label></div>
       <div id="heard" class="muted">Gapirganingiz shu yerda ko'rinadi.</div><div id="reply" style="margin-top:8px"></div>
       <p class="muted" style="margin-top:12px">${SR ? "Brauzer STT: uz-UZ. Ovoz brauzer provayderiga (Google/Microsoft) yuboriladi — internet kerak." : '<span class="warn">Bu brauzer Web Speech API ni qo\'llamaydi. Chrome yoki Edge ishlating.</span>'}<br>
-      TTS: ${uzVoice ? "o'zbekcha ovoz topildi: " + esc(uzVoice.name) : '<span class="warn">o\'zbekcha TTS ovozi topilmadi — javob matn bilan ko\'rsatiladi (yoki boshqa til ovozi)</span>'}</p></div>
+      TTS: ${uzVoice ? "brauzerda o'zbekcha ovoz: " + esc(uzVoice.name) : st.tts["espeak-ng"].installed ? '<span class="ok">brauzerda o\'zbekcha ovoz yo\'q — mahalliy espeak-ng (uz) ishlatiladi</span>' : '<span class="warn">o\'zbekcha TTS yo\'q — javob matn bilan ko\'rsatiladi. espeak-ng o\'rnating.</span>'}</p>
+      <div class="row" style="margin-top:8px"><input id="ttst" placeholder="Matnni ovozda eshitish (espeak-ng)"><button class="ghost" id="ttsb" ${st.tts["espeak-ng"].installed ? "" : "disabled"}>▶</button></div>
+      <div class="row"><button class="ghost" id="whrec" ${st.engines[1].loaded_model ? "" : "disabled"}>🎙 Mahalliy Whisper bilan yozish (5 s)</button><span id="whst" class="muted">${st.engines[1].loaded_model ? "" : "Whisper modeli yuklanmagan"}</span></div></div>
     <div class="card"><h3>Dvigatellar</h3>${table(st.engines.map((e) => ({ ...e, models_mb: e.models_mb ? Object.entries(e.models_mb).map(([k, x]) => k + ":" + x + "MB").join(" ") : "" })), ["id", "offline", "uzbek", "installed", "loaded_model", "models_mb"])}
       <div class="row" style="margin-top:8px"><select id="wm" style="width:140px"><option>tiny</option><option>base</option><option selected>small</option><option>medium</option></select>
       <button class="ghost" id="wl">Whisper modelini yuklash</button></div><pre id="wo" hidden></pre></div></div>`;
   $("#wl").onclick = async () => { try { out($("#wo"), await post("/api/voice/whisper/load", { text: $("#wm").value })); } catch (e) { fail($("#wo"), e); } };
   const setMic = (on) => { $("#micst").textContent = on ? "🔴 MIKROFON YOQILGAN — tinglayapman" : "Mikrofon o'chiq"; $("#micst").className = "pill " + (on ? "bad" : ""); $("#mic").textContent = on ? "⏹ To'xtatish" : "🎙 Mikrofonni yoqish"; };
+  const speakText = async (text) => {
+    if (uzVoice && "speechSynthesis" in window) { const u = new SpeechSynthesisUtterance(text); u.lang = uzVoice.lang; u.voice = uzVoice; speechSynthesis.speak(u); return; }
+    if (!st.tts["espeak-ng"].installed) return;
+    const res = await fetch("/api/voice/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.slice(0, 1500) }) });
+    if (res.ok) new Audio(URL.createObjectURL(await res.blob())).play();
+  };
+  $("#ttsb").onclick = () => speakText($("#ttst").value);
+  $("#whrec").onclick = async () => {
+    try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); const rec = new MediaRecorder(stream); const parts = [];
+      rec.ondataavailable = (e) => parts.push(e.data);
+      rec.onstop = async () => { stream.getTracks().forEach((t) => t.stop()); $("#whst").textContent = "Tanilmoqda (mahalliy)…";
+        const fd = new FormData(); fd.append("file", new Blob(parts, { type: "audio/webm" }), "yozuv.webm");
+        const r = await fetch("/api/voice/transcribe", { method: "POST", body: fd }); const d = await r.json();
+        if (!r.ok) { $("#whst").innerHTML = `<span class="bad">${esc(d.detail)}</span>`; return; }
+        $("#heard").textContent = d.text; $("#whst").textContent = `Whisper ${d.model}: ishonch ${d.probability}`;
+        const ans = await post("/api/chat", { text: d.text }); $("#reply").textContent = ans.text; if ($("#speak").checked) speakText(ans.text); };
+      rec.start(); $("#whst").innerHTML = '<span class="bad">🔴 MIKROFON YOQILGAN — 5 soniya yozilmoqda</span>'; setTimeout(() => rec.stop(), 5000);
+    } catch (e) { $("#whst").innerHTML = `<span class="bad">Mikrofon: ${esc(e.message)}</span>`; }
+  };
   $("#mic").onclick = async () => {
     if (recog) { recog.stop(); return; }
     if (!SR) return alert("Brauzer ovozni tanishni qo'llamaydi");
@@ -42,7 +63,7 @@ async function renderVoice(v) {
       setMic(false); recog = null; if (mediaRec && mediaRec.state !== "inactive") mediaRec.stop();
       const t = $("#heard").textContent.trim(); if (!t || t.startsWith("Gapirganingiz")) return;
       const r = await post("/api/chat", { text: t }); $("#reply").textContent = r.text;
-      if ($("#speak").checked && "speechSynthesis" in window) { const u = new SpeechSynthesisUtterance(r.text); u.lang = uzVoice ? uzVoice.lang : "uz-UZ"; if (uzVoice) u.voice = uzVoice; speechSynthesis.speak(u); }
+      if ($("#speak").checked) speakText(r.text);
     };
     recog.start(); setMic(true);
   };
@@ -96,7 +117,7 @@ async function renderStudio(v) {
   v.innerHTML = `<div class="card"><div>FFmpeg: ${tools.ffmpeg ? '<span class="ok">bor</span>' : '<span class="warn">yo\'q (winget install Gyan.FFmpeg)</span>'} · Pillow: ${tools.pillow ? '<span class="ok">' + esc(tools.pillow) + "</span>" : '<span class="warn">yo\'q</span>'}
     · AI rasm generatsiyasi: <span class="muted">${esc(tools.image_generation)}</span></div><div class="muted">Kirish fayllari: ${esc(ws)} · natijalar har doim yangi fayl (asl fayl o'zgarmaydi)</div></div>
     <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:12px">
-    <div class="card"><h3>Video</h3><select id="vop">${["probe:Ma'lumot", "quality:Sifat tekshiruvi (Reels)", "trim:Kesish", "vertical:9:16 Reels formati", "convert:Format o'zgartirish", "concat:Birlashtirish", "subtitles:Subtitr", "audio:Ovoz qo'shish", "slideshow:Rasmlardan video"].map((x) => `<option value="${x.split(":")[0]}">${x.split(":")[1]}</option>`).join("")}</select>
+    <div class="card"><h3>Video</h3><select id="vop">${["probe:Ma'lumot", "quality:Sifat tekshiruvi (Reels)", "trim:Kesish", "vertical:9:16 Reels formati", "convert:Format o'zgartirish", "concat:Birlashtirish", "subtitles:Subtitr", "audio:Ovoz qo'shish", "slideshow:Rasmlardan video", "auto_subtitles:Avtomatik subtitr (Whisper)", "voiceover:O'zbekcha ovoz qo'shish (TTS)"].map((x) => `<option value="${x.split(":")[0]}">${x.split(":")[1]}</option>`).join("")}</select>
       <textarea id="vp" style="margin-top:8px"></textarea><div class="row" style="margin-top:8px"><button id="vgo">Bajarish</button></div><pre id="vo" hidden></pre></div>
     <div class="card"><h3>Rasm</h3><select id="iop">${["analyze:Tahlil", "resize:O'lcham (preset)", "text:Matn qo'shish", "logo:Logo/avatar", "prompt:Generator uchun prompt"].map((x) => `<option value="${x.split(":")[0]}">${x.split(":")[1]}</option>`).join("")}</select>
       <textarea id="ip" style="margin-top:8px"></textarea><div class="row" style="margin-top:8px"><button id="igo">Bajarish</button></div><pre id="io" hidden></pre></div></div>
@@ -105,7 +126,8 @@ async function renderStudio(v) {
   const VEX = { probe: { path: p("video.mp4") }, quality: { path: p("video.mp4"), target: "reels" }, trim: { path: p("video.mp4"), start: 0, end: 10 },
     vertical: { path: p("video.mp4"), mode: "pad" }, convert: { path: p("video.mp4"), format: "mp3" }, concat: { paths: [p("a.mp4"), p("b.mp4")] },
     subtitles: { path: p("video.mp4"), lines: [{ start: 0, end: 2.5, text: "Assalomu alaykum!" }], burn: true }, audio: { path: p("video.mp4"), audio: p("musiqa.mp3"), mix: false },
-    slideshow: { images: [p("1.jpg"), p("2.jpg")], seconds: 3 } };
+    slideshow: { images: [p("1.jpg"), p("2.jpg")], seconds: 3 }, auto_subtitles: { path: p("video.mp4"), burn: true, language: "uz" },
+    voiceover: { path: p("video.mp4"), text: "Assalomu alaykum! Yangi mahsulotlar keldi.", mix: false, speed: 150 } };
   const IEX = { analyze: { path: p("rasm.jpg") }, resize: { path: p("rasm.jpg"), preset: "instagram_post", mode: "crop" }, text: { path: p("rasm.jpg"), text: "Chegirma 20%", position: "bottom" },
     logo: { text: "Mening Do'konim", shape: "circle" }, prompt: { subject: "yangi uzilgan non, issiq, do'kon peshtaxtasida", purpose: "instagram_post", style: "realistik, iliq ranglar" } };
   const sync = () => { $("#vp").value = JSON.stringify(VEX[$("#vop").value], null, 1); $("#ip").value = JSON.stringify(IEX[$("#iop").value], null, 1); };

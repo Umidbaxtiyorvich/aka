@@ -108,3 +108,53 @@ def test_browser_reads_local_site(core, tmp_path):
     assert m["title"] == "Demo POS" and {s["text"] for s in m["sections"]} == {"Kirim", "Ombor"}
     assert m["forms"][0]["fields"] == ["login", "parol"] and m["tables"] == [["Mahsulot", "Qoldiq"]]
     assert any("parol kiritmaydi" in n for n in m["notes"]) and os.path.exists(m["screenshot"])
+
+
+needs_espeak = pytest.mark.skipif(not (shutil.which("espeak-ng") or shutil.which("espeak")), reason="espeak-ng yo'q")
+
+
+@needs_espeak
+@needs_ffmpeg
+def test_uzbek_tts_and_voiceover(core):
+    r = core.voice.synthesize("Assalomu alaykum! Bugungi savdo hisoboti tayyor.")
+    assert r["engine"] == "espeak-ng (uz)" and os.path.getsize(r["output"]) > 10000
+    shutil.copy(r["output"], core.settings.allowed_read_dirs[0] + "/ovoz.wav")
+    info = core.studio.probe(core.settings.allowed_read_dirs[0] + "/ovoz.wav")
+    assert info["audio"] and info["duration"] > 1
+    src = _video(core, dur=3)
+    out = core.studio.voiceover(src, "Yangi mahsulot keldi")["output"]
+    assert core.studio.probe(out)["audio"]
+
+
+def test_tts_validation(core):
+    from jarvis.voice import VoiceError
+    with pytest.raises(VoiceError):
+        core.voice.synthesize("   ")
+
+
+class _Seg:
+    def __init__(self, s, e, t):
+        self.start, self.end, self.text = s, e, t
+
+
+class _Info:
+    language, language_probability = "uz", 0.91
+
+
+class _FakeWhisper:
+    def transcribe(self, path, language="uz", vad_filter=True):
+        assert os.path.exists(path)
+        return iter([_Seg(0.0, 1.2, " Salom "), _Seg(1.3, 2.8, "Bugun chegirma"), _Seg(2.9, 3.0, "  ")]), _Info()
+
+
+@needs_ffmpeg
+def test_auto_subtitles_with_whisper(core):
+    from jarvis.voice import VoiceError
+    src = _video(core, dur=3)
+    with pytest.raises(VoiceError, match="yuklanmagan"):
+        core.studio.auto_subtitles(src)
+    core.voice._model, core.voice._model_name = _FakeWhisper(), "small"
+    r = core.studio.auto_subtitles(src, burn=False)
+    srt = open(r["output"], encoding="utf-8").read()
+    assert r["segments"] == 2 and "00:00:01,300 --> 00:00:02,800" in srt and "Bugun chegirma" in srt
+    assert not [f for f in os.listdir(core.studio.exports) if f.endswith(".wav") and "_audio" in f]   # vaqtinchalik audio o'chirildi

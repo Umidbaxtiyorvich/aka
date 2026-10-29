@@ -187,6 +187,8 @@ class AgentManager:
         v = self.core.voice
         if p.get("op") == "transcribe":
             return v.transcribe(str(self.core.files._check_read(p["path"])))
+        if p.get("op") == "tts":
+            return v.synthesize(p["text"], speed=int(p.get("speed", 150)))
         return v.status()
 
     def _h_image(self, p):
@@ -206,7 +208,9 @@ class AgentManager:
                "vertical": lambda: st.to_vertical(p["path"], p.get("mode", "pad")), "convert": lambda: st.convert(p["path"], p["format"]),
                "subtitles": lambda: st.add_subtitles(p["path"], p["lines"], p.get("burn", True)),
                "audio": lambda: st.add_audio(p["path"], p["audio"], p.get("mix", False)),
-               "slideshow": lambda: st.slideshow(p["images"], float(p.get("seconds", 3)), p.get("audio"))}
+               "slideshow": lambda: st.slideshow(p["images"], float(p.get("seconds", 3)), p.get("audio")),
+               "auto_subtitles": lambda: st.auto_subtitles(p["path"], p.get("burn", True), p.get("language", "uz")),
+               "voiceover": lambda: st.voiceover(p["path"], p["text"], p.get("mix", False), int(p.get("speed", 150)))}
         if op not in ops:
             raise ValueError(f"op: {list(ops)}")
         return ops[op]()

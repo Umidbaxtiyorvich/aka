@@ -186,6 +186,29 @@ class Studio:
         self._log(f"Ovoz qo'shildi: {v.name} + {a.name}", out)
         return {"output": str(out)}
 
+    def auto_subtitles(self, path: str, burn: bool = True, language: str = "uz") -> dict:
+        """Videodagi nutqdan avtomatik subtitr: FFmpeg audio ajratadi → mahalliy Whisper → SRT (→ videoga yozish).
+        Natijani nashrdan oldin tekshiring: o'zbek tilida Whisper xato qilishi mumkin."""
+        p = self._in(path)
+        wav = self._out(p.stem + "_audio", ".wav")
+        self._ffmpeg(["-i", str(p), "-vn", "-ac", "1", "-ar", "16000"], wav)
+        try:
+            tr = self.core.voice.transcribe(str(wav), language=language)
+        finally:
+            wav.unlink(missing_ok=True)
+        if not tr["segments"]:
+            raise StudioError("Videoda nutq topilmadi")
+        res = self.add_subtitles(path, tr["segments"], burn=burn)
+        return res | {"segments": len(tr["segments"]), "text": tr["text"][:2000], "model": tr.get("model"),
+                      "note": "Avtomatik subtitr — nashrdan oldin matnni tekshiring."}
+
+    def voiceover(self, path: str, text: str, mix: bool = False, speed: int = 150) -> dict:
+        """Matnni o'zbekcha ovozga aylantirib (espeak-ng) videoga qo'shadi."""
+        v = self._in(path)
+        tts = self.core.voice.synthesize(text, str(self._out(v.stem + "_tts", ".wav")), speed=speed)
+        res = self.add_audio(path, tts["output"], mix=mix)
+        return res | {"tts": tts}
+
     def slideshow(self, images: list[str], seconds: float = 3.0, audio: str | None = None) -> dict:
         """Kontent rejasidan video: rasmlar → 9:16 slayd-shou (ixtiyoriy fon ovozi)."""
         if not images:

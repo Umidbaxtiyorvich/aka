@@ -945,6 +945,24 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def v_load(body: TextIn):
         return guard(C().voice.load_whisper, body.text or "small")
 
+    @app.post("/api/voice/tts")
+    def v_tts(body: TextIn):
+        r = guard(C().voice.synthesize, body.text)
+        return FileResponse(r["output"], media_type="audio/wav", headers={"X-TTS-Engine": r["engine"].encode("ascii", "ignore").decode()})
+
+    @app.post("/api/voice/transcribe")
+    async def v_transcribe(file: UploadFile):
+        c = C()
+        d = Path(c.settings.allowed_write_dirs[0]) / "voice"
+        d.mkdir(parents=True, exist_ok=True)
+        tmp = d / f"_stt_{int(time.time() * 1000)}{Path(file.filename or 'a.webm').suffix or '.webm'}"
+        tmp.write_bytes(await file.read())
+        try:
+            return guard(c.voice.transcribe, str(tmp))
+        finally:
+            if not c.settings.save_voice_recordings:
+                tmp.unlink(missing_ok=True)
+
     @app.post("/api/voice/recordings")
     async def v_save(request: Request):
         data = await request.body()
