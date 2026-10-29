@@ -17,6 +17,7 @@ from .config import Settings
 from .db import Database
 from .dag import TaskGraph
 from .decisions import DecisionJournal
+from .diagnostics import Diagnostics
 from .files import FileIntelligence
 from .memory import Memory, MemoryError_
 from .browser import BrowserAgent
@@ -88,6 +89,7 @@ class JarvisCore:
         self.backup = BackupManager(self)
         self.dag = TaskGraph(self)
         self.plugins = PluginManager(self)
+        self.diagnostics = Diagnostics(self)
         self.improver = Improver(self)
         self.agents = AgentManager(self)
 

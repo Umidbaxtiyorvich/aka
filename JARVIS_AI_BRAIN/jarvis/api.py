@@ -1,6 +1,7 @@
 """FastAPI: lokal API va dashboard. Standart holatda faqat 127.0.0.1 da ishlaydi."""
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 
@@ -221,6 +222,19 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     app = FastAPI(title="JARVIS AI BRAIN", version=__version__)
     app.state.core = core or JarvisCore()
     C = lambda: app.state.core  # noqa: E731
+
+    @app.middleware("http")
+    async def timing(request: Request, call_next):
+        t0 = time.perf_counter()
+        status = 500
+        try:
+            response = await call_next(request)
+            status = response.status_code
+            return response
+        finally:
+            route = request.scope.get("route")
+            path = getattr(route, "path", None) or ("/static" if request.url.path.startswith("/static") else "other")
+            app.state.core.diagnostics.metrics.add(request.method, path, status, (time.perf_counter() - t0) * 1000)
 
     def guard(fn, *a, **kw):
         try:
@@ -555,6 +569,18 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.get("/api/plugins/{name}/logs")
     def pl_logs(name: str):
         return C().plugins.logs(name)
+
+    # Observability
+    @app.get("/api/diagnostics")
+    def diag(external: bool = True):
+        return C().diagnostics.run(external)
+
+    @app.get("/api/diagnostics/export")
+    def diag_export(external: bool = True):
+        from fastapi.responses import Response
+        name = f"jarvis_diagnostika_{time.strftime('%Y%m%d_%H%M%S')}.json"
+        return Response(C().diagnostics.export(external), media_type="application/json",
+                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
     # Sandbox
     @app.get("/api/sandbox")
