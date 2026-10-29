@@ -1,5 +1,5 @@
 """Agent Manager va agentlar. Har bir agent — haqiqiy handler funksiyasi.
-Hali yaratilmagan agentlar 'planned' deb aniq belgilanadi va vazifa qabul qilmaydi.
+Tashqi xizmatga ulanmagan agentlar (Telegram, Instagram) aniq xato qaytaradi — ishlayotgandek ko'rsatilmaydi.
 Vazifalar bitta navbat orqali ketma-ket bajariladi (8 GB RAM uchun resurs tejash)."""
 from __future__ import annotations
 
@@ -51,18 +51,15 @@ class AgentManager:
         A("computer", "Kompyuter agenti", "Buyruqni taklif qiladi; bajarish faqat tasdiqdan keyin", ["shell (tasdiq bilan)"], "E", self._h_computer)
         A("security", "Xavfsizlik agenti", "Matn/buyruqda maxfiy ma'lumot, injection va xavfni tekshiradi", ["security"], "A", self._h_security)
         A("qa", "Nazoratchi (QA)", "Modullar holatini tekshiradi va testlarni ishga tushiradi", ["selfcheck", "pytest"], "A", self._h_qa)
-        for key, title, role in [
-            ("research", "Tadqiqotchi", "Internetdan qidirish (keyingi bosqich)"),
-            ("browser", "Brauzer agenti", "Playwright orqali saytlar (keyingi bosqich)"),
-            ("voice", "Ovoz agenti", "STT/TTS (keyingi bosqich)"),
-            ("image", "Rasm agenti", "Rasm yaratish/tahrirlash (keyingi bosqich)"),
-            ("video", "Video agenti", "FFmpeg bilan video (keyingi bosqich)"),
-            ("instagram", "Instagram agenti", "Meta rasmiy API (keyingi bosqich)"),
-            ("telegram", "Telegram agenti", "Bot va bildirishnomalar (keyingi bosqich)"),
-            ("bi", "Biznes tahlilchi", "Savdo va ombor tahlili (keyingi bosqich)"),
-            ("pos", "POS agenti", "POS o'qish/kiritish (keyingi bosqich)"),
-        ]:
-            A(key, title, role, [], "A", None, status="planned")
+        A("research", "Tadqiqotchi", "Internetdan qidiradi, manba/sana/ishonch bilan javob beradi", ["web search", "fetch"], "A", self._h_research)
+        A("browser", "Brauzer agenti", "Ruxsat berilgan saytni faqat o'qiydi va tuzilishini hujjatlashtiradi", ["playwright"], "A", self._h_browser)
+        A("voice", "Ovoz agenti", "STT/TTS dvigatellari holati, mahalliy Whisper", ["web speech", "faster-whisper"], "B", self._h_voice)
+        A("image", "Rasm agenti", "Rasm tahlili, o'lcham, matn, logo, generator prompti", ["pillow"], "B", self._h_image)
+        A("video", "Video agenti", "FFmpeg: kesish, birlashtirish, 9:16, subtitr, ovoz, sifat", ["ffmpeg"], "B", self._h_video)
+        A("instagram", "Instagram agenti", "Post/Reels/Stories loyihasi, kalendar, nashr (tasdiq bilan)", ["graph api"], "D", self._h_instagram)
+        A("telegram", "Telegram agenti", "Bot holati va bildirishnomalar", ["bot api"], "D", self._h_telegram)
+        A("bi", "Biznes tahlilchi", "Savdo, ombor, foyda, qarzdorlik tahlili", ["bi"], "B", self._h_bi)
+        A("pos", "POS agenti", "Hujjat loyihasi va tasdiq so'rovi (kiritish faqat tasdiqdan keyin)", ["pos connector"], "D", self._h_pos)
 
     def _add(self, key, title, role, tools, perm, handler, status="idle"):
         self.agents[key] = Agent(key, title, role, tools, perm, handler, status=status)
@@ -171,6 +168,75 @@ class AgentManager:
         text = p.get("text", "")
         return {"contains_secret": contains_secret(text), "injection_markers": injection_score(text),
                 "command_risk": classify_command(text) if p.get("is_command") else None}
+
+    def _h_research(self, p):
+        r = self.core.research
+        return r.fetch(p["url"]) if p.get("op") == "fetch" else r.answer(p["query"])
+
+    def _h_browser(self, p):
+        b = self.core.browser
+        return b.site_map(p["url"]) if p.get("op") == "site_map" else b.inspect(p["url"])
+
+    def _h_voice(self, p):
+        v = self.core.voice
+        if p.get("op") == "transcribe":
+            return v.transcribe(str(self.core.files._check_read(p["path"])))
+        return v.status()
+
+    def _h_image(self, p):
+        st, op = self.core.studio, p.get("op", "analyze")
+        ops = {"analyze": lambda: st.analyze_image(p["path"]), "resize": lambda: st.resize(p["path"], p["preset"], p.get("mode", "fit")),
+               "text": lambda: st.add_text(p["path"], p["text"], p.get("position", "bottom")),
+               "logo": lambda: st.make_logo(p["text"], shape=p.get("shape", "circle")),
+               "prompt": lambda: st.image_prompt(p["subject"], p.get("purpose", "instagram_post"), p.get("style", "zamonaviy, toza"))}
+        if op not in ops:
+            raise ValueError(f"op: {list(ops)}")
+        return ops[op]()
+
+    def _h_video(self, p):
+        st, op = self.core.studio, p.get("op", "probe")
+        ops = {"probe": lambda: st.probe(p["path"]), "quality": lambda: st.quality_check(p["path"], p.get("target", "reels")),
+               "trim": lambda: st.trim(p["path"], float(p["start"]), float(p["end"])), "concat": lambda: st.concat(p["paths"]),
+               "vertical": lambda: st.to_vertical(p["path"], p.get("mode", "pad")), "convert": lambda: st.convert(p["path"], p["format"]),
+               "subtitles": lambda: st.add_subtitles(p["path"], p["lines"], p.get("burn", True)),
+               "audio": lambda: st.add_audio(p["path"], p["audio"], p.get("mix", False)),
+               "slideshow": lambda: st.slideshow(p["images"], float(p.get("seconds", 3)), p.get("audio"))}
+        if op not in ops:
+            raise ValueError(f"op: {list(ops)}")
+        return ops[op]()
+
+    def _h_instagram(self, p):
+        ig, op = self.core.instagram, p.get("op", "status")
+        if op == "draft":
+            return ig.draft(p["account"], p.get("kind", "post"), p["caption"], p.get("media_url", ""), p.get("scheduled_at", ""))
+        if op == "preview":
+            return ig.preview(int(p["id"]))
+        if op == "request_publish":
+            return {"approval": ig.request_publish(int(p["id"])), "needs_approval": True}
+        if op == "hashtags":
+            from .instagram import suggest_hashtags
+            return {"hashtags": suggest_hashtags(p.get("text", ""))}
+        return {"accounts": [ig.account_status(a["name"]) for a in ig.accounts()]}
+
+    def _h_telegram(self, p):
+        tg = self.core.telegram
+        if p.get("op") == "notify":
+            return {"sent_to": tg.broadcast(p.get("text", "JARVIS test xabari"))}
+        return tg.status()
+
+    def _h_bi(self, p):
+        bi, op = self.core.bi, p.get("op", "report")
+        if op == "import":
+            return bi.import_file(p["path"], p["kind"])
+        return bi.report()
+
+    def _h_pos(self, p):
+        pos, op = self.core.pos, p.get("op", "status")
+        if op == "draft":
+            return pos.create_draft(p["doc_type"], p["party"], p["items"], p.get("note", ""), p.get("account", ""))
+        if op == "request_approval":
+            return pos.request_approval(int(p["id"])) | {"needs_approval": True}
+        return pos.status()
 
     def _h_qa(self, p):
         from . import selfcheck

@@ -29,10 +29,12 @@ def test_agents_real_handlers(core):
     assert '"database"' in t["result"]
 
 
-def test_planned_agent_refuses(core):
+def test_unconnected_agent_fails_honestly(core):
+    t = core.agents.submit("instagram", "post", {"op": "draft", "account": "yoq", "caption": "x"}, run_now=True)
+    assert t["status"] == "failed" and "instagram_accounts" in t["error"]
     import pytest
-    with pytest.raises(ValueError):
-        core.agents.submit("instagram", "post", {})
+    with pytest.raises(KeyError):
+        core.agents.submit("nomalum_agent", "x", {})
 
 
 def test_computer_flow_read_only(core):

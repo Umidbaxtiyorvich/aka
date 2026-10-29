@@ -9,20 +9,41 @@ from . import system_info
 from .agents import AgentManager
 from .ai_engine import SYSTEM_PROMPT, AIError, build_provider
 from .approval import ApprovalEngine
+from .bi import BusinessIntelligence
 from .audit import Audit
 from .computer import ComputerAgent
 from .config import Settings
 from .db import Database
 from .files import FileIntelligence
 from .memory import Memory, MemoryError_
+from .browser import BrowserAgent
+from .improve import Improver
+from .instagram import InstagramManager
+from .notify import Notifier
+from .planner import Planner
+from .pos import POSManager
+from .research import Research, ResearchError
+from .studio import Studio
+from .telegram_bot import TelegramAssistant
+from .telephony import Telephony
+from .voice import Voice
 from .security import contains_secret, redact
 
 CAPABILITIES = {
-    "ishlaydi": ["O'zbekcha matnli chat (kirill/lotin, xatoga chidamli buyruqlar)", "Doimiy xotira: qo'shish, qidirish, tahrirlash, eksport, o'chirish",
-                 "Audit jurnali", "Tasdiqlash tizimi (A–E darajalar, versiyaga bog'langan xesh)", "Fayllarni o'qish (txt/csv/xlsx/pdf) — faqat ruxsat berilgan papkada",
-                 "Buyruq taklifi va tasdiqdan keyin bajarish", "Kod tahlili (Python)", "O'z-o'zini tekshirish va testlar", "Tizim resurslari diagnostikasi"],
-    "qisman": ["AI suhbat: Ollama ulansa ishlaydi, aks holda offline rejim"],
-    "hali_yoq": ["Ovoz (STT/TTS)", "Internet tadqiqoti", "Brauzer agenti", "Rasm/video studiyasi", "Instagram", "Telegram", "POS va Business Intelligence", "Telefon qo'ng'irog'i"],
+    "ishlaydi": ["O'zbekcha matnli chat (kirill/lotin, xatoga chidamli)", "Doimiy xotira (qidiruv, tahrir, eksport, o'chirish)",
+                 "Audit va xatolar jurnali", "Tasdiqlash tizimi (A–E, versiyaga bog'langan)", "Planner (maqsad → bosqichlar → agentlar)",
+                 "Fayllarni o'qish (txt/csv/xlsx/pdf)", "Buyruq taklifi va tasdiqdan keyin bajarish", "Kod tahlili (Python)",
+                 "Business Intelligence: CSV/Excel import, qoldiq, foyda, kam qolgan, noto'g'ri narx, takroriy hujjat, qarzdorlik",
+                 "POS hujjat loyihasi → tasdiq → fayl eksporti (outbox) → tekshiruv", "Video: kesish, birlashtirish, 9:16, format, subtitr, ovoz, slayd-shou, sifat tekshiruvi (FFmpeg)",
+                 "Rasm: tahlil, o'lcham presetlari, matn qo'shish, logo/avatar, generator uchun prompt", "Brauzer agenti: ruxsat berilgan saytni faqat o'qish (Playwright)",
+                 "Bildirishnomalar (dashboard)", "Self-improvement: taklif → alohida worktree'da test → tasdiq → alohida branch"],
+    "qisman": ["AI suhbat: Ollama ulansa (real Ollama bilan hali sinalmagan), aks holda offline",
+               "Ovoz: brauzer STT/TTS (internet kerak); mahalliy Whisper ixtiyoriy o'rnatiladi",
+               "Internet tadqiqoti: kod tayyor, siz yoqqaningizdan keyin ishlaydi (bulutda real tarmoq bilan sinalmagan)",
+               "Telegram: bot kodi tayyor, token va ID kiritilgach ishlaydi (real Telegram bilan sinalmagan)",
+               "Instagram: Graph API kodi tayyor, Business akkaunt + Meta App + token kerak (real API bilan sinalmagan)"],
+    "hali_yoq": ["POS bilan to'g'ridan-to'g'ri API/brauzer kiritish (POS manzili kerak)", "AI rasm generatsiyasi (GPU yoki onlayn adapter)",
+                 "Telefon qo'ng'irog'i (SIP provayder kerak, faqat reja va tasdiq tayyor)", "Dashboard autentifikatsiyasi (server faqat 127.0.0.1 da)"],
 }
 
 
@@ -36,6 +57,20 @@ class JarvisCore:
         self.files = FileIntelligence(self.settings)
         self.computer = ComputerAgent(self.settings, self.approvals, self.audit)
         self.ai = build_provider(self.settings)
+        self.bi = BusinessIntelligence(self.db, self.audit, self.settings, self.files)
+        self.pos = POSManager(self.db, self.audit, self.approvals, self.settings)
+        self.notifier = Notifier(self.db, self.settings)
+        self.telegram = TelegramAssistant(self)
+        self.notifier.telegram = self.telegram
+        self.audit.on_error = lambda m, msg: self.notifier.notify(f"Xato: {m}", msg, severity="warning", category="error")
+        self.research = Research(self)
+        self.studio = Studio(self)
+        self.instagram = InstagramManager(self)
+        self.voice = Voice(self)
+        self.browser = BrowserAgent(self)
+        self.telephony = Telephony(self.settings, self.approvals)
+        self.planner = Planner(self)
+        self.improver = Improver(self)
         self.agents = AgentManager(self)
 
     def reload_ai(self):
@@ -117,6 +152,31 @@ class JarvisCore:
             items = self.files.list_dir()
             names = ", ".join(i["name"] for i in items[:20]) or "bo'sh"
             return out | {"text": f"Ruxsat berilgan papka: {self.settings.allowed_read_dirs[0]}\nIchida: {names}"}
+
+        if intent == "research":
+            q = re.sub(r"(?i)\b(internetdan|internetda|qidir\w*|izla\w*|topib ber)\b", "", text).strip(" :?")
+            try:
+                r = self.research.answer(q or text)
+            except ResearchError as e:
+                return out | {"text": str(e)}
+            src = "\n".join(f"[{s['n']}] {s['title']} — {s['url']} ({s['fetched_at']}, ishonch {s['reliability']})" for s in r["sources"])
+            return out | {"text": f"{r['answer']}\n\nManbalar:\n{src or 'yo‘q'}", "research": r}
+
+        if intent == "bi_report":
+            r = self.bi.report()
+            if not r["has_data"]:
+                return out | {"text": "Hali savdo/ombor ma'lumoti import qilinmagan. Business Intelligence bo'limida CSV yoki Excel faylni yuklang."}
+            p = r["profit"]
+            gp = p["gross_profit"] if p["gross_profit"] is not None else f"{p['gross_profit_known_only']} (tannarxi noma'lum: {', '.join(p['skus_without_cost'])})"
+            return out | {"text": f"Savdo: {p['revenue']}, yalpi foyda: {gp}. Kam qolgan: {len(r['low_stock'])}, "
+                                  f"narx muammosi: {len(r['price_issues'])}, takroriy hujjat: {len(r['duplicates'])}, "
+                                  f"qoldiq tafovuti: {len(r['discrepancies'])}. Batafsil — BI bo'limida."}
+
+        if intent == "plan":
+            goal = text.split(":", 1)[1].strip() if ":" in text else text
+            plan = self.planner.create(goal)
+            steps = "\n".join(f"{s['n']}. {s['text']} → {s['agent']}" for s in plan["steps"])
+            return out | {"text": f"Reja #{plan['id']} tuzildi:\n{steps}\nBajarish uchun Agentlar → Rejalar bo'limida «Bajarish»ni bosing.", "plan": plan}
 
         if intent == "greeting" and self.ai.name == "offline":
             return out | {"text": "Assalomu alaykum! Men JARVIS. Nima qila olishimni bilish uchun «yordam» deb yozing."}

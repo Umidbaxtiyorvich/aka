@@ -1,3 +1,5 @@
-# Faqat kerak bo'lganda o'rnating (hajmi katta):
-# playwright>=1.44    # brauzer agenti (POS o'qish rejimi). Keyin: python -m playwright install chromium (~150 MB)
-# faster-whisper      # mahalliy speech-to-text (model 75 MB - 1.5 GB)
+# Faqat kerak bo'lganda o'rnating:
+playwright>=1.44        # brauzer agenti. Keyin: python -m playwright install chromium  (~150 MB)
+# faster-whisper        # mahalliy o'zbekcha STT. Model: tiny 75 MB ... medium 1.5 GB (birinchi ishlatishda yuklanadi)
+# Tashqi dastur: FFmpeg (video) — Windows: winget install Gyan.FFmpeg
+# Tashqi dastur: Ollama (mahalliy AI) — https://ollama.com

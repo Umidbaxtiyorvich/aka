@@ -8,6 +8,7 @@ from .security import redact
 class Audit:
     def __init__(self, db: Database):
         self.db = db
+        self.on_error = None   # Notifier ulanganda: xato → bildirishnoma
 
     def log(self, agent: str, action: str, *, target: str = "", risk: str = "A",
             approval_status: str = "not_required", result: str = "", error_code: str = "",
@@ -22,6 +23,11 @@ class Audit:
 
     def error(self, module: str, message: str) -> None:
         self.db.execute("INSERT INTO errors(module, message) VALUES (?,?)", (module, redact(message)[:1000]))
+        if self.on_error:
+            try:
+                self.on_error(module, message)
+            except Exception:  # bildirishnoma xatosi asosiy amalni buzmasin
+                pass
 
     def recent(self, limit: int = 50) -> list[dict]:
         return self.db.query("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,))

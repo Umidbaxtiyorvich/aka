@@ -14,7 +14,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Foydalanuvchi o'zgartira olmaydigan (va JARVIS o'zi o'zgartira olmaydigan) kalitlar.
-LOCKED_KEYS = {"read_only_mode", "require_approval", "allowed_read_dirs", "allowed_write_dirs"}
+LOCKED_KEYS = {"read_only_mode", "require_approval", "allowed_read_dirs", "allowed_write_dirs",
+               "telegram_allowed_ids", "protected_paths"}
 
 
 def jarvis_home() -> Path:
@@ -34,6 +35,21 @@ class Settings:
     require_approval: bool = True
     allowed_read_dirs: list[str] = field(default_factory=list)
     allowed_write_dirs: list[str] = field(default_factory=list)
+    # Internet va integratsiyalar (maxfiy kalitlar bu yerda emas — secrets.py)
+    internet_enabled: bool = False        # internet tadqiqoti faqat siz yoqqanda
+    browser_allowed_domains: list[str] = field(default_factory=list)
+    telegram_allowed_ids: list[int] = field(default_factory=list)   # qulflangan: faqat settings.json orqali
+    telegram_notify: bool = True
+    instagram_accounts: list[dict] = field(default_factory=list)    # [{"name":..., "ig_user_id":...}] — tokensiz
+    pos_site: str = ""                    # POS manzili (keyin beriladi)
+    pos_connector: str = "file_export"    # file_export | api | browser
+    low_stock_threshold: float = 5
+    save_voice_recordings: bool = False
+    telephony_provider: str = ""          # bo'sh = o'chirilgan
+    telephony_cost_per_min: float = 0.0
+    # Self-improvement o'zgartira olmaydigan fayllar
+    protected_paths: list[str] = field(default_factory=lambda: [
+        "jarvis/security.py", "jarvis/approval.py", "jarvis/config.py", "jarvis/secrets.py", "jarvis/improve.py"])
 
     @classmethod
     def path(cls) -> Path:

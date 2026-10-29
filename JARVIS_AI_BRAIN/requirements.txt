@@ -1,10 +1,10 @@
-# Asosiy (majburiy) — jami ~40 MB
-fastapi>=0.110        # lokal API
-uvicorn>=0.29         # API serveri
-psutil>=5.9           # RAM/CPU/disk monitoringi
-keyring>=25           # Windows Credential Manager orqali maxfiy kalitlar
-pytest>=8             # testlar
-
-# Ixtiyoriy (fayl tahlili) — o'rnatilmasa ham tizim ishlaydi
-openpyxl>=3.1         # Excel (.xlsx) o'qish
-pypdf>=4              # PDF matnini o'qish
+# Asosiy (majburiy) — jami ~60 MB
+fastapi>=0.110          # lokal API
+uvicorn>=0.29           # API serveri
+python-multipart>=0.0.9 # fayl yuklash (BI import)
+psutil>=5.9             # RAM/CPU/disk monitoringi
+keyring>=25             # Windows Credential Manager orqali maxfiy kalitlar
+Pillow>=10              # rasm studiyasi (~10 MB)
+openpyxl>=3.1           # Excel (.xlsx) o'qish
+pypdf>=4                # PDF matnini o'qish
+pytest>=8               # testlar

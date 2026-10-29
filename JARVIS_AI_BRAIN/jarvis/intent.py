@@ -13,13 +13,16 @@ CYR = {"а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "
 INTENTS = {
     "greeting": ["salom", "assalomu", "hayrli", "privet", "hello"],
     "memory_save": ["eslab", "esla", "yodda", "saqla", "zapomni", "remember"],
-    "memory_search": ["eslaysanmi", "xotira", "qidir xotira", "nima dedim", "eslat"],
-    "task_create": ["vazifa", "reja", "qilish kerak", "zadacha", "task", "rejala"],
+    "memory_search": ["eslaysanmi", "xotira", "xotiradan", "nima dedim", "eslat"],
+    "task_create": ["vazifa", "qilish kerak", "zadacha", "task"],
     "file_read": ["fayl", "o'qi", "ochib", "papka", "hujjat", "fail", "file"],
     "status": ["holat", "status", "ahvol", "qanday ishlayapsan", "tizim", "resurs"],
     "help": ["yordam", "nima qila olasan", "imkoniyat", "pomosh", "help"],
     "run_tests": ["test", "tekshir", "sinov", "proverka"],
     "command": ["buyruq", "bajar", "ishga tushir", "zapusti", "komanda", "run"],
+    "research": ["internetdan", "internetda", "qidir", "izla", "google", "найди", "search"],
+    "bi_report": ["savdo", "ombor", "qoldiq", "foyda", "hisobot", "продажи", "остаток", "sklad"],
+    "plan": ["rejala", "reja tuz", "bosqichma", "plan"],
 }
 
 
@@ -32,7 +35,16 @@ def normalize(text: str) -> str:
 
 
 def detect(text: str) -> tuple[str, float]:
-    """(intent, ishonch) qaytaradi. Ishonch past bo'lsa — 'unknown', JARVIS aniqlashtiruvchi savol beradi."""
+    """(intent, ishonch) qaytaradi. Ishonch past bo'lsa — 'unknown', JARVIS aniqlashtiruvchi savol beradi.
+    "buyruq: mazmun" ko'rinishida ikki nuqtadan oldingi qism ustuvor (mazmundagi so'zlar chalg'itmasin)."""
+    if ":" in text:
+        head = _detect(text.split(":", 1)[0])
+        if head[0] != "unknown":
+            return head
+    return _detect(text)
+
+
+def _detect(text: str) -> tuple[str, float]:
     norm = normalize(text)
     words = re.findall(r"[\w']+", norm)
     best, score = "unknown", 0.0
