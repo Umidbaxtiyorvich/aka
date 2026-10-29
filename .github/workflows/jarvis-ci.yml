@@ -1,0 +1,23 @@
+name: JARVIS CI
+on:
+  push:
+    paths: ["JARVIS_AI_BRAIN/**", ".github/workflows/jarvis-ci.yml"]
+  pull_request:
+    paths: ["JARVIS_AI_BRAIN/**", ".github/workflows/jarvis-ci.yml"]
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: JARVIS_AI_BRAIN
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt httpx ruff
+      - run: ruff check jarvis tests scripts --select E,F,W --ignore E501,E701,E702,E731
+      - run: python -m pytest -q

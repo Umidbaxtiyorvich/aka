@@ -1,0 +1,11 @@
+data/
+logs/
+backups/
+models/
+exports/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+config/settings.json
+.env
