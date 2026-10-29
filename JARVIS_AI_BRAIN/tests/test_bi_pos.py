@@ -40,7 +40,12 @@ def test_bi_import_and_analysis(core):
     prof = core.bi.profit()
     assert prof["revenue"] == 39000 and prof["cost_of_goods"] == 3000 * 4 + 9000 * 2
     a1 = next(s for s in core.bi.stock() if s["sku"] == "A1")
-    assert a1["computed_from_movements"] == 6 and a1["difference"] == -3
+    assert a1["computed_from_movements"] == 6 and a1["difference"] is None      # boshlang'ich qoldiqsiz solishtirilmaydi
+    notes = {(d["sku"], d["note"].split(":")[0]) for d in core.bi.discrepancies()}
+    assert ("B2", "Sotuv/chiqim kirimdan ko'p") in notes and not any(s == "A1" for s, _ in notes)
+    core.bi.import_file(_write(core, "boshlang.csv", "Turi,Kod,Miqdor\nboshlang'ich qoldiq,A1,1\n"), "movements")
+    a1 = next(s for s in core.bi.stock() if s["sku"] == "A1")
+    assert a1["computed_from_movements"] == 7 and a1["difference"] == -4
     debt = next(d for d in core.bi.debts() if d["party"] == "Ali MChJ")
     assert debt["we_owe"] == 10000
 
@@ -92,7 +97,21 @@ def test_pos_change_after_approval_invalidates(core):
     assert r2["approval"]["payload"]["version"] == 2 and r2["approval"]["payload"]["total"] == 33000
 
 
+def test_pos_external_blocked_in_read_only(core):
+    class Ext:
+        name = "api"
+        def status(self): return {}
+        def find_existing(self, k): return None
+        def create(self, k, d): raise AssertionError("chaqirilmasligi kerak")
+    core.pos.connector = Ext()
+    d = core.pos.create_draft("kirim", "A", ITEMS)
+    _approve(core, core.pos.request_approval(d["id"])["approval"])
+    with pytest.raises(POSError, match="Faqat o'qish"):
+        core.pos.submit(d["id"])
+
+
 def test_pos_unknown_outcome_never_resends(core):
+    core.settings.read_only_mode = False
     class Flaky:
         name = "flaky"
         def __init__(self): self.store, self.calls = {}, 0

@@ -4,21 +4,41 @@ O'zbek tilida ishlaydigan, doimiy xotirali, agentli va **har bir muhim amalni fa
 
 > JARVIS ongga ega emas. U — AI modeli (ixtiyoriy), SQLite xotira, qoidalar va ruxsat berilgan vositalardan iborat dastur.
 
-## Holat (0.1.0 — 1-bosqich)
+## Holat (0.2.0)
 
-| Holat | Funksiya |
+**✅ Ishlaydi va testlangan** (47 ta avtomatik test + brauzerda end-to-end tekshiruv):
+
+| Modul | Nima qiladi |
 |---|---|
-| ✅ Ishlaydi | FastAPI backend, o'zbekcha dashboard (dark/neon-blue), matnli chat (lotin/kirill, xatoga chidamli buyruqlar) |
-| ✅ Ishlaydi | Doimiy xotira: qo'shish, FTS qidiruv, tahrirlash, eksport, o'chirish; manba/sana/ishonch; zid ma'lumotni belgilash |
-| ✅ Ishlaydi | Audit jurnali (maxfiy ma'lumotlar avtomatik yashiriladi), xatolar jurnali |
-| ✅ Ishlaydi | Approval Engine: A–E darajalar, tasdiq payload'ning SHA-256 xeshiga bog'langan, o'zgarsa bekor bo'ladi, takroriy/noma'lum natija himoyasi |
-| ✅ Ishlaydi | 6 ta haqiqiy agent: Manager, Developer (Python tahlili), File Analysis, Computer (tasdiq bilan), Security, QA; ketma-ket navbat |
-| ✅ Ishlaydi | Fayllarni o'qish (txt/csv/xlsx/pdf) faqat ruxsat berilgan papkada; `.env`, kalit fayllari bloklangan |
-| ✅ Ishlaydi | Diagnostika (RAM/CPU/disk/GPU), model katalogi, self-check va pytest dashboarddan |
-| ⚠️ Qisman | AI suhbat: Ollama ulansa ishlaydi (adapter tayyor, real Ollama bilan hali sinalmagan); aks holda offline rejim |
-| ⏳ Hali yo'q | Ovoz, internet tadqiqoti, brauzer agenti, rasm/video, Instagram, Telegram, POS/BI, telefon qo'ng'irog'i — [docs/ROADMAP.md](docs/ROADMAP.md) |
+| Core + Chat | O'zbekcha chat (lotin/kirill, xato yozilgan so'zlar), parol yozilsa bloklaydi |
+| Memory | Qo'shish, FTS qidiruv, tahrir, eksport, o'chirish; manba/sana/ishonch; zid ma'lumotni belgilaydi |
+| Planner | Maqsad → bosqichlar → agentlar; tasdiq kerak bo'lsa to'xtaydi |
+| 15 ta agent | Manager, Developer, File, Computer, Security, QA, Research, Browser, Voice, Image, Video, Instagram, Telegram, BI, POS — hammasining haqiqiy handleri bor, navbat bilan ishlaydi |
+| Approval + Audit | A–E darajalar, tasdiq aniq versiya xeshiga bog'langan, o'zgarsa bekor; takroriy va noma'lum natijadan himoya |
+| Business Intelligence | CSV/Excel import (uz/ru/en ustunlar, cp1251), qoldiq, kam qolgan, noto'g'ri narx, takroriy hujjat, tafovut, foyda, qarzdorlik, kunlik savdo |
+| POS Connector | Loyiha → tasdiq → kiritish → tekshirish. Hozir `file_export` (lokal outbox fayllari) |
+| Video studiya | FFmpeg: kesish, birlashtirish, 9:16, format, subtitr, ovoz, rasmlardan video, sifat tekshiruvi |
+| Rasm studiya | Pillow: tahlil, Instagram/Story presetlari, matn qo'shish, logo/avatar, generator uchun prompt |
+| Browser agent | Playwright: ruxsat berilgan saytni faqat o'qish, sayt tuzilishini hujjatlashtirish, skrinshot |
+| Self-improvement | Yaxshilash takliflari; patch → alohida git worktree'da test → tasdiq → alohida branch; rollback |
+| Bildirishnomalar | Dashboard (+ Telegram sozlangan bo'lsa) |
 
-Rejadagi 9 ta agent dashboardda xira ko'rinadi va vazifa qabul qilmaydi — ishlayotgandek ko'rsatilmaydi.
+**⚠️ Kod tayyor, lekin real xizmat bilan sinalmagan** (bulut muhitida bu xizmatlarga tarmoq yopiq; testlar soxta HTTP bilan):
+
+- **Ollama** — o'rnatsangiz ishlaydi; offline rejim har doim bor.
+- **Telegram bot** — token va o'z ID'ingiz kerak.
+- **Instagram** — Business/Creator akkaunt, Meta App va token kerak. Nashr uchun media ommaviy URL'da bo'lishi shart.
+- **Internet tadqiqoti** — standart holatda o'chiq, Sozlamalarda yoqiladi.
+- **Ovoz** — brauzer STT/TTS (Chrome/Edge, internet bilan). O'zbekcha TTS ovozi Windows'da odatda yo'q. Mahalliy Whisper ixtiyoriy.
+
+**⏳ Hali yo'q:**
+
+- POSga API yoki brauzer orqali to'g'ridan-to'g'ri yozish — POS manzili kerak.
+- AI bilan rasm generatsiyasi — GPU yoki onlayn adapter kerak.
+- Haqiqiy telefon qo'ng'irog'i — SIP provayder kerak; hozir faqat reja va tasdiq.
+- Dashboard autentifikatsiyasi — shuning uchun server faqat `127.0.0.1` da ishlaydi.
+
+Sozlash bo'yicha qo'llanmalar: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 
 ## Uch ish rejimi
 
@@ -32,7 +52,7 @@ Rejadagi 9 ta agent dashboardda xira ko'rinadi va vazifa qabul qilmaydi — ishl
 git clone https://github.com/Umidbaxtiyorvich/aka.git
 cd aka\JARVIS_AI_BRAIN
 powershell -ExecutionPolicy Bypass -File scripts\check_system.ps1   # GPU/RAM/disk diagnostikasi (faqat o'qiydi)
-powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1  # .venv + kutubxonalar (~40 MB) + testlar
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1  # .venv + kutubxonalar (~60 MB) + testlar
 powershell -ExecutionPolicy Bypass -File scripts\start_windows.ps1  # http://127.0.0.1:8765
 ```
 
@@ -64,11 +84,14 @@ python -m pytest -q
 - `yordam` — nima ishlaydi va nima hali yo'q
 - `eslab qol: hisobotlar har dushanba` · `xotira: hisobot`
 - `vazifa: POS manzilini topish`
-- `holat` · `fayllar` · `test`
+- `holat` · `fayllar` · `test` · `savdo hisoboti`
+- `reja tuz: testlarni tekshir keyin savdo hisoboti`
+- `internetdan qidir: ffmpeg subtitr` (internet yoqilgan bo'lsa)
 - ``bajar `dir` `` — buyruq taklif qilinadi, tasdiqlashlar bo'limida tasdiqlanadi
 
 ## Hujjatlar
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — arxitektura va modullar
 - [docs/SECURITY.md](docs/SECURITY.md) — xavfsizlik, tasdiqlash, maxfiy kalitlar
+- [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) — Ollama, Telegram, Instagram, POS, ovoz, FFmpeg, Playwright sozlash
 - [docs/ROADMAP.md](docs/ROADMAP.md) — keyingi bosqichlar

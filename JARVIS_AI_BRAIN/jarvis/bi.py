@@ -57,6 +57,7 @@ SYNONYMS = {
     "direction": ["direction", "yo'nalish", "направление"],
 }
 DOC_TYPES = {
+    "boshlangich": ["boshlang'ich qoldiq", "boshlangich qoldiq", "boshlangich", "opening", "начальный остаток", "ostatok na nachalo"],
     "kirim": ["kirim", "приход", "in", "purchase", "xarid"],
     "chiqim": ["chiqim", "расход", "out", "spisanie", "списание", "hisobdan chiqarish"],
     "sotuv": ["sotuv", "savdo", "продажа", "sale", "chek"],
@@ -235,18 +236,24 @@ class BusinessIntelligence:
         for sku in sorted(set(products) | set(moves)):
             p, mv = products.get(sku, {}), moves.get(sku, {})
             has_moves = bool(mv)
-            computed = mv.get("kirim", 0) + mv.get("qaytarish", 0) - mv.get("chiqim", 0) - mv.get("sotuv", 0)
+            has_opening = "boshlangich" in mv
+            computed = (mv.get("boshlangich", 0) + mv.get("kirim", 0) + mv.get("qaytarish", 0)
+                        - mv.get("chiqim", 0) - mv.get("sotuv", 0))
             reported = p.get("stock_reported")
             out.append({"sku": sku, "name": p.get("name") or "", "unit": p.get("unit") or "",
                         "kirim": mv.get("kirim", 0), "chiqim": mv.get("chiqim", 0), "sotuv": mv.get("sotuv", 0),
                         "qaytarish": mv.get("qaytarish", 0),
-                        "computed_from_movements": computed if has_moves else None, "reported_stock": reported,
-                        "difference": round(reported - computed, 3) if has_moves and reported is not None else None,
+                        "computed_from_movements": computed if has_moves else None, "has_opening": has_opening,
+                        "reported_stock": reported,
+                        # Boshlang'ich qoldiqsiz solishtirish ma'nosiz — tafovut faqat u bo'lganda hisoblanadi
+                        "difference": round(reported - computed, 3) if has_opening and reported is not None else None,
                         "min_stock": p.get("min_stock"), "in_catalog": sku in products})
         return out
 
     def current_stock(self, row: dict) -> float | None:
-        return row["reported_stock"] if row["reported_stock"] is not None else row["computed_from_movements"]
+        if row["reported_stock"] is not None:
+            return row["reported_stock"]
+        return row["computed_from_movements"] if row["has_opening"] else None
 
     def low_stock(self) -> list[dict]:
         out = []
@@ -335,8 +342,15 @@ class BusinessIntelligence:
         return out
 
     def discrepancies(self) -> list[dict]:
-        return [r for r in self.stock() if r["difference"] not in (None, 0)] + \
-               [r | {"note": "Harakat bor, lekin katalogda yo'q"} for r in self.stock() if not r["in_catalog"]]
+        out = []
+        for r in self.stock():
+            if r["difference"] not in (None, 0):
+                out.append(r | {"note": "POS qoldig'i hisoblangan qoldiqdan farq qiladi"})
+            elif not r["has_opening"] and r["computed_from_movements"] is not None and r["computed_from_movements"] < 0:
+                out.append(r | {"note": "Sotuv/chiqim kirimdan ko'p: kirim hujjati yoki boshlang'ich qoldiq yetishmaydi"})
+            if not r["in_catalog"]:
+                out.append(r | {"note": "Harakat bor, lekin mahsulot katalogida yo'q"})
+        return out
 
     def report(self) -> dict:
         has_data = bool(self.db.one("SELECT 1 x FROM bi_imports"))

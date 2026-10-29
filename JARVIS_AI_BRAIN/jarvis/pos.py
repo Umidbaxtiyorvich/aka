@@ -179,6 +179,8 @@ class POSManager:
             raise POSError("Oldingi kiritish natijasi noma'lum. Avval 'Tekshirish' tugmasi bilan POSdagi holatni aniqlang.")
         if not d["approval_id"]:
             raise POSError("Tasdiq so'ralmagan")
+        if self.settings.read_only_mode and self.connector.name != "file_export":
+            raise POSError("Faqat o'qish rejimi: tashqi POSga yozish bloklangan. Hozircha file_export ishlating.")
         payload = doc_payload(d, self.site)
         self.approvals.authorize_execution(d["approval_id"], payload)   # versiya/xesh tekshiruvi
         key = self.idempotency_key(d)

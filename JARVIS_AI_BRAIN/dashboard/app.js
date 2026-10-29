@@ -14,27 +14,29 @@ async function api(path, opts = {}) {
 const SECTIONS = [
   ["dashboard", "Dashboard", renderDashboard],
   ["chat", "AI Chat", renderChat],
-  ["voice", "Voice", planned("Ovozli muloqot", "Mikrofon (faqat siz yoqqanda, holati ko'rinib turadi), STT va TTS. O'zbek tili uchun mahalliy variantlar (Whisper) va ularning sifati solishtiriladi.")],
+  ["voice", "Voice", renderVoice],
   ["memory", "Memory", renderMemory],
   ["agents", "Agentlar", renderAgents],
   ["office", "Virtual AI Office", renderOffice],
   ["files", "Fayllar", renderFiles],
   ["computer", "Kompyuter boshqaruvi", renderComputer],
-  ["research", "Internet tadqiqoti", planned("Internet tadqiqoti", "Qidiruv, manba va sana bilan javob. Sahifa matni 'ishonchsiz ma'lumot' sifatida belgilanadi — undagi ko'rsatmalar bajarilmaydi.")],
-  ["studio", "Rasm va video", planned("Image & Video Studio", "FFmpeg orqali kesish, birlashtirish, 9:16 Reels, subtitr. Rasm generatsiyasi GPU yoki ixtiyoriy onlayn adapter talab qiladi.")],
-  ["instagram", "Instagram", planned("Instagram Manager", "Faqat Meta rasmiy Graph API (Business/Creator akkaunt). Har bir nashr aniq matn va akkaunt bilan tasdiqlanadi.")],
-  ["telegram", "Telegram", planned("Telegram Assistant", "Bot tokeni Credential Manager'da; faqat ruxsat berilgan user ID'lardan buyruq qabul qilinadi.")],
-  ["bi", "Business Intelligence", planned("Business Intelligence", "CSV/Excel import, qoldiq, foyda, kam qolgan mahsulot, takroriy hujjat va noto'g'ri narx tahlili.")],
-  ["pos", "POS ulanishi", planned("POS Connector", "Avval faqat o'qish. Hujjat loyihasi → aniq versiya tasdig'i → kiritish → qayta tekshirish → audit. POS manzili berilgach boshlanadi.")],
-  ["docs", "Hujjatlar", planned("Hujjatlar", "Tayyorlangan hujjat loyihalari va ularning versiyalari (POS moduli bilan birga).")],
+  ["research", "Internet tadqiqoti", renderResearch],
+  ["browser", "Brauzer agenti", renderBrowser],
+  ["studio", "Rasm va video", renderStudio],
+  ["instagram", "Instagram", renderInstagram],
+  ["telegram", "Telegram", renderTelegram],
+  ["bi", "Business Intelligence", renderBI],
+  ["pos", "POS ulanishi", renderPOS],
+  ["docs", "Hujjatlar", renderDocs],
   ["approvals", "Tasdiqlashlar", renderApprovals],
+  ["notifications", "Bildirishnomalar", renderNotifications],
   ["audit", "Audit jurnali", renderAudit],
   ["errors", "Xatolar", renderErrors],
-  ["tests", "Testlar", renderTests],
+  ["tests", "Testlar va yaxshilash", renderTests],
   ["security", "Xavfsizlik", renderSecurity],
   ["settings", "Sozlamalar", renderSettings],
 ];
-const PLANNED = new Set(["voice", "research", "studio", "instagram", "telegram", "bi", "pos", "docs"]);
+const PLANNED = new Set();
 
 function buildMenu() {
   $("#menu").innerHTML = SECTIONS.map(([id, name]) =>
@@ -63,7 +65,7 @@ async function renderDashboard(v) {
   const draw = async () => {
     const s = await api("/api/status");
     const sys = s.system, active = s.agents.filter((a) => a.implemented);
-    $("#mode").innerHTML = s.settings.read_only_mode ? statusPill(true, "Faqat o'qish rejimi") : statusPill(false, "", "O'zgartirish rejimi");
+    $("#mode").innerHTML = (s.unread_notifications ? `<a href="#notifications" class="pill warn" style="margin-right:6px">🔔 ${s.unread_notifications}</a>` : "") + (s.settings.read_only_mode ? statusPill(true, "Faqat o'qish rejimi") : statusPill(false, "", "O'zgartirish rejimi"));
     v.innerHTML = `<div class="grid">
       <div class="card"><h3>AI holati</h3><div class="big">${esc(s.ai.provider)}</div>${statusPill(s.ai.available, "ishlayapti", "mavjud emas")}<div class="muted">${esc(s.ai.note)}</div></div>
       <div class="card"><h3>Faol model</h3><div class="big">${esc(s.ai.model || "—")}</div></div>
@@ -87,7 +89,14 @@ async function renderDashboard(v) {
 function table(rows, cols) {
   if (!rows.length) return '<span class="muted">Bo\'sh</span>';
   return `<table><tr>${cols.map((c) => `<th>${c}</th>`).join("")}</tr>${rows.map((r) =>
-    `<tr>${cols.map((c) => `<td>${esc(typeof r[c] === "object" ? JSON.stringify(r[c]) : r[c])}</td>`).join("")}</tr>`).join("")}</table>`;
+    `<tr>${cols.map((c) => `<td>${esc(cell(r[c]))}</td>`).join("")}</tr>`).join("")}</table>`;
+}
+
+function cell(v) {
+  if (v === null || v === undefined) return "";
+  if (Array.isArray(v)) return v.map((x) => (typeof x === "object" ? JSON.stringify(x) : x)).join(", ");
+  if (typeof v === "boolean") return v ? "ha" : "yo'q";
+  return typeof v === "object" ? JSON.stringify(v) : v;
 }
 
 async function renderChat(v) {
@@ -141,8 +150,16 @@ async function renderAgents(v) {
     <input id="tt" placeholder="Vazifa nomi"></div>
     <textarea id="pl" placeholder='Payload (JSON). Misollar: developer → {"code":"def f(:"}  · security → {"text":"..."} · file_analysis → {"op":"list"} · qa → {"run_tests":false}'>{}</textarea>
     <div class="row" style="margin-top:8px"><button id="go">Navbatga qo'yish</button></div></div>
+    <div class="card" style="margin-top:12px"><h3>Planner: maqsad → bosqichlar</h3><div class="row"><input id="goal" placeholder="Masalan: testlarni tekshir keyin savdo hisobotini ko'rsat"><button id="mkplan">Reja tuzish</button></div><div id="plans"></div></div>
     <div class="card" style="margin-top:12px"><h3>Agentlar</h3>${table(agents, ["title", "role", "status", "permission", "tools", "last_error"])}</div>
     <div class="card" style="margin-top:12px"><h3>Vazifalar</h3>${table(tasks, ["id", "agent", "title", "status", "result", "error"])}</div>`;
+  const drawPlans = async () => { const ps = await api("/api/plans");
+    $("#plans").innerHTML = ps.slice(0, 8).map((p) => `<div style="margin-top:8px"><b>#${p.id}</b> ${esc(p.goal)} <span class="pill">${esc(p.status)}</span>
+      ${["planned", "partial", "waiting_approval"].includes(p.status) ? `<button class="ghost" data-run="${p.id}">Bajarish</button>` : ""}
+      <div class="muted">${p.steps.map((s) => `${s.n}. ${esc(s.text)} → ${s.agent} [${s.status}]`).join(" · ")}</div></div>`).join(""); };
+  drawPlans();
+  $("#mkplan").onclick = async () => { try { await api("/api/plans", { method: "POST", body: { text: $("#goal").value } }); drawPlans(); } catch (e) { alert(e.message); } };
+  $("#plans").onclick = async (e) => { const id = e.target.dataset.run; if (id) { await api(`/api/plans/${id}/run`, { method: "POST" }); drawPlans(); } };
   $("#go").onclick = async () => {
     try { await api("/api/tasks", { method: "POST", body: { agent: $("#ag").value, title: $("#tt").value || "Vazifa", payload: JSON.parse($("#pl").value || "{}") } }); setTimeout(show, 400); }
     catch (e) { alert(e.message); }
@@ -194,7 +211,10 @@ async function renderApprovals(v) {
     <div class="muted">Daraja ${a.level}: ${esc(a.level_info)} · tizim: ${esc(a.target)} · akkaunt: ${esc(a.account || "—")} · so'ragan: ${esc(a.requested_by)} · ${esc(a.created_at)}</div>
     <pre>${esc(JSON.stringify(a.payload, null, 2))}</pre><div class="muted">versiya xeshi: ${a.payload_hash}</div>
     <div class="row" style="margin-top:8px">${a.status === "pending" ? `<button data-ok="${a.id}" data-h="${a.payload_hash}">Aynan shu versiyani tasdiqlash</button><button class="danger" data-no="${a.id}" data-h="${a.payload_hash}">Rad etish</button>` : ""}
-    ${a.status === "approved" && a.action_type === "shell_command" ? `<button data-run="${a.id}">Bajarish</button>` : ""}</div><pre id="o${a.id}" hidden></pre></div>`).join("")
+    ${a.status === "approved" && a.action_type === "shell_command" ? `<button data-run="${a.id}">Bajarish</button>` : ""}
+    ${a.status === "approved" && a.action_type.startsWith("pos_") ? '<a href="#pos">POS bo\'limida kiritish →</a>' : ""}
+    ${a.status === "approved" && a.action_type.startsWith("instagram") ? '<a href="#instagram">Instagram bo\'limida nashr →</a>' : ""}
+    ${a.status === "approved" && a.action_type === "code_change" ? '<a href="#tests">Branch yaratish →</a>' : ""}</div><pre id="o${a.id}" hidden></pre></div>`).join("")
     : '<div class="card muted">Tasdiq so\'rovlari yo\'q</div>';
   v.onclick = async (e) => {
     const d = e.target.dataset;
@@ -214,7 +234,8 @@ async function renderErrors(v) {
 }
 
 async function renderTests(v) {
-  v.innerHTML = `<div class="card"><div class="row"><button id="h">Modullarni tekshirish</button><button id="t" class="ghost">pytest testlarini ishga tushirish</button></div><div id="r" class="muted">Natija shu yerda chiqadi.</div></div>`;
+  v.innerHTML = `<div class="card"><div class="row"><button id="h">Modullarni tekshirish</button><button id="t" class="ghost">pytest testlarini ishga tushirish</button></div><div id="r" class="muted">Natija shu yerda chiqadi.</div></div><div id="imp"></div>`;
+  renderImprove($("#imp"));
   const run = async (full) => {
     $("#r").textContent = "Bajarilmoqda…";
     const t = await api("/api/tasks", { method: "POST", body: { agent: "qa", title: full ? "pytest" : "Health check", payload: { run_tests: full } } });
@@ -250,8 +271,23 @@ async function renderSettings(v) {
     <p class="muted">Model avtomatik yuklab olinmaydi. O'rnatish: <code>ollama pull ${esc(sys.recommended_model)}</code> (o'zingiz, hajmini ko'rib).</p></div>
     <div class="card"><h3>Diagnostika</h3><pre>${esc(JSON.stringify({ os: sys.os, cpu: sys.cpu, cores: sys.cpu_cores, ram_gb: sys.ram_total_gb, disk_free_gb: sys.disk_free_gb, gpu: sys.gpu, tools: sys.tools }, null, 2))}</pre>
     <div>Tavsiya etilgan model: <b>${esc(sys.recommended_model)}</b></div></div></div>
+    <div class="card" style="margin-top:12px"><h3>Integratsiyalar (maxfiy kalitlarsiz)</h3>
+      <label><input type="checkbox" id="inet" style="width:auto" ${s.internet_enabled ? "checked" : ""}> Internet tadqiqotiga ruxsat</label><br>
+      <label><input type="checkbox" id="vrec" style="width:auto" ${s.save_voice_recordings ? "checked" : ""}> Ovoz yozuvlarini saqlash</label><br>
+      <label><input type="checkbox" id="tgn" style="width:auto" ${s.telegram_notify ? "checked" : ""}> Muhim bildirishnomalarni Telegram'ga yuborish</label>
+      <label>Brauzer agentiga ruxsat berilgan domenlar (vergul bilan)</label><input id="doms" value="${esc(s.browser_allowed_domains.join(", "))}">
+      <label>POS sayti manzili</label><input id="pos" value="${esc(s.pos_site)}" placeholder="https://...">
+      <label>POS konnektori</label><select id="posc"><option value="file_export">file_export (lokal fayl, tayyor)</option><option value="api">api (sozlanmagan)</option><option value="browser">browser (sozlanmagan)</option></select>
+      <label>Kam qolgan mahsulot chegarasi (min_stock bo'lmasa)</label><input id="low" type="number" value="${s.low_stock_threshold}">
+      <div class="row" style="margin-top:10px"><button id="save2">Saqlash</button></div><div id="msg2"></div>
+      <p class="muted">Telegram ID'lari, o'qish/yozish papkalari va faqat-o'qish rejimi xavfsizlik uchun faqat data/settings.json orqali o'zgartiriladi.</p></div>
     <div class="card" style="margin-top:12px"><h3>Model katalogi (taxminiy talablar)</h3>${table(sys.model_catalog, ["name", "disk_gb", "ram_gb", "note"])}</div>`;
-  $("#pv").value = s.ai_provider;
+  $("#pv").value = s.ai_provider; $("#posc").value = s.pos_connector;
+  $("#save2").onclick = async () => {
+    try { await api("/api/settings", { method: "POST", body: { internet_enabled: $("#inet").checked, save_voice_recordings: $("#vrec").checked, telegram_notify: $("#tgn").checked,
+      browser_allowed_domains: $("#doms").value.split(",").map((x) => x.trim()).filter(Boolean), pos_site: $("#pos").value.trim(), pos_connector: $("#posc").value, low_stock_threshold: Number($("#low").value) } });
+      $("#msg2").innerHTML = '<span class="ok">Saqlandi (audit jurnaliga yozildi)</span>'; } catch (e) { $("#msg2").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+  };
   $("#save").onclick = async () => {
     try { await api("/api/settings", { method: "POST", body: { ai_provider: $("#pv").value, ollama_url: $("#url").value, ollama_model: $("#model").value } });
       const st = await api("/api/status"); $("#msg").innerHTML = st.ai.available ? `<span class="ok">${esc(st.ai.note)}</span>` : `<span class="warn">${esc(st.ai.note)}</span>`;
