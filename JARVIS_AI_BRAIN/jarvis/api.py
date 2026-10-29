@@ -15,6 +15,7 @@ from .approval import ApprovalError
 from .config import LOCKED_KEYS, PROJECT_ROOT
 from .core import CAPABILITIES, JarvisCore
 from .bi import BIError
+from .decisions import DecisionError
 from .browser import BrowserError
 from .files import FileAccessError
 from .improve import ImproveError
@@ -29,7 +30,8 @@ from .telephony import TelephonyError
 from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
-               StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError)
+               StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
+               DecisionError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
@@ -50,6 +52,35 @@ class MemoryIn(BaseModel):
     project: str | None = None
     source: str = "user"
     confidence: float = 1.0
+    info_type: str | None = None
+    reference: str = ""
+    observed_at: str | None = None
+
+class VerifyIn(BaseModel):
+    reference: str
+    note: str = ""
+
+class DecisionIn(BaseModel):
+    problem: str
+    options: list[str]
+    chosen: str
+    rationale: str
+    sources: list[str] = []
+    risks: str = ""
+    expected_outcome: str = ""
+    review_at: str = ""
+    project: str = ""
+    files: list[str] = []
+
+class DecisionUpdateIn(BaseModel):
+    actual_outcome: str | None = None
+    review_at: str | None = None
+    status: str | None = None
+    note: str = ""
+
+class DecisionReviseIn(BaseModel):
+    reason: str
+    changes: dict = {}
 
 class MemoryUpdate(BaseModel):
     content: str
@@ -203,7 +234,8 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.post("/api/memory")
     def mem_add(body: MemoryIn):
         return guard(C().memory.add, body.content, body.kind, project=body.project, source=body.source,
-                     confidence=body.confidence)
+                     confidence=body.confidence, info_type=body.info_type, reference=body.reference,
+                     observed_at=body.observed_at)
 
     @app.put("/api/memory/{mid}")
     def mem_update(mid: int, body: MemoryUpdate):
@@ -213,6 +245,52 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def mem_delete(mid: int):
         guard(C().memory.delete, mid)
         return {"deleted": mid}
+
+    @app.get("/api/memory/{mid}/provenance")
+    def mem_prov(mid: int):
+        return guard(C().memory.provenance, mid)
+
+    @app.post("/api/memory/{mid}/verify")
+    def mem_verify(mid: int, body: VerifyIn):
+        return guard(C().memory.verify, mid, body.reference, body.note)
+
+    @app.get("/api/knowledge/compare")
+    def mem_compare(q: str):
+        return C().memory.compare(q)
+
+    @app.get("/api/knowledge/stale")
+    def mem_stale():
+        return C().memory.stale_items()
+
+    # Decision Journal
+    @app.get("/api/decisions")
+    def dec_list(q: str = "", status: str = ""):
+        return C().decisions.list(q, status)
+
+    @app.get("/api/decisions/due")
+    def dec_due():
+        return C().decisions.due_for_review()
+
+    @app.post("/api/decisions")
+    def dec_create(body: DecisionIn):
+        return guard(C().decisions.create, **body.model_dump())
+
+    @app.get("/api/decisions/compare")
+    def dec_compare(a: int, b: int):
+        return guard(C().decisions.compare, a, b)
+
+    @app.get("/api/decisions/{did}")
+    def dec_get(did: int):
+        return guard(C().decisions.get, did) | {"chain": C().decisions.history(did)}
+
+    @app.post("/api/decisions/{did}/update")
+    def dec_update(did: int, body: DecisionUpdateIn):
+        fields = {k: v for k, v in body.model_dump(exclude={"note"}).items() if v is not None}
+        return guard(C().decisions.update, did, note=body.note, **fields)
+
+    @app.post("/api/decisions/{did}/revise")
+    def dec_revise(did: int, body: DecisionReviseIn):
+        return guard(C().decisions.revise, did, reason=body.reason, **body.changes)
 
     @app.get("/api/memory/export", response_class=PlainTextResponse)
     def mem_export():

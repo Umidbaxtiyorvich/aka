@@ -14,6 +14,7 @@ from .audit import Audit
 from .computer import ComputerAgent
 from .config import Settings
 from .db import Database
+from .decisions import DecisionJournal
 from .files import FileIntelligence
 from .memory import Memory, MemoryError_
 from .browser import BrowserAgent
@@ -75,6 +76,7 @@ class JarvisCore:
         self.browser = BrowserAgent(self)
         self.telephony = Telephony(self.settings, self.approvals)
         self.planner = Planner(self)
+        self.decisions = DecisionJournal(self)
         self.improver = Improver(self)
         self.agents = AgentManager(self)
 
@@ -118,7 +120,10 @@ class JarvisCore:
             hits = self.memory.search(q, limit=5)
             if not hits:
                 return out | {"text": "Xotirada mos ma'lumot topilmadi."}
-            return out | {"text": "Topdim:\n" + "\n".join(f"• #{h['id']} {h['content']} (manba: {h['source']}, {h['created_at']})" for h in hits)}
+            from .memory import label
+            return out | {"text": "Topdim:\n" + "\n".join(
+                f"• #{h['id']} {h['content']} [{label(h)}; manba: {h['reference'] or h['source']}, {h['observed_at'] or h['created_at']}"
+                f"{'; ZID MA`LUMOT BOR' if h['status'] == 'conflict' else ''}]" for h in hits)}
 
         if intent == "task_create":
             content = text.split(":", 1)[1].strip() if ":" in text else text
