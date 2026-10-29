@@ -570,6 +570,20 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def pl_logs(name: str):
         return C().plugins.logs(name)
 
+    # Release gate
+    @app.get("/api/release/last")
+    def release_last():
+        import json as _json
+        from .config import jarvis_home
+        p = jarvis_home() / "release" / "last.json"
+        if not p.exists():
+            return {"verdict": None, "note": "Release gate hali ishga tushirilmagan (python scripts/release_gate.py)"}
+        return _json.loads(p.read_text(encoding="utf-8"))
+
+    @app.post("/api/release/run")
+    def release_run():
+        return guard(C().agents.submit, "qa", "Release gate", {"release_gate": True})
+
     # Observability
     @app.get("/api/diagnostics")
     def diag(external: bool = True):
@@ -859,6 +873,11 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.post("/api/improve/proposals/{pid}/rollback")
     def imp_rb(pid: int):
         return guard(C().improver.rollback, pid)
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon():
+        from fastapi.responses import Response
+        return Response(status_code=204)
 
     @app.get("/")
     def index():

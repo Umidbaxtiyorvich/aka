@@ -16,3 +16,14 @@
 | 12 | Release Gate | CI: ruff + pytest | `scripts/release_gate.py`: toifalangan testlar, frontend e2e, PASS/FAIL/INCOMPLETE; CI'ga ulash |
 
 Mavjud API va dashboard bo'limlari saqlanadi; yangi jadvallar mavjud bazaga migratsiya bilan qo'shiladi.
+
+## Natija (v0.3.0)
+
+Barcha 12 band amalga oshirildi. Fayllar: `router.py`, `resource_guard.py`, `policy.py`, `memory.py` (provenance), `decisions.py`,
+`sandbox.py`, `backup.py`, `dag.py`, `kgraph.py`, `plugins.py` + `plugins/`, `diagnostics.py`, `scripts/release_gate.py`,
+`dashboard/advanced.js`, `tests/frontend/`. Mavjud API va bo'limlar o'zgarmadi; yangi jadvallar migratsiya bilan qo'shildi.
+
+Halol cheklovlar:
+* Sandbox `process` backend — OS darajasidagi izolyatsiya emas (batafsil: docs/SECURITY.md → Sandbox).
+* Xarajat = token × siz kiritgan narx; provayder hisob-fakturasi emas.
+* Tashqi AI/Telegram/Instagram real xizmat bilan bulut muhitida sinalmagan (tarmoq yopiq) — mock testlar bor.

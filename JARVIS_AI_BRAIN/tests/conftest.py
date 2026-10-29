@@ -1,7 +1,33 @@
+import re
+
 import pytest
 
 from jarvis.config import Settings
 from jarvis.core import JarvisCore
+
+# Release gate uchun test toifalari (fayl bo'yicha + test nomi bo'yicha)
+FILE_CATEGORIES = {
+    "test_security": ["permissions", "unit"], "test_approval": ["permissions", "unit"], "test_policy": ["permissions", "unit"],
+    "test_memory_audit": ["unit"], "test_chat_agents": ["unit"], "test_api_files": ["api"], "test_bi_pos": ["integration"],
+    "test_integrations": ["integration"], "test_studio_browser": ["integration"], "test_planner_improve": ["integration"],
+    "test_router_guard": ["unit"], "test_provenance_decisions": ["unit"], "test_sandbox": ["permissions", "integration"],
+    "test_backup": ["integration"], "test_graphs": ["integration"], "test_plugins": ["permissions", "integration"],
+    "test_diagnostics": ["api", "unit"], "test_dashboard_e2e": ["frontend"],
+}
+ERROR_NAME = re.compile(r"fail|error|invalid|reject|block|forbidden|unknown|tamper|limit|validation|honest|unapproved|cannot|dangerous|missing|not_configured|refuse|untrusted")
+
+
+def pytest_collection_modifyitems(items):
+    for item in items:
+        cats = set(FILE_CATEGORIES.get(item.path.stem, ["unit"]))
+        if "api" in item.name or "client" in getattr(item, "fixturenames", ()):
+            cats.add("api")
+        if ERROR_NAME.search(item.name):
+            cats.add("errors")
+        for c in cats:
+            item.add_marker(getattr(pytest.mark, c))
+        item.user_properties.append(("categories", ",".join(sorted(cats))))
+
 
 
 @pytest.fixture

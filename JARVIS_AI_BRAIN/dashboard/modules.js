@@ -1,8 +1,9 @@
 // JARVIS dashboard — integratsiya bo'limlari. Umumiy yordamchilar ($, esc, api, table) app.js da.
 const post = (path, body) => api(path, { method: "POST", body: body || {} });
 const put = (path, body) => api(path, { method: "PUT", body });
-const out = (el, data) => { el.hidden = false; el.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2); };
-const fail = (el, e) => { el.hidden = false; el.innerHTML = `<span class="bad">${esc(e.message)}</span>`; };
+// Element yo'q bo'lsa (foydalanuvchi so'rov tugashidan oldin boshqa bo'limga o'tgan) — jim o'tkazib yuboriladi
+const out = (el, data) => { if (!el || !el.isConnected) return; el.hidden = false; el.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2); };
+const fail = (el, e) => { if (!el || !el.isConnected) return; el.hidden = false; el.innerHTML = `<span class="bad">${esc(e.message)}</span>`; };
 const fileLink = (p) => p ? `<a href="/api/studio/file?path=${encodeURIComponent(p)}" target="_blank">${esc(p.split(/[\\/]/).pop())}</a>` : "";
 
 // ---------------- Voice ----------------
@@ -62,7 +63,8 @@ async function renderResearch(v) {
     $("#r").onclick = async (e) => {
       const n = e.target.dataset.save; if (!n) return; const src = r.sources[n - 1];
       const text = prompt("Xotiraga saqlanadigan bilim (tekshirib, tahrirlang):", `${r.query}: ${src.title}`);
-      if (text) { await post("/api/memory", { content: text, kind: "knowledge", source: src.url, confidence: src.reliability }); e.target.textContent = "saqlandi ✓"; }
+      if (text) { await post("/api/memory", { content: text, kind: "knowledge", source: src.url, reference: src.url, info_type: "fact",
+        observed_at: src.fetched_at, confidence: src.reliability }); e.target.textContent = "saqlandi ✓ (tekshirilmagan fakt)"; }
     };
   };
   $("#ans").onclick = async () => { $("#r").textContent = "Qidirilmoqda…"; try { show(await post("/api/research/answer", { text: $("#q").value })); } catch (e) { fail($("#r"), e); } };

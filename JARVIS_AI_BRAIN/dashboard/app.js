@@ -1,5 +1,7 @@
 // JARVIS dashboard — barcha ma'lumotlar /api orqali backenddan keladi.
-const $ = (s, el = document) => el.querySelector(s);
+// Bo'lim almashgandan keyin tugagan async handlerlar yo'q elementga yozib xato bermasligi uchun — "bo'sh" element
+const DETACHED = () => document.createElement("div");
+const $ = (s, el = document) => el.querySelector(s) || DETACHED();
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 async function api(path, opts = {}) {
@@ -16,8 +18,13 @@ const SECTIONS = [
   ["chat", "AI Chat", renderChat],
   ["voice", "Voice", renderVoice],
   ["memory", "Memory", renderMemory],
+  ["knowledge", "Bilim manbalari", renderKnowledge],
+  ["decisions", "Qarorlar jurnali", renderDecisions],
+  ["kg", "Knowledge Graph", renderKG],
   ["agents", "Agentlar", renderAgents],
   ["office", "Virtual AI Office", renderOffice],
+  ["dag", "Vazifalar grafi", renderDag],
+  ["router", "AI Router va xarajat", renderRouter],
   ["files", "Fayllar", renderFiles],
   ["computer", "Kompyuter boshqaruvi", renderComputer],
   ["research", "Internet tadqiqoti", renderResearch],
@@ -33,7 +40,12 @@ const SECTIONS = [
   ["audit", "Audit jurnali", renderAudit],
   ["errors", "Xatolar", renderErrors],
   ["tests", "Testlar va yaxshilash", renderTests],
+  ["diagnostics", "Diagnostika", renderDiagnostics],
+  ["sandbox", "Sandbox", renderSandbox],
+  ["plugins", "Kengaytmalar", renderPlugins],
+  ["backups", "Zaxira nusxalar", renderBackups],
   ["security", "Xavfsizlik", renderSecurity],
+  ["policy", "Siyosat (Policy)", renderPolicy],
   ["settings", "Sozlamalar", renderSettings],
 ];
 const PLANNED = new Set();
@@ -125,8 +137,8 @@ async function renderMemory(v) {
   const load = async () => {
     const q = $("#q").value.trim(), kind = $("#kind").value;
     const rows = await api(q ? `/api/memory?q=${encodeURIComponent(q)}` : `/api/memory${kind ? "?kind=" + kind : ""}`);
-    $("#list").innerHTML = rows.length ? `<table><tr><th>#</th><th>tur</th><th>mazmun</th><th>manba</th><th>ishonch</th><th>holat</th><th></th></tr>${rows.map((r) =>
-      `<tr><td>${r.id}</td><td>${esc(r.kind)}</td><td>${esc(r.content)}</td><td>${esc(r.source)}<br><span class="muted">${esc(r.created_at)}</span></td><td>${r.confidence}</td>
+    $("#list").innerHTML = rows.length ? `<table><tr><th>#</th><th>tur</th><th>mazmun</th><th>ma'lumot turi</th><th>manba</th><th>ishonch</th><th>holat</th><th></th></tr>${rows.map((r) =>
+      `<tr><td>${r.id}</td><td>${esc(r.kind)}</td><td>${esc(r.content)}</td><td>${esc(memLabel(r))}</td><td>${esc(r.reference || r.source)}<br><span class="muted">${esc(r.observed_at || r.created_at)}</span></td><td>${r.confidence}</td>
       <td class="${r.status === "conflict" ? "warn" : ""}">${esc(r.status)}</td>
       <td><button class="ghost" data-edit="${r.id}">tahrir</button> <button class="danger" data-del="${r.id}">o'chir</button></td></tr>`).join("")}</table>` : '<span class="muted">Xotira bo\'sh</span>';
   };
@@ -217,7 +229,10 @@ async function renderApprovals(v) {
     ${a.status === "approved" && a.action_type.startsWith("shell_") ? `<button data-run="${a.id}">Bajarish</button>` : ""}
     ${a.status === "approved" && a.action_type.startsWith("pos_") ? '<a href="#pos">POS bo\'limida kiritish →</a>' : ""}
     ${a.status === "approved" && a.action_type.startsWith("instagram") ? '<a href="#instagram">Instagram bo\'limida nashr →</a>' : ""}
-    ${a.status === "approved" && a.action_type === "code_change" ? '<a href="#tests">Branch yaratish →</a>' : ""}</div><pre id="o${a.id}" hidden></pre></div>`).join("")
+    ${a.status === "approved" && a.action_type === "code_change" ? '<a href="#tests">Branch yaratish →</a>' : ""}
+    ${a.status === "approved" && a.action_type === "plugin_enable" ? '<a href="#plugins">Kengaytmani yoqish →</a>' : ""}
+    ${a.status === "approved" && a.action_type === "backup_restore" ? '<a href="#backups">Tiklashni bajarish →</a>' : ""}
+    ${a.status === "approved" && a.action_type === "sandbox_unsafe_run" ? '<a href="#sandbox">Sandbox\'da ishga tushirish →</a>' : ""}</div><pre id="o${a.id}" hidden></pre></div>`).join("")
     : '<div class="card muted">Tasdiq so\'rovlari yo\'q</div>';
   v.onclick = async (e) => {
     const d = e.target.dataset;
@@ -237,7 +252,8 @@ async function renderErrors(v) {
 }
 
 async function renderTests(v) {
-  v.innerHTML = `<div class="card"><div class="row"><button id="h">Modullarni tekshirish</button><button id="t" class="ghost">pytest testlarini ishga tushirish</button></div><div id="r" class="muted">Natija shu yerda chiqadi.</div></div><div id="imp"></div>`;
+  v.innerHTML = `<div class="card"><div class="row"><button id="h">Modullarni tekshirish</button><button id="t" class="ghost">pytest testlarini ishga tushirish</button></div><div id="r" class="muted">Natija shu yerda chiqadi.</div></div><div id="rel"></div><div id="imp"></div>`;
+  renderRelease($("#rel"));
   renderImprove($("#imp"));
   const run = async (full) => {
     $("#r").textContent = "Bajarilmoqda…";
@@ -248,6 +264,22 @@ async function renderTests(v) {
     $("#r").innerHTML = table(res.health, ["check", "ok", "note"]) + (res.tests ? `<h3 style="margin-top:12px" class="${res.tests.passed ? "ok" : "bad"}">${res.tests.passed ? "Barcha testlar o'tdi" : "Testlar muvaffaqiyatsiz"}</h3><pre>${esc(res.tests.summary)}</pre>` : "");
   };
   $("#h").onclick = () => run(false); $("#t").onclick = () => run(true);
+}
+
+async function renderRelease(el) {
+  const r = await api("/api/release/last");
+  const cls = { PASS: "ok", FAIL: "bad", INCOMPLETE: "warn" }[r.verdict] || "muted";
+  el.innerHTML = `<div class="card" style="margin-top:12px"><h3>Release gate</h3>
+    ${r.verdict ? `<div class="big ${cls}">${esc(r.verdict)}</div><div class="muted">${esc(r.finished_at)} · commit ${esc((r.git || {}).commit || "?")}${(r.git || {}).uncommitted_changes ? " (commit qilinmagan o'zgarishlar bor)" : ""}</div>
+      ${r.reasons.length ? `<div class="warnbox">${r.reasons.map(esc).join("<br>")}</div>` : ""}
+      ${table(Object.entries(r.tests.categories).map(([k, c]) => ({ toifa: k, ...c })), ["toifa", "passed", "failed", "skipped"])}
+      ${table(r.checks, ["name", "status", "detail"])}${r.tests.failures.length ? "<h3>Muvaffaqiyatsiz testlar</h3>" + table(r.tests.failures, ["test", "message"]) : ""}`
+      : `<p class="muted">${esc(r.note)}</p>`}
+    <div class="row" style="margin-top:8px"><button class="ghost" id="rgrun">Release gate'ni ishga tushirish (bir necha daqiqa)</button></div>
+    <p class="muted">INCOMPLETE — majburiy tekshiruv bajarilmagan; bu "tayyor" degani emas.</p></div>`;
+  $("#rgrun").onclick = async () => { $("#rgrun").textContent = "Ishlamoqda…"; const t = await api("/api/release/run", { method: "POST" });
+    for (let i = 0; i < 600; i++) { const x = await api("/api/tasks/" + t.id); if (["done", "failed"].includes(x.status)) break; await new Promise((s) => setTimeout(s, 2000)); }
+    renderRelease(el); };
 }
 
 async function renderSecurity(v) {

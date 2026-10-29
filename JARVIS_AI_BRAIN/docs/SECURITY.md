@@ -46,3 +46,44 @@ shubhali ko'rsatmalar aniqlanadi. Bunday matn xavfsizlik sozlamalarini o'zgartir
 ## Self-improvement chegarasi
 JARVIS testlarni ishga tushirib, hisobot beradi. U kodni o'zi o'zgartirmaydi; kelajakdagi patchlar alohida branch'da
 taklif qilinadi va faqat sizning tasdig'ingiz bilan birlashtiriladi. Rollback — Git orqali.
+
+## Policy Engine (v0.3)
+- Har bir tasdiq so'rovi `policy.py` orqali o'tadi. Kod past daraja so'rasa ham, siyosatdagi minimal daraja qo'llanadi.
+- **forbidden** amallar tasdiq bilan ham bajarilmaydi:
+  - CAPTCHA yoki login chetlab o'tish;
+  - kalitni tashqariga yuborish;
+  - tasdiqni o'chirish;
+  - xavfli tizim buyruqlari: `format`, `diskpart`, `bcdedit`, `reg delete HKLM` va boshqalar;
+  - `command_allowlist` da yo'q buyruq. Zanjirdagi har bir qism alohida tekshiriladi.
+- **medium** amallarni avtomatik qilishni faqat siz yoqasiz (`medium_auto_actions`). **high** amallar hech qachon avtomatik emas.
+- `command_allowlist` va `forbidden_actions` qulflangan: ularni faqat `settings.json` orqali o'zgartirish mumkin.
+
+## Sandbox — halol cheklov
+- `process` backend (standart) quyidagilarni qiladi:
+  - statik AST tekshiruvi;
+  - alohida vaqtinchalik papka;
+  - token va kalitlarsiz muhit (`python -I`);
+  - audit-hook: papkadan tashqariga yozish, subprocess, ctypes va ruxsatsiz tarmoqni bloklaydi;
+  - vaqt va xotira limiti.
+- Bu **OS darajasidagi izolyatsiya emas**. Maxsus yozilgan zararli kod (C-kengaytma, interpreter zaifligi) uni chetlab o'tishi mumkin.
+- Windows'da CPU vaqti limiti yo'q, xotira esa monitoring orqali nazorat qilinadi.
+- Shell buyruqlarida tarmoqni bloklab bo'lmaydi.
+- Ishonchsiz kod uchun `sandbox_backend: "docker"` ishlating:
+  - `--network none`, read-only konteyner, memory va pids limiti.
+  - Docker o'rnatilgan bo'lishi kerak. Muqobili — Windows Sandbox yoki VM.
+- Claude Code bulut muhiti JARVIS uchun izolyatsiya **emas**. U faqat ishlab chiqish muhiti.
+
+## AI Router va xarajat
+- Maxfiy ma'lumot (parol, karta, pasport, telefon) faqat mahalliy modelga yuboriladi. Mahalliy model bo'lmasa, tashqi modelga yuborilmaydi.
+- Pullik AI standart holatda o'chiq. U faqat siz yoqqanda va kunlik/oylik limit belgilanganda ishlaydi.
+- Limit tugasa, pullik so'rovlar to'xtaydi.
+- Model almashtirilsa, bu javobda ko'rsatiladi.
+
+## Kengaytmalar
+- Kengaytma faqat aniq versiya, fayl xeshi va ruxsatlar bilan tasdiqlangandan keyin yoqiladi.
+- Fayl o'zgarsa, kengaytma `untrusted` holatiga o'tadi.
+- Kod sandbox'da ishlaydi va faqat berilgan ruxsatlar doirasidagi amallarni bajara oladi.
+
+## Zaxira nusxalar
+- Maxfiy kalitlar nusxaga kirmaydi.
+- Tiklash E darajali tasdiq talab qiladi va undan oldin xavfsizlik nusxasi olinadi. Batafsil: docs/BACKUP.md.

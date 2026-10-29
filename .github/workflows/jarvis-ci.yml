@@ -5,8 +5,10 @@ on:
   pull_request:
     paths: ["JARVIS_AI_BRAIN/**", ".github/workflows/jarvis-ci.yml"]
 jobs:
-  test:
+  release-gate:
+    name: release gate (${{ matrix.os }})
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -19,5 +21,33 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt httpx ruff
-      - run: ruff check jarvis tests scripts --select E,F,W --ignore E501,E701,E702,E731
-      - run: python -m pytest -q
+      # Frontend testlari bu yerda Playwright'siz SKIP bo'ladi — gate ularni majburiy qilmaydi (pastdagi job qiladi)
+      - run: python scripts/release_gate.py --json-out release-report.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-report-${{ matrix.os }}
+          path: JARVIS_AI_BRAIN/release-report.json
+          if-no-files-found: ignore
+
+  frontend-gate:
+    name: release gate + frontend e2e (ubuntu)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: JARVIS_AI_BRAIN
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pip install -r requirements.txt httpx ruff playwright
+      - run: python -m playwright install --with-deps chromium
+      - run: python scripts/release_gate.py --require-frontend --json-out release-report.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-report-frontend
+          path: JARVIS_AI_BRAIN/release-report.json
+          if-no-files-found: ignore

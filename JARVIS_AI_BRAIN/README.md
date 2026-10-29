@@ -4,7 +4,26 @@ O'zbek tilida ishlaydigan, doimiy xotirali, agentli va **har bir muhim amalni fa
 
 > JARVIS ongga ega emas. U — AI modeli (ixtiyoriy), SQLite xotira, qoidalar va ruxsat berilgan vositalardan iborat dastur.
 
-## Holat (0.2.0)
+## v0.3.0 — boshqaruv, nazorat va xavfsizlik qatlami
+
+| Takomillashtirish | Holat | Qisqacha |
+|---|---|---|
+| Adaptive AI Router | ✅ | light/strong modellar, murakkablik va maxfiylik bo'yicha tanlash, ko'rinadigan fallback, OpenAI-compatible/Anthropic adapterlari |
+| Resource & Cost Guard | ✅ | so'rov/token/xarajat (o'lchangan va taxminiy alohida), kunlik/oylik limit, ogohlantirish, pullik AI standart holatda o'chiq |
+| Policy Engine | ✅ | low/medium/high/forbidden, buyruqlar allowlist'i, tasdiq oynasida ta'sir/maqsad/qaytarish |
+| Knowledge Provenance | ✅ | fakt/taxmin/model xulosasi/foydalanuvchi ma'lumoti, manbasiz "tasdiqlangan" bo'lmaydi, eskirish, manbalarni solishtirish |
+| Decision Journal | ✅ | o'zgarmas tarix, qayta ko'rib chiqish yangi qaror sifatida |
+| Sandbox | ✅ (best-effort) | statik tekshiruv + audit-hook + limitlar; OS izolyatsiyasi emas — Docker ixtiyoriy |
+| Backup & DR | ✅ | izchil nusxa, manifest + SHA-256, sinov-tiklash, retention, E-darajali tiklash |
+| Task Dependency Graph | ✅ | bog'liqliklar, xavfsiz parallel, takrorni qayta ishlatish, xato tarqalishi, vizual |
+| Knowledge Graph | ✅ | SQLite tugun/qirra, avtomatik bog'lanishlar, qidiruv, yo'l topish |
+| Plugin arxitekturasi | ✅ | manifest, hash bo'yicha ishonch, minimal ruxsatlar, sandbox'da ishlash |
+| Observability | ✅ | yagona diagnostika, "tekshirib bo'lmadi" holati, javob vaqtlari, eksport |
+| Release Gate | ✅ | toifalangan testlar, frontend e2e, PASS/FAIL/INCOMPLETE, CI |
+
+Tafsilotlar: [docs/IMPROVEMENTS_PLAN.md](docs/IMPROVEMENTS_PLAN.md), [docs/RELEASE.md](docs/RELEASE.md), [docs/BACKUP.md](docs/BACKUP.md).
+
+## Holat (0.2.0 modullari)
 
 **✅ Ishlaydi va testlangan** (47 ta avtomatik test + brauzerda end-to-end tekshiruv):
 
@@ -76,6 +95,7 @@ GPU (VRAM 6 GB+) bo'lsa, kattaroq modellar Sozlamalar → Model katalogida ko'rs
 cd JARVIS_AI_BRAIN
 pip install -r requirements.txt httpx
 python -m pytest -q
+python scripts/release_gate.py   # PASS / FAIL / INCOMPLETE
 ./scripts/start.sh            # http://127.0.0.1:8765
 ```
 

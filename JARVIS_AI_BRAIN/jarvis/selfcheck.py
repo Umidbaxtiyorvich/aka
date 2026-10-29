@@ -31,3 +31,11 @@ def run_tests(timeout: int = 300) -> dict:
                           cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=timeout)
     tail = (proc.stdout + proc.stderr).strip().splitlines()[-15:]
     return {"passed": proc.returncode == 0, "exit_code": proc.returncode, "summary": "\n".join(tail)}
+
+
+def run_release_gate(timeout: int = 900) -> dict:
+    """scripts/release_gate.py ni ishga tushiradi; hisobot JARVIS_HOME/release/last.json ga yoziladi."""
+    proc = subprocess.run([sys.executable, str(PROJECT_ROOT / "scripts" / "release_gate.py")], cwd=PROJECT_ROOT,
+                          capture_output=True, text=True, timeout=timeout)
+    verdict = {0: "PASS", 1: "FAIL", 2: "INCOMPLETE"}.get(proc.returncode, "FAIL")
+    return {"verdict": verdict, "exit_code": proc.returncode, "summary": "\n".join(proc.stdout.strip().splitlines()[-14:])}

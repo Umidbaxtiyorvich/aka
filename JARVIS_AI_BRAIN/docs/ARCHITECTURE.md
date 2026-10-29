@@ -41,10 +41,29 @@ files.py  computer.py  bi.py     pos.py     research.py   browser.py  studio.py 
 | 19 | Dashboard | dashboard/ | ✅ 23 bo'lim |
 | 20 | Monitoring & Notifications | notify.py, telephony.py | ✅ dashboard/Telegram, ⏳ qo'ng'iroq |
 
+## v0.3 boshqaruv qatlami
+
+| Modul | Fayl | Vazifa |
+|---|---|---|
+| Policy Engine | policy.py | Har bir amal: low/medium/high/forbidden → tasdiq darajasi (ApprovalEngine ichida majburiy) |
+| AI Router | router.py | Murakkablik/maxfiylik/narx/mavjudlik bo'yicha model tanlash, fallback; `core.ai` |
+| Resource Guard | resource_guard.py | ai_usage jadvali, limitlar, ogohlantirishlar, resurs o'lchovlari |
+| Provenance | memory.py | info_type, verified, reference, observed_at, eskirish, solishtirish |
+| Decision Journal | decisions.py | decisions + decision_events (o'zgarmas tarix) |
+| Sandbox | sandbox.py | Kod/buyruqni cheklangan muhitda ishga tushirish, sandbox_runs |
+| Backup | backup.py | Zip + manifest, verify, restore, retention, avto-jadval |
+| Task Graph | dag.py | dag_runs, dag_nodes; parallel va bog'liqliklar |
+| Knowledge Graph | kgraph.py | kg_nodes, kg_edges; avtomatik ilgaklar |
+| Plugins | plugins.py, plugins/ | Manifest, ishonch, ruxsatlar, sandbox'da ijro |
+| Diagnostics | diagnostics.py | Komponentlar holati, so'rov vaqtlari middleware'i, eksport |
+| Release Gate | scripts/release_gate.py | lint + JS + toifalangan pytest → PASS/FAIL/INCOMPLETE |
+
 ## Ma'lumotlar bazasi (SQLite, `JARVIS_HOME/jarvis.db`)
 
 `memories`(+FTS5), `conversations`, `audit_log`, `errors`, `approvals`, `tasks`, `plans`, `notifications`,
-`bi_imports`, `bi_products`, `bi_movements`, `bi_payments`, `pos_documents`, `ig_posts`, `ig_replies`, `proposals`.
+`bi_imports`, `bi_products`, `bi_movements`, `bi_payments`, `pos_documents`, `ig_posts`, `ig_replies`, `proposals`,
+`ai_usage`, `guard_alerts`, `decisions`, `decision_events`, `sandbox_runs`, `dag_runs`, `dag_nodes`, `kg_nodes`, `kg_edges`,
+`plugins`, `plugin_logs`. Migratsiya: `Database.ensure_columns()` — mavjud ma'lumot yo'qolmaydi.
 
 ## Fayllar (`JARVIS_HOME/workspace/` — yagona ruxsat berilgan papka)
 

@@ -247,6 +247,8 @@ class AgentManager:
     def _h_qa(self, p):
         from . import selfcheck
         out = {"health": selfcheck.health(self.core)}
+        if p.get("release_gate"):
+            out["release"] = selfcheck.run_release_gate()
         if p.get("run_tests"):
             out["tests"] = selfcheck.run_tests()
         return out
