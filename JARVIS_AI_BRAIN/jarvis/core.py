@@ -7,7 +7,7 @@ from pathlib import Path
 from . import intent as intent_mod
 from . import system_info
 from .agents import AgentManager
-from .ai_engine import SYSTEM_PROMPT, AIError, build_provider
+from .ai_engine import SYSTEM_PROMPT, AIError
 from .approval import ApprovalEngine
 from .bi import BusinessIntelligence
 from .audit import Audit
@@ -21,8 +21,11 @@ from .improve import Improver
 from .instagram import InstagramManager
 from .notify import Notifier
 from .planner import Planner
+from .policy import PolicyEngine
 from .pos import POSManager
 from .research import Research, ResearchError
+from .resource_guard import ResourceGuard
+from .router import Router
 from .studio import Studio
 from .telegram_bot import TelegramAssistant
 from .telephony import Telephony
@@ -53,10 +56,12 @@ class JarvisCore:
         self.db = Database(db_path)
         self.audit = Audit(self.db)
         self.memory = Memory(self.db, self.audit)
-        self.approvals = ApprovalEngine(self.db, self.audit)
+        self.policy = PolicyEngine(self.settings)
+        self.approvals = ApprovalEngine(self.db, self.audit, self.policy)
         self.files = FileIntelligence(self.settings)
         self.computer = ComputerAgent(self.settings, self.approvals, self.audit)
-        self.ai = build_provider(self.settings)
+        self.guard = ResourceGuard(self)
+        self.ai = Router(self)
         self.bi = BusinessIntelligence(self.db, self.audit, self.settings, self.files)
         self.pos = POSManager(self.db, self.audit, self.approvals, self.settings)
         self.notifier = Notifier(self.db, self.settings)
@@ -74,7 +79,7 @@ class JarvisCore:
         self.agents = AgentManager(self)
 
     def reload_ai(self):
-        self.ai = build_provider(self.settings)
+        self.ai._avail_cache.clear()
 
     # --- chat ---
     def chat(self, text: str) -> dict:
@@ -195,8 +200,9 @@ class JarvisCore:
         messages += [{"role": h["role"], "content": h["content"]} for h in history[:-1]]
         messages.append({"role": "user", "content": text})
         try:
-            answer = self.ai.chat(messages)
-            return {"text": answer, "provider": self.ai.name}
+            r = self.ai.route(messages)
+            return {"text": r["text"] + "\n\n" + self.ai.notice(r["route"]), "provider": r["route"]["provider"],
+                    "route": r["route"]}
         except AIError as e:
             self.audit.error("ai_engine", str(e))
             return {"text": "AI modeli javob bermadi. Xato logga yozildi. Sozlamalar → AI bo'limida holatni tekshiring.",

@@ -23,8 +23,11 @@ class ComputerAgent:
         cwd = self.settings.allowed_write_dirs[0]
         payload = {"command": command, "cwd": cwd}
         summary = f"Buyruq: {command} — {EXPLAIN[level]}" + (f" Sabab: {reason}" if reason else "")
-        appr = self.approvals.request(action_type="shell_command", target="local_computer", level=level,
-                                      payload=payload, summary=summary, requested_by="computer_agent")
+        appr = self.approvals.request(action_type="shell_read" if level == "A" else "shell_command",
+                                      target="local_computer", level=level, payload=payload, summary=summary,
+                                      requested_by="computer_agent", command=command,
+                                      purpose=reason or "Foydalanuvchi so'ragan buyruq")
+        level = appr["level"]
         return {"approval": appr, "explanation": EXPLAIN[level], "risk": level}
 
     def execute(self, approval_id: int, payload: dict) -> dict:

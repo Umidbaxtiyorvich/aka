@@ -83,6 +83,15 @@ class Database:
         with self._lock:
             return [dict(r) for r in self.conn.execute(sql, params).fetchall()]
 
+    def ensure_columns(self, table: str, columns: dict[str, str]) -> None:
+        """Oddiy migratsiya: mavjud jadvalga yetishmayotgan ustunlarni qo'shadi (ma'lumot yo'qolmaydi)."""
+        with self._lock:
+            have = {r["name"] for r in self.conn.execute(f"PRAGMA table_info({table})").fetchall()}
+            for name, decl in columns.items():
+                if name not in have:
+                    self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+            self.conn.commit()
+
     def one(self, sql: str, params: tuple = ()) -> dict | None:
         rows = self.query(sql, params)
         return rows[0] if rows else None

@@ -6,9 +6,6 @@ Tashqi pullik provayderlar ixtiyoriy; ular qo'shilsa ham, xarajatdan oldin tasdi
 """
 from __future__ import annotations
 
-import json
-import urllib.error
-import urllib.request
 
 SYSTEM_PROMPT = (
     "Sen JARVIS — foydalanuvchining shaxsiy yordamchisisan. Faqat o'zbek tilida, qisqa va aniq javob ber. "
@@ -38,6 +35,9 @@ class OfflineProvider:
     def available(self) -> tuple[bool, str]:
         return True, "Modelsiz rejim (qoidaga asoslangan)"
 
+    def chat_ex(self, messages: list[dict]) -> dict:
+        return {"text": self.chat(messages), "tokens_in": None, "tokens_out": None}
+
     def chat(self, messages: list[dict]) -> str:
         last = messages[-1]["content"] if messages else ""
         return ("Hozir AI modeli ulanmagan (offline rejim). Men xotira, vazifalar, fayllar va tasdiqlar bilan "
@@ -51,13 +51,13 @@ class OllamaProvider:
         self.url, self.model, self.timeout = url.rstrip("/"), model, timeout
 
     def _req(self, path: str, body: dict | None = None, timeout: int | None = None) -> dict:
-        data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(self.url + path, data=data, headers={"Content-Type": "application/json"})
+        from . import net
         try:
-            with urllib.request.urlopen(req, timeout=timeout or self.timeout) as r:
-                return json.loads(r.read().decode())
-        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
-            raise AIError(f"Ollama bilan bog'lanib bo'lmadi ({self.url}): {e}") from e
+            if body is None:
+                return net.get_json(self.url + path, timeout=timeout or self.timeout)
+            return net.post_json(self.url + path, json_body=body, timeout=timeout or self.timeout)
+        except net.NetError as e:
+            raise AIError(f"Ollama bilan bog'lanib bo'lmadi ({self.url}): {e}") from None
 
     def available(self) -> tuple[bool, str]:
         try:
@@ -69,12 +69,16 @@ class OllamaProvider:
             return False, f"Model '{self.model}' o'rnatilmagan. Mavjud: {names or 'yo‘q'}"
         return True, f"Ollama ishlayapti, model: {self.model}"
 
-    def chat(self, messages: list[dict]) -> str:
+    def chat_ex(self, messages: list[dict]) -> dict:
         res = self._req("/api/chat", {"model": self.model, "messages": messages, "stream": False})
         content = res.get("message", {}).get("content")
         if not content:
             raise AIError("Model bo'sh javob qaytardi")
-        return content
+        # Ollama haqiqiy token sonini qaytaradi (prompt_eval_count / eval_count)
+        return {"text": content, "tokens_in": res.get("prompt_eval_count"), "tokens_out": res.get("eval_count")}
+
+    def chat(self, messages: list[dict]) -> str:
+        return self.chat_ex(messages)["text"]
 
 
 def build_provider(settings) -> OfflineProvider | OllamaProvider:

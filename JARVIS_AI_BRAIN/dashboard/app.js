@@ -208,10 +208,13 @@ async function renderApprovals(v) {
   v.innerHTML = rows.length ? rows.map((a) => `<div class="card" style="margin-bottom:10px">
     <div class="row" style="justify-content:space-between"><b>#${a.id} ${esc(a.summary)}</b><span class="pill ${a.status === "pending" ? "warn" : a.status === "executed" ? "ok" : ""}">${esc(a.status)}</span></div>
     ${a.level === "E" ? '<div class="warnbox bad">OGOHLANTIRISH: qaytarib bo\'lmaydigan yoki o\'chiruvchi amal bo\'lishi mumkin.</div>' : ""}
+    ${a.risk ? `<div class="row" style="flex-wrap:wrap"><span class="pill ${a.risk === "high" ? "bad" : a.risk === "medium" ? "warn" : "ok"}">xavf: ${esc(a.risk)}</span>
+      <span>Ta'sir: <b>${esc(a.impact)}</b></span><span>Maqsad: ${esc(a.purpose)}</span>
+      <span>Qaytarish: ${a.reversible ? '<span class="ok">mumkin</span>' : '<span class="bad">mumkin emas</span>'}</span></div>` : ""}
     <div class="muted">Daraja ${a.level}: ${esc(a.level_info)} · tizim: ${esc(a.target)} · akkaunt: ${esc(a.account || "—")} · so'ragan: ${esc(a.requested_by)} · ${esc(a.created_at)}</div>
     <pre>${esc(JSON.stringify(a.payload, null, 2))}</pre><div class="muted">versiya xeshi: ${a.payload_hash}</div>
     <div class="row" style="margin-top:8px">${a.status === "pending" ? `<button data-ok="${a.id}" data-h="${a.payload_hash}">Aynan shu versiyani tasdiqlash</button><button class="danger" data-no="${a.id}" data-h="${a.payload_hash}">Rad etish</button>` : ""}
-    ${a.status === "approved" && a.action_type === "shell_command" ? `<button data-run="${a.id}">Bajarish</button>` : ""}
+    ${a.status === "approved" && a.action_type.startsWith("shell_") ? `<button data-run="${a.id}">Bajarish</button>` : ""}
     ${a.status === "approved" && a.action_type.startsWith("pos_") ? '<a href="#pos">POS bo\'limida kiritish →</a>' : ""}
     ${a.status === "approved" && a.action_type.startsWith("instagram") ? '<a href="#instagram">Instagram bo\'limida nashr →</a>' : ""}
     ${a.status === "approved" && a.action_type === "code_change" ? '<a href="#tests">Branch yaratish →</a>' : ""}</div><pre id="o${a.id}" hidden></pre></div>`).join("")

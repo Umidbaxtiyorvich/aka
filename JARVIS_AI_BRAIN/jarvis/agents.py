@@ -99,7 +99,8 @@ class AgentManager:
         t = self.task(tid)
         agent = self.agents[t["agent"]]
         agent.status, agent.current_task = "running", tid
-        self.core.db.execute("UPDATE tasks SET status='running' WHERE id=?", (tid,))
+        self.core.db.execute("UPDATE tasks SET status='running', started_at=? WHERE id=?",
+                             (datetime.now(timezone.utc).isoformat(), tid))
         try:
             result = agent.handler(json.loads(t["payload"] or "{}"))
             text = json.dumps(result, ensure_ascii=False, default=str)

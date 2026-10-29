@@ -32,7 +32,11 @@ USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyErro
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
-            "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings"}
+            "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
+            "ai_providers", "paid_ai_allowed", "currency", "daily_cost_limit", "monthly_cost_limit", "daily_request_limit",
+            "cost_warn_percent", "medium_auto_actions", "sandbox_backend", "sandbox_timeout_sec", "sandbox_memory_mb",
+            "sandbox_max_retries", "backup_interval_hours", "backup_keep", "backup_max_total_mb", "backup_include_workspace"}
+PROVIDER_KINDS = {"ollama", "openai_compatible", "anthropic", "offline"}
 
 DASHBOARD = PROJECT_ROOT / "dashboard"
 
@@ -74,6 +78,22 @@ class SettingsIn(BaseModel):
     pos_connector: str | None = None
     low_stock_threshold: float | None = None
     save_voice_recordings: bool | None = None
+    ai_providers: list[dict] | None = None
+    paid_ai_allowed: bool | None = None
+    currency: str | None = None
+    daily_cost_limit: float | None = None
+    monthly_cost_limit: float | None = None
+    daily_request_limit: int | None = None
+    cost_warn_percent: int | None = None
+    medium_auto_actions: list[str] | None = None
+    sandbox_backend: str | None = None
+    sandbox_timeout_sec: int | None = None
+    sandbox_memory_mb: int | None = None
+    sandbox_max_retries: int | None = None
+    backup_interval_hours: float | None = None
+    backup_keep: int | None = None
+    backup_max_total_mb: int | None = None
+    backup_include_workspace: bool | None = None
 
 class OpIn(BaseModel):
     """Umumiy so'rov: modul amali va parametrlari."""
@@ -211,7 +231,7 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def appr_execute(aid: int):
         c = C()
         row = guard(c.approvals.get, aid)
-        if row["action_type"] != "shell_command":
+        if row["action_type"] not in ("shell_command", "shell_read"):
             raise HTTPException(400, "Bu turdagi amal uchun ijrochi hali yo'q")
         return guard(c.computer.execute, aid, row["payload"])
 
@@ -270,6 +290,20 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
         data = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in EDITABLE}
         if "pos_connector" in data and data["pos_connector"] not in ("file_export", "api", "browser"):
             raise HTTPException(400, "pos_connector: file_export, api yoki browser")
+        for prov in data.get("ai_providers") or []:
+            if not isinstance(prov, dict) or not prov.get("id") or prov.get("kind") not in PROVIDER_KINDS or not prov.get("model"):
+                raise HTTPException(400, f"Provayder noto'g'ri: id, kind ({sorted(PROVIDER_KINDS)}), model kerak")
+            if prov["kind"] in ("openai_compatible", "anthropic"):
+                prov["paid"], prov["local"] = True, False
+                if prov["kind"] == "openai_compatible" and not str(prov.get("base_url", "")).startswith("https://"):
+                    raise HTTPException(400, "Tashqi provayder uchun https:// base_url kerak")
+        if "medium_auto_actions" in data:
+            from .policy import ACTIONS
+            bad = [a for a in data["medium_auto_actions"] if ACTIONS.get(a, ("high",))[0] != "medium"]
+            if bad:
+                raise HTTPException(400, f"Faqat o'rta xavfli amallar avtomatik qilinadi. Mumkin emas: {bad}")
+        if "sandbox_backend" in data and data["sandbox_backend"] not in ("process", "docker"):
+            raise HTTPException(400, "sandbox_backend: process yoki docker")
         if "ai_provider" in data and data["ai_provider"] not in ("offline", "ollama"):
             raise HTTPException(400, "ai_provider: offline yoki ollama")
         for k, v in data.items():
@@ -282,6 +316,31 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
         c.audit.log("user", f"Sozlamalar o'zgartirildi: {sorted(data)}", target="settings", risk="C",
                     approval_status="user_action")
         return c.settings.public()
+
+    # AI Router / Resource Guard / Policy
+    @app.get("/api/ai/router")
+    def ai_router():
+        c = C()
+        return {"providers": c.ai.status(), "last_route": c.ai.last_route, "metrics": c.guard.providers()}
+
+    @app.post("/api/ai/route-preview")
+    def ai_preview(body: TextIn):
+        p = C().ai.plan([{"role": "user", "content": body.text}])
+        return {"complexity": p["complexity"], "private": p["private"], "skipped": p["skipped"],
+                "order": [x["id"] for x in p["candidates"]]}
+
+    @app.get("/api/guard")
+    def guard_summary():
+        c = C()
+        return c.guard.summary() | {"local_model": c.guard.local_model_resources()}
+
+    @app.get("/api/policy")
+    def policy_table():
+        return C().policy.table()
+
+    @app.post("/api/policy/evaluate")
+    def policy_eval(body: OpIn):
+        return C().policy.evaluate(body.op, body.params.get("level"), command=body.params.get("command")).public()
 
     # Planner
     @app.post("/api/plans")

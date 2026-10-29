@@ -39,7 +39,10 @@ def test_unconnected_agent_fails_honestly(core):
 
 def test_computer_flow_read_only(core):
     assert core.computer.propose("echo salom")["risk"] == "A"
-    assert core.computer.propose("dir & del x.txt")["risk"] == "E"
+    import pytest as _pt
+    from jarvis.approval import ApprovalError as _AE
+    with _pt.raises(_AE, match="ruxsat etilgan buyruqlar"):
+        core.computer.propose("dir & del x.txt")          # zanjirdagi 'del' allowlist'da yo'q
     assert core.computer.propose("dir | findstr a")["risk"] == "C"
     r = core.computer.propose("dir" if __import__("os").name == "nt" else "ls")
     assert r["approval"]["status"] == "approved"

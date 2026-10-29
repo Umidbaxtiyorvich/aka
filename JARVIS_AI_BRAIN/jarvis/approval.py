@@ -17,7 +17,10 @@ from datetime import datetime, timezone
 
 from .audit import Audit
 from .db import Database
+from .policy import PolicyEngine, PolicyViolation
 from .security import contains_secret
+
+POLICY_COLUMNS = {"risk": "TEXT", "impact": "TEXT", "purpose": "TEXT", "reversible": "INTEGER", "policy_reason": "TEXT"}
 
 AUTO_LEVELS = {"A", "B"}
 LEVEL_INFO = {
@@ -40,13 +43,24 @@ def payload_hash(action_type: str, target: str, account: str | None, payload: di
 
 
 class ApprovalEngine:
-    def __init__(self, db: Database, audit: Audit):
-        self.db, self.audit = db, audit
+    def __init__(self, db: Database, audit: Audit, policy: PolicyEngine | None = None):
+        self.db, self.audit, self.policy = db, audit, policy
+        db.ensure_columns("approvals", POLICY_COLUMNS)
 
     def request(self, *, action_type: str, target: str, level: str, payload: dict, summary: str,
-                requested_by: str, account: str | None = None, idempotency_key: str | None = None) -> dict:
+                requested_by: str, account: str | None = None, idempotency_key: str | None = None,
+                purpose: str = "", command: str | None = None) -> dict:
         if level not in LEVEL_INFO:
             raise ApprovalError(f"Noma'lum daraja: {level}")
+        decision = None
+        if self.policy:
+            try:
+                decision = self.policy.enforce(action_type, level, command=command)
+            except PolicyViolation as e:
+                self.audit.log(requested_by, f"Siyosat bloklagan amal: {summary}", target=target, risk="E",
+                               approval_status="forbidden", error_code="POLICY_FORBIDDEN", error_note=str(e))
+                raise ApprovalError(f"Taqiqlangan amal: {e}") from None
+            level = decision.level
         if contains_secret(json.dumps(payload, ensure_ascii=False)):
             raise ApprovalError("Payload ichida maxfiy ma'lumot bor — tasdiqqa qo'yilmaydi.")
         h = payload_hash(action_type, target, account, payload)
@@ -54,12 +68,18 @@ class ApprovalEngine:
             existing = self.db.one("SELECT * FROM approvals WHERE idempotency_key=?", (idempotency_key,))
             if existing:
                 return existing
-        status = "approved" if level in AUTO_LEVELS else "pending"
+        if decision is not None:
+            status = "pending" if decision.requires_approval else "approved"
+        else:
+            status = "approved" if level in AUTO_LEVELS else "pending"
         cur = self.db.execute(
             "INSERT INTO approvals(action_type, target, account, level, payload, payload_hash, summary, status,"
-            " requested_by, idempotency_key) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            " requested_by, idempotency_key, risk, impact, purpose, reversible, policy_reason)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (action_type, target, account, level, json.dumps(payload, ensure_ascii=False), h, summary,
-             status, requested_by, idempotency_key),
+             status, requested_by, idempotency_key, decision.risk if decision else None,
+             decision.impact if decision else None, purpose or summary,
+             int(decision.reversible) if decision else None, decision.reason if decision else None),
         )
         self.audit.log(requested_by, f"Tasdiq so'raldi: {summary}", target=target, risk=level, approval_status=status)
         return self.get(cur.lastrowid)
