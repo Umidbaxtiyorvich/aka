@@ -44,3 +44,6 @@ pre{background:#050c18;border:1px solid var(--line);border-radius:8px;padding:10
 .warnbox{border:1px solid #6b5520;background:#2a2008;padding:10px;border-radius:8px;margin-bottom:10px}
 @media (max-width:760px){body{flex-direction:column}aside{width:100%;height:auto;position:static}main{padding:14px 16px}}
 a{color:var(--neon2)}
+label{display:block;margin-top:6px}
+.row label{margin-top:0}
+#mode:empty{display:none}
