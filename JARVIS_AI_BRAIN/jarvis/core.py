@@ -9,6 +9,7 @@ from . import system_info
 from .agents import AgentManager
 from .ai_engine import SYSTEM_PROMPT, AIError
 from .approval import ApprovalEngine
+from .backup import BackupManager
 from .bi import BusinessIntelligence
 from .audit import Audit
 from .computer import ComputerAgent
@@ -79,6 +80,7 @@ class JarvisCore:
         self.planner = Planner(self)
         self.decisions = DecisionJournal(self)
         self.sandbox = Sandbox(self)
+        self.backup = BackupManager(self)
         self.improver = Improver(self)
         self.agents = AgentManager(self)
 

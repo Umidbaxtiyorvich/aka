@@ -14,6 +14,7 @@ from .ai_engine import MODEL_CATALOG
 from .approval import ApprovalError
 from .config import LOCKED_KEYS, PROJECT_ROOT
 from .core import CAPABILITIES, JarvisCore
+from .backup import BackupError
 from .bi import BIError
 from .decisions import DecisionError
 from .browser import BrowserError
@@ -32,7 +33,7 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError)
+               DecisionError, SandboxError, BackupError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
@@ -178,6 +179,13 @@ class SandboxIn(BaseModel):
     allow_network: bool = False
     stdin: str | None = None
     approval_id: int | None = None
+
+class BackupIn(BaseModel):
+    label: str = "manual"
+    include_workspace: bool | None = None
+
+class RestoreIn(BaseModel):
+    approval_id: int
 
 class CallIn(BaseModel):
     phone: str
@@ -426,6 +434,28 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.post("/api/policy/evaluate")
     def policy_eval(body: OpIn):
         return C().policy.evaluate(body.op, body.params.get("level"), command=body.params.get("command")).public()
+
+    # Backup & recovery
+    @app.get("/api/backups")
+    def bk_list():
+        c = C()
+        return {"status": c.backup.status(), "items": c.backup.list(), "history": c.backup._history()[-30:][::-1]}
+
+    @app.post("/api/backups")
+    def bk_create(body: BackupIn):
+        return guard(C().backup.create, body.label, body.include_workspace)
+
+    @app.post("/api/backups/{name}/verify")
+    def bk_verify(name: str):
+        return guard(C().backup.verify, name)
+
+    @app.post("/api/backups/{name}/request-restore")
+    def bk_req(name: str):
+        return guard(C().backup.request_restore, name)
+
+    @app.post("/api/backups/{name}/restore")
+    def bk_restore(name: str, body: RestoreIn):
+        return guard(C().backup.restore, name, body.approval_id)
 
     # Sandbox
     @app.get("/api/sandbox")
@@ -722,7 +752,9 @@ def main():
     a = ap.parse_args()
     if a.host not in ("127.0.0.1", "localhost"):
         print("OGOHLANTIRISH: server tarmoqqa ochilmoqda. Autentifikatsiya hali yo'q — faqat ishonchli tarmoqda!")
-    uvicorn.run(create_app(), host=a.host, port=a.port)
+    app = create_app()
+    app.state.core.backup.start_auto()        # jadval bo'yicha avtomatik zaxira (backup_interval_hours)
+    uvicorn.run(app, host=a.host, port=a.port)
 
 
 if __name__ == "__main__":
