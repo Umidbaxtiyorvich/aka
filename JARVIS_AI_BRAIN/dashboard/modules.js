@@ -112,14 +112,15 @@ async function renderBrowser(v) {
 
 // ---------------- Studio ----------------
 async function renderStudio(v) {
-  const [tools, exps] = await Promise.all([api("/api/studio/tools"), api("/api/studio/exports")]);
+  const [tools, exps, ig] = await Promise.all([api("/api/studio/tools"), api("/api/studio/exports"), api("/api/studio/imagegen")]);
   const ws = (await api("/api/settings")).allowed_read_dirs[0];
   v.innerHTML = `<div class="card"><div>FFmpeg: ${tools.ffmpeg ? '<span class="ok">bor</span>' : '<span class="warn">yo\'q (winget install Gyan.FFmpeg)</span>'} · Pillow: ${tools.pillow ? '<span class="ok">' + esc(tools.pillow) + "</span>" : '<span class="warn">yo\'q</span>'}
-    · AI rasm generatsiyasi: <span class="muted">${esc(tools.image_generation)}</span></div><div class="muted">Kirish fayllari: ${esc(ws)} · natijalar har doim yangi fayl (asl fayl o'zgarmaydi)</div></div>
+    · Rasm generatori: ${ig.generator.available ? `<span class="ok">mavjud (${ig.generator.models.map(esc).join(", ")})</span>` : `<span class="muted">${esc(ig.generator.note)}</span>`}
+    · Vision: ${ig.vision.available ? `<span class="ok">${esc(ig.vision_model)}</span>` : '<span class="muted">sozlanmagan</span>'}</div><div class="muted">Kirish fayllari: ${esc(ws)} · natijalar har doim yangi fayl (asl fayl o'zgarmaydi)</div></div>
     <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:12px">
     <div class="card"><h3>Video</h3><select id="vop">${["probe:Ma'lumot", "quality:Sifat tekshiruvi (Reels)", "trim:Kesish", "vertical:9:16 Reels formati", "convert:Format o'zgartirish", "concat:Birlashtirish", "subtitles:Subtitr", "audio:Ovoz qo'shish", "slideshow:Rasmlardan video", "auto_subtitles:Avtomatik subtitr (Whisper)", "voiceover:O'zbekcha ovoz qo'shish (TTS)"].map((x) => `<option value="${x.split(":")[0]}">${x.split(":")[1]}</option>`).join("")}</select>
       <textarea id="vp" style="margin-top:8px"></textarea><div class="row" style="margin-top:8px"><button id="vgo">Bajarish</button></div><pre id="vo" hidden></pre></div>
-    <div class="card"><h3>Rasm</h3><select id="iop">${["analyze:Tahlil", "resize:O'lcham (preset)", "text:Matn qo'shish", "logo:Logo/avatar", "prompt:Generator uchun prompt"].map((x) => `<option value="${x.split(":")[0]}">${x.split(":")[1]}</option>`).join("")}</select>
+    <div class="card"><h3>Rasm</h3><select id="iop">${["analyze:Tahlil (piksel)", "describe:Mazmun tahlili (mahalliy vision)", "resize:O'lcham (preset)", "text:Matn qo'shish", "logo:Logo/avatar", "prompt:Generator uchun prompt", "generate:Rasm yaratish (mahalliy SD)", "edit:Rasmni AI bilan tahrirlash (SD)"].map((x) => `<option value="${x.split(":")[0]}">${x.split(":")[1]}</option>`).join("")}</select>
       <textarea id="ip" style="margin-top:8px"></textarea><div class="row" style="margin-top:8px"><button id="igo">Bajarish</button></div><pre id="io" hidden></pre></div></div>
     <div class="card" style="margin-top:12px"><h3>Natijalar (exports)</h3>${exps.length ? `<table>${exps.slice(0, 40).map((f) => `<tr><td>${fileLink(f.path)}</td><td class="muted">${(f.size / 1024).toFixed(0)} KB</td><td class="muted">${esc(f.path)}</td></tr>`).join("")}</table>` : '<span class="muted">Hali yo\'q</span>'}</div>`;
   const p = (f) => `${ws}/${f}`;
@@ -129,11 +130,13 @@ async function renderStudio(v) {
     slideshow: { images: [p("1.jpg"), p("2.jpg")], seconds: 3 }, auto_subtitles: { path: p("video.mp4"), burn: true, language: "uz" },
     voiceover: { path: p("video.mp4"), text: "Assalomu alaykum! Yangi mahsulotlar keldi.", mix: false, speed: 150 } };
   const IEX = { analyze: { path: p("rasm.jpg") }, resize: { path: p("rasm.jpg"), preset: "instagram_post", mode: "crop" }, text: { path: p("rasm.jpg"), text: "Chegirma 20%", position: "bottom" },
-    logo: { text: "Mening Do'konim", shape: "circle" }, prompt: { subject: "yangi uzilgan non, issiq, do'kon peshtaxtasida", purpose: "instagram_post", style: "realistik, iliq ranglar" } };
+    logo: { text: "Mening Do'konim", shape: "circle" }, describe: { path: p("rasm.jpg"), question: "Bu rasmda nima tasvirlangan?" },
+    generate: { prompt: "fresh bread on a bakery counter, warm light, product photo", negative: "blurry, text", width: 1024, height: 1024, steps: 25 },
+    edit: { path: p("rasm.jpg"), prompt: "blue studio background", strength: 0.5 }, prompt: { subject: "yangi uzilgan non, issiq, do'kon peshtaxtasida", purpose: "instagram_post", style: "realistik, iliq ranglar" } };
   const sync = () => { $("#vp").value = JSON.stringify(VEX[$("#vop").value], null, 1); $("#ip").value = JSON.stringify(IEX[$("#iop").value], null, 1); };
   $("#vop").onchange = sync; $("#iop").onchange = sync; sync();
   const run = async (kind, op, txt, o) => { o.hidden = false; o.textContent = "Bajarilmoqda…";
-    try { const r = await post(`/api/studio/${kind}`, { op, params: JSON.parse(txt) }); o.innerHTML = esc(JSON.stringify(r, null, 2)) + (r.output ? "\n\n" + fileLink(r.output) : ""); } catch (e) { fail(o, e); } };
+    try { const r = await post(`/api/studio/${kind}`, { op, params: JSON.parse(txt) }); o.innerHTML = esc(JSON.stringify(r, null, 2)) + (r.output ? "\n\n" + fileLink(r.output) : "") + (r.outputs ? "\n\n" + r.outputs.map(fileLink).join("  ") : ""); } catch (e) { fail(o, e); } };
   $("#vgo").onclick = () => run("video", $("#vop").value, $("#vp").value, $("#vo"));
   $("#igo").onclick = () => run("image", $("#iop").value, $("#ip").value, $("#io"));
 }
@@ -142,7 +145,7 @@ async function renderStudio(v) {
 async function renderInstagram(v) {
   const [accs, posts] = await Promise.all([api("/api/instagram/accounts"), api("/api/instagram/posts")]);
   v.innerHTML = `<div class="warnbox">Faqat Meta rasmiy Graph API (Business/Creator akkaunt + Facebook sahifa + Meta App). Nashr uchun media ommaviy https:// URL bo'lishi kerak.
-    Direct xabarlar alohida Messaging API ruxsatini talab qiladi — hozircha faqat izohlarga javob loyihasi. Har bir nashr aniq akkaunt va matn bilan alohida tasdiqlanadi.</div>
+    Reels/video Meta tomonidan qayta ishlanmaguncha nashr qilinmaydi. Javob kelmasa — qayta yuborilmaydi, akkauntda tekshiriladi. Har bir nashr, izoh va Direct javobi alohida tasdiqlanadi.</div>
     <div class="card"><h3>Akkauntlar</h3>${accs.length ? table(accs, ["name", "connected", "username", "followers_count", "media_count", "note"]) :
       '<span class="muted">Akkaunt yo\'q. data/settings.json → instagram_accounts: [{"name":"shop","ig_user_id":"..."}], token: python scripts/set_secret.py instagram_token_shop</span>'}</div>
     <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:12px"><div class="card"><h3>Yangi post loyihasi</h3>
@@ -151,13 +154,34 @@ async function renderInstagram(v) {
       <input id="media" placeholder="Media URL (https://...)"><input id="when" type="datetime-local" style="margin-top:6px">
       <div class="row" style="margin-top:8px"><button id="save">Loyihani saqlash</button></div><div id="m"></div></div>
       <div class="card"><h3>Kontent kalendari</h3>${posts.length ? `<table><tr><th>#</th><th>sana</th><th>akk.</th><th>tur</th><th>caption</th><th>holat</th><th></th></tr>${posts.map((x) => `<tr><td>${x.id}</td><td>${esc(x.scheduled_at || x.created_at)}</td><td>${esc(x.account)}</td><td>${esc(x.kind)}</td><td>${esc(x.caption.slice(0, 90))}</td><td>${esc(x.status)}</td>
-        <td>${x.status === "draft" ? `<button class="ghost" data-pv="${x.id}">preview</button> <button data-req="${x.id}">tasdiqqa</button>` : ""}${x.status === "pending_approval" ? `<button data-pub="${x.id}">nashr (tasdiqdan keyin)</button>` : ""}</td></tr>`).join("")}</table>` : '<span class="muted">Loyiha yo\'q</span>'}<pre id="po" hidden></pre></div></div>`;
+        <td>${x.status === "draft" ? `<button class="ghost" data-pv="${x.id}">preview</button> <button data-req="${x.id}">tasdiqqa</button>` : ""}${x.status === "pending_approval" ? `<button data-pub="${x.id}">nashr (tasdiqdan keyin)</button>` : ""}
+        ${x.status === "unknown" ? `<button data-chk="${x.id}">akkauntda tekshirish</button>` : ""}</td></tr>`).join("")}</table>` : '<span class="muted">Loyiha yo\'q</span>'}
+        <div class="row" style="margin-top:8px"><button class="ghost" id="sched">Vaqti kelgan rejali postlarni tekshirish</button></div><pre id="po" hidden></pre></div></div>
+    <div class="card" style="margin-top:12px"><h3>Direct xabarlar</h3><p class="muted">Instagram Messaging API ruxsati kerak. Javob faqat oxirgi kiruvchi xabardan 24 soat ichida; har bir xabar alohida tasdiqlanadi.</p>
+      <div class="row"><select id="dmacc" style="width:200px">${accs.map((a) => `<option>${esc(a.name)}</option>`).join("")}</select><button class="ghost" id="dmload">Suhbatlarni yuklash</button></div>
+      <div id="dmlist"></div><div id="dmmsgs"></div><div id="dmdrafts"></div></div>`;
+  const drawDrafts = async () => { const ds = await api("/api/instagram/dm");
+    $("#dmdrafts").innerHTML = ds.length ? "<h3 style='margin-top:10px'>Javob loyihalari</h3><table>" + ds.map((d) => `<tr><td>#${d.id}</td><td>${esc(d.account)}</td><td class="muted">${esc(d.last_incoming)}</td><td>${esc(d.reply)}</td>
+      <td>${d.within_24h ? '<span class="ok">24 soat ichida</span>' : '<span class="bad">oyna yopilgan</span>'}</td><td>${esc(d.status)}</td>
+      <td>${d.status === "draft" && d.within_24h ? `<button data-dmreq="${d.id}">tasdiqqa</button>` : ""}${d.status === "pending_approval" ? `<button data-dmsend="${d.id}">yuborish (tasdiqdan keyin)</button>` : ""}</td></tr>`).join("") + "</table>" : ""; };
+  drawDrafts();
+  $("#sched").onclick = async () => out($("#po"), await post("/api/instagram/scheduled/run"));
+  $("#dmload").onclick = async () => { try { const cs = await api(`/api/instagram/${encodeURIComponent($("#dmacc").value)}/conversations`);
+    $("#dmlist").innerHTML = cs.length ? cs.map((c) => `<button class="ghost" style="margin:3px" data-conv="${esc(c.id)}">suhbat ${esc(c.id.slice(-6))} · ${esc(c.updated_time || "")}</button>`).join("") : '<span class="muted">Suhbat yo\'q</span>'; }
+    catch (e) { fail($("#dmlist"), e); } };
   $("#tags").onclick = async () => { const r = await post("/api/instagram/hashtags", { text: $("#cap").value }); $("#tg").textContent = r.hashtags.join(" "); };
   $("#save").onclick = async () => { try { const tags = $("#tg").textContent.trim(); await post("/api/instagram/posts", { account: $("#acc").value, kind: $("#kind").value, caption: $("#cap").value, media_url: $("#media").value, scheduled_at: $("#when").value, hashtags: tags ? tags.split(" ") : null }); show(); } catch (e) { fail($("#m"), e); } };
   v.onclick = async (e) => { const d = e.target.dataset; try {
     if (d.pv) out($("#po"), await api(`/api/instagram/posts/${d.pv}/preview`));
     if (d.req) { await post(`/api/instagram/posts/${d.req}/request-publish`); location.hash = "approvals"; }
     if (d.pub) { out($("#po"), await post(`/api/instagram/posts/${d.pub}/publish`)); }
+    if (d.chk) { out($("#po"), await post(`/api/instagram/posts/${d.chk}/check`)); }
+    if (d.conv) { const acc = $("#dmacc").value; const ms = await api(`/api/instagram/${encodeURIComponent(acc)}/conversations/${encodeURIComponent(d.conv)}`);
+      $("#dmmsgs").innerHTML = `<div class="chat" style="height:auto;max-height:260px">${ms.map((m) => `<div class="msg ${m.from && String(m.from.id) === String(acc) ? "user" : "assistant"}">${esc(m.message || "")}<div class="muted">${esc(m.created_time || "")}</div></div>`).join("")}</div>
+        <div class="row"><input id="dmtext" placeholder="Javob (bo'sh qolsa — taklif tayyorlanadi)"><button data-dmdraft="${esc(d.conv)}">Javob loyihasi</button></div>`; }
+    if (d.dmdraft) { await post("/api/instagram/dm", { account: $("#dmacc").value, conversation_id: d.dmdraft, reply: $("#dmtext").value }); drawDrafts(); }
+    if (d.dmreq) { await post(`/api/instagram/dm/${d.dmreq}/request`); location.hash = "approvals"; }
+    if (d.dmsend) { out($("#po"), await post(`/api/instagram/dm/${d.dmsend}/send`)); drawDrafts(); }
   } catch (er) { fail($("#po"), er); } };
 }
 
@@ -184,7 +208,7 @@ async function renderBI(v) {
   const p = r.profit;
   v.innerHTML = `<div class="card"><h3>Import (asl fayl o'zgartirilmaydi)</h3><div class="row">
     <select id="kind" style="width:200px"><option value="products">Mahsulotlar/qoldiq</option><option value="movements">Kirim/chiqim/sotuv</option><option value="payments">To'lovlar</option></select>
-    <input type="file" id="f" accept=".csv,.xlsx"><button id="up">Yuklash</button></div>
+    <input type="file" id="f" accept=".csv,.xlsx"><button id="up">Yuklash</button>${r.has_data ? '<a href="/api/bi/export.xlsx" download><button class="ghost">Excel hisobot</button></a>' : ""}</div>
     <div class="muted">Ustunlar avtomatik taniladi (o'zbek/rus/ingliz): kod, nomi, shtrix-kod, birlik, tannarx, sotish narxi, qoldiq, minimal; hujjat raqami, turi (kirim/chiqim/sotuv/qaytarish), sana, kontragent, miqdor, narx, summa.</div><pre id="o" hidden></pre></div>
     ${r.has_data ? `<div class="grid" style="margin-top:12px">
       <div class="card"><h3>Savdo summasi</h3><div class="big">${money(p.revenue)}</div></div>
@@ -246,7 +270,8 @@ async function renderNotifications(v) {
       <td class="${n.severity === "critical" ? "bad" : n.severity === "warning" ? "warn" : ""}">${esc(n.severity)}</td><td>${esc(n.category)}</td><td><b>${esc(n.title)}</b><div class="muted">${esc(n.body)}</div></td><td>${esc(n.delivered)}</td></tr>`).join("")}</table>` : '<span class="muted">Bildirishnoma yo\'q</span>'}</div>
     <div class="card" style="margin-top:12px"><h3>Telefon qo'ng'irog'i</h3><div id="tel"></div></div>`;
   $("#rd").onclick = async () => { await post("/api/notifications/read"); show(); };
-  const t = await api("/api/telephony/status"); $("#tel").innerHTML = `<div>${t.configured ? '<span class="ok">sozlangan</span>' : '<span class="muted">o\'chirilgan</span>'} — ${esc(t.note)}</div>`;
+  const t = await api("/api/telephony/status"); $("#tel").innerHTML = `<div>${t.ready ? '<span class="ok">tayyor</span>' : t.configured ? '<span class="warn">to\'liq sozlanmagan</span>' : '<span class="muted">o\'chirilgan</span>'} — ${esc(t.note)}</div>
+    <div class="muted">Qoidalar: ${t.rules.length ? t.rules.map((r) => `${esc(r.category)}/${esc(r.severity || "critical")} → ${esc(r.phone)}`).join("; ") : "yo'q"} · narx: ${t.cost_per_min}/daqiqa. Qo'ng'iroq faqat tasdiqdan keyin.</div>`;
 }
 
 // ---------------- Self-improvement ----------------

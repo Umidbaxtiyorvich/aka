@@ -12,7 +12,8 @@ FILE_CATEGORIES = {
     "test_integrations": ["integration"], "test_studio_browser": ["integration"], "test_planner_improve": ["integration"],
     "test_router_guard": ["unit"], "test_provenance_decisions": ["unit"], "test_sandbox": ["permissions", "integration"],
     "test_backup": ["integration"], "test_graphs": ["integration"], "test_plugins": ["permissions", "integration"],
-    "test_diagnostics": ["api", "unit"], "test_dashboard_e2e": ["frontend"],
+    "test_diagnostics": ["api", "unit"], "test_dashboard_e2e": ["frontend"], "test_auth": ["permissions", "api"],
+    "test_apps": ["permissions", "integration"], "test_ai_features": ["unit", "integration"],
 }
 ERROR_NAME = re.compile(r"fail|error|invalid|reject|block|forbidden|unknown|tamper|limit|validation|honest|unapproved|cannot|dangerous|missing|not_configured|refuse|untrusted")
 

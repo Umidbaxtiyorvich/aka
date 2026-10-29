@@ -22,6 +22,7 @@ from .diagnostics import Diagnostics
 from .files import FileIntelligence
 from .memory import Memory, MemoryError_
 from .browser import BrowserAgent
+from .imagegen import ImageGen
 from .improve import Improver
 from .instagram import InstagramManager
 from .kgraph import KnowledgeGraph
@@ -41,20 +42,17 @@ from .voice import Voice
 from .security import contains_secret, redact
 
 CAPABILITIES = {
-    "ishlaydi": ["O'zbekcha matnli chat (kirill/lotin, xatoga chidamli)", "Doimiy xotira (qidiruv, tahrir, eksport, o'chirish)",
-                 "Audit va xatolar jurnali", "Tasdiqlash tizimi (A–E, versiyaga bog'langan)", "Planner (maqsad → bosqichlar → agentlar)",
-                 "Fayllarni o'qish (txt/csv/xlsx/pdf)", "Buyruq taklifi va tasdiqdan keyin bajarish", "Kod tahlili (Python)",
-                 "Business Intelligence: CSV/Excel import, qoldiq, foyda, kam qolgan, noto'g'ri narx, takroriy hujjat, qarzdorlik",
-                 "POS hujjat loyihasi → tasdiq → fayl eksporti (outbox) → tekshiruv", "Video: kesish, birlashtirish, 9:16, format, subtitr, ovoz, slayd-shou, sifat tekshiruvi (FFmpeg)",
-                 "Rasm: tahlil, o'lcham presetlari, matn qo'shish, logo/avatar, generator uchun prompt", "Brauzer agenti: ruxsat berilgan saytni faqat o'qish (Playwright)",
-                 "Bildirishnomalar (dashboard)", "Self-improvement: taklif → alohida worktree'da test → tasdiq → alohida branch"],
-    "qisman": ["AI suhbat: Ollama ulansa (real Ollama bilan hali sinalmagan), aks holda offline",
-               "Ovoz: brauzer STT/TTS (internet kerak); mahalliy Whisper ixtiyoriy o'rnatiladi",
-               "Internet tadqiqoti: kod tayyor, siz yoqqaningizdan keyin ishlaydi (bulutda real tarmoq bilan sinalmagan)",
-               "Telegram: bot kodi tayyor, token va ID kiritilgach ishlaydi (real Telegram bilan sinalmagan)",
-               "Instagram: Graph API kodi tayyor, Business akkaunt + Meta App + token kerak (real API bilan sinalmagan)"],
-    "hali_yoq": ["POS bilan to'g'ridan-to'g'ri API/brauzer kiritish (POS manzili kerak)", "AI rasm generatsiyasi (GPU yoki onlayn adapter)",
-                 "Telefon qo'ng'irog'i (SIP provayder kerak, faqat reja va tasdiq tayyor)", "Dashboard autentifikatsiyasi (server faqat 127.0.0.1 da)"],
+    "ishlaydi": ["O'zbekcha chat (kirill/lotin, xatoga chidamli)", "Doimiy xotira + manba/ishonch (provenance)", "Qarorlar jurnali",
+                 "Tasdiqlash + Policy Engine (low/medium/high/forbidden)", "Planner (AI mavjud bo'lsa AI bilan) va vazifalar grafi",
+                 "Fayllarni o'qish (txt/csv/xlsx/pdf)", "Buyruqlar va dasturlarni tasdiq bilan ishga tushirish", "Sandbox'da kod sinash",
+                 "Business Intelligence + Excel hisobot", "POS: loyiha → tasdiq → fayl eksporti yoki REST API",
+                 "Video (FFmpeg): kesish, 9:16, subtitr, avtomatik subtitr (Whisper), o'zbekcha ovoz (espeak-ng)",
+                 "Rasm: tahlil, o'lcham, matn, logo; mahalliy SD bilan yaratish; vision tahlil", "Brauzer agenti (faqat o'qish)",
+                 "Zaxira nusxa va tiklash", "Diagnostika, release gate, kengaytmalar", "Dashboard PIN himoyasi"],
+    "qisman": ["AI: Ollama/tashqi provayder ulansa (real xizmat bilan bu yerda sinalmagan), aks holda offline",
+               "Telegram, Instagram (post/Reels/Direct), internet tadqiqoti, Twilio qo'ng'irog'i — kod tayyor, kalit kiritilgach ishlaydi",
+               "Ovoz: brauzer STT (internet) yoki mahalliy Whisper (ixtiyoriy o'rnatiladi)"],
+    "hali_yoq": ["POSga brauzer orqali yozish (POS sayti ma'lum bo'lgach)", "HTTPS (tarmoqqa ochish uchun)"],
 }
 
 
@@ -80,10 +78,12 @@ class JarvisCore:
         self.audit.on_error = lambda m, msg: self.notifier.notify(f"Xato: {m}", msg, severity="warning", category="error")
         self.research = Research(self)
         self.studio = Studio(self)
+        self.imagegen = ImageGen(self)
         self.instagram = InstagramManager(self)
         self.voice = Voice(self)
         self.browser = BrowserAgent(self)
         self.telephony = Telephony(self.settings, self.approvals)
+        self.notifier.telephony = self.telephony
         self.planner = Planner(self)
         self.decisions = DecisionJournal(self)
         self.sandbox = Sandbox(self)

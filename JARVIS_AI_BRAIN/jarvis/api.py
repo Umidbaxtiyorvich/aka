@@ -22,6 +22,7 @@ from .dag import DagError
 from .decisions import DecisionError
 from .browser import BrowserError
 from .files import FileAccessError
+from .imagegen import ImageGenError
 from .improve import ImproveError
 from .instagram import InstagramError, suggest_hashtags
 from .kgraph import KGError
@@ -38,13 +39,14 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError)
+               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
             "ai_providers", "paid_ai_allowed", "currency", "daily_cost_limit", "monthly_cost_limit", "daily_request_limit",
             "cost_warn_percent", "medium_auto_actions", "sandbox_backend", "sandbox_timeout_sec", "sandbox_memory_mb",
-            "sandbox_max_retries", "backup_interval_hours", "backup_keep", "backup_max_total_mb", "backup_include_workspace"}
+            "sandbox_max_retries", "backup_interval_hours", "backup_keep", "backup_max_total_mb", "backup_include_workspace",
+            "image_gen_url", "vision_model", "planner_use_ai", "session_hours", "pos_api"}
 PROVIDER_KINDS = {"ollama", "openai_compatible", "anthropic", "offline"}
 
 DASHBOARD = PROJECT_ROOT / "dashboard"
@@ -133,6 +135,11 @@ class SettingsIn(BaseModel):
     backup_keep: int | None = None
     backup_max_total_mb: int | None = None
     backup_include_workspace: bool | None = None
+    image_gen_url: str | None = None
+    vision_model: str | None = None
+    planner_use_ai: bool | None = None
+    session_hours: float | None = None
+    pos_api: dict | None = None
 
 class OpIn(BaseModel):
     """Umumiy so'rov: modul amali va parametrlari."""
@@ -229,6 +236,11 @@ class AppIn(BaseModel):
     name: str
     file: str | None = None
     reason: str = ""
+
+class SuggestIn(BaseModel):
+    error_id: int | None = None
+    description: str = ""
+    file: str = ""
 
 class CallIn(BaseModel):
     phone: str
@@ -533,9 +545,9 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
             setattr(c.settings, k, v)
         c.settings.save()
         c.reload_ai()
-        if "pos_connector" in data:
-            from .pos import FileExportConnector, NotConfiguredConnector
-            c.pos.connector = FileExportConnector() if data["pos_connector"] == "file_export" else NotConfiguredConnector(data["pos_connector"])
+        if "pos_connector" in data or "pos_api" in data:
+            from .pos import make_connector
+            c.pos.connector = make_connector(c.settings)
         c.audit.log("user", f"Sozlamalar o'zgartirildi: {sorted(data)}", target="settings", risk="C",
                     approval_status="user_action")
         return c.settings.public()
@@ -709,6 +721,10 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def plan_create(body: TextIn):
         return guard(C().planner.create, body.text)
 
+    @app.post("/api/plans/rules")
+    def plan_create_rules(body: TextIn):
+        return guard(C().planner.create, body.text, False)
+
     @app.get("/api/plans")
     def plans():
         return C().planner.list()
@@ -743,6 +759,13 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.get("/api/bi/report")
     def bi_report():
         return C().bi.report()
+
+    @app.get("/api/bi/export.xlsx")
+    def bi_export():
+        from fastapi.responses import Response
+        data = guard(C().bi.export_xlsx)
+        return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        headers={"Content-Disposition": f'attachment; filename="jarvis_bi_{time.strftime("%Y%m%d")}.xlsx"'})
 
     @app.get("/api/bi/stock")
     def bi_stock():
@@ -817,6 +840,10 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.post("/api/studio/video")
     def st_video(body: OpIn):
         return guard(C().agents._h_video, {"op": body.op, **body.params})
+
+    @app.get("/api/studio/imagegen")
+    def st_imagegen():
+        return C().imagegen.status()
 
     @app.get("/api/studio/exports")
     def st_exports():
@@ -984,6 +1011,10 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def tel_status():
         return C().telephony.status()
 
+    @app.post("/api/telephony/call/{aid}")
+    def tel_call(aid: int):
+        return guard(C().telephony.call, aid)
+
     @app.post("/api/telephony/plan")
     def tel_plan(body: CallIn):
         return guard(C().telephony.plan_call, body.phone, body.message, body.reason, body.est_minutes)
@@ -992,6 +1023,10 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.get("/api/improve/suggestions")
     def imp_sugg():
         return C().improver.suggestions()
+
+    @app.post("/api/improve/suggest")
+    def imp_suggest(body: SuggestIn):
+        return guard(C().improver.suggest_patch, body.error_id, body.description, body.file)
 
     @app.get("/api/improve/proposals")
     def imp_list():

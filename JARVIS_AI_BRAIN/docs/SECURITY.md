@@ -1,7 +1,14 @@
 # Xavfsizlik
 
 ## Asosiy qoidalar
-- Server faqat `127.0.0.1` da (tarmoqqa ochilmaydi). Autentifikatsiya hali yo'q — shuning uchun serverga tashqaridan kirish berilmasin.
+- Server faqat `127.0.0.1` da (tarmoqqa ochilmaydi).
+- Dashboard PIN bilan himoyalangan:
+  - PIN PBKDF2-HMAC-SHA256 bilan xeshlanadi (200 000 iteratsiya);
+  - sessiya cookie'si HttpOnly va SameSite=Strict;
+  - 5 ta noto'g'ri urinishdan keyin kirish bloklanadi;
+  - PIN almashtirilsa, barcha sessiyalar bekor bo'ladi.
+- `Host` sarlavhasi `allowed_hosts` ro'yxati bilan tekshiriladi. Bu DNS rebinding hujumidan himoya qiladi.
+- Begona `Origin` dan kelgan o'zgartiruvchi so'rovlar rad etiladi. Shunda siz kirgan boshqa sayt JARVIS'ga buyruq yubora olmaydi.
 - **Faqat o'qish rejimi** standart holatda yoqilgan: A darajadan yuqori buyruqlar tasdiqlansa ham bajarilmaydi.
 - Yozish va o'qish faqat `allowed_read_dirs` / `allowed_write_dirs` ichida (standart: `data/workspace`).
 - `read_only_mode`, `require_approval`, `allowed_*_dirs` — **qulflangan**: API, dashboard yoki JARVIS ularni o'zgartira olmaydi. Faqat siz `data/settings.json` ni qo'lda tahrirlaysiz.
@@ -87,3 +94,20 @@ taklif qilinadi va faqat sizning tasdig'ingiz bilan birlashtiriladi. Rollback �
 ## Zaxira nusxalar
 - Maxfiy kalitlar nusxaga kirmaydi.
 - Tiklash E darajali tasdiq talab qiladi va undan oldin xavfsizlik nusxasi olinadi. Batafsil: docs/BACKUP.md.
+
+## Yangi tashqi amallar (v0.4)
+- **Instagram Direct** (D darajali tasdiq):
+  - har bir xabar alohida tasdiqlanadi;
+  - javob faqat 24 soatlik oynada yuboriladi (Meta qoidasi).
+- **Reels:** konteyner `FINISHED` holatiga o'tmaguncha nashr qilinmaydi. Javob kelmasa, natija `unknown` bo'ladi va avval akkauntda tekshiriladi.
+- **Dastur ochish** (C darajali tasdiq):
+  - faqat `app_allowlist` dagi dasturlar (qulflangan);
+  - shell ishlatilmaydi;
+  - fayl faqat ruxsat berilgan papkadan.
+- **Qo'ng'iroq** (D darajali tasdiq): qoidalar faqat reja tuzadi, qo'ng'iroq hech qachon avtomatik qilinmaydi.
+- **POS REST API:**
+  - faqat `https://` manzillar;
+  - har so'rovda `Idempotency-Key`;
+  - faqat o'qish rejimida yozish bloklanadi.
+- **AI patch taklifi:** faqat taklif. U testdan o'tmaguncha va tasdiqlanmaguncha qo'llanmaydi. Himoyalangan fayllar uchun so'ralmaydi.
+- **Rasm/vision:** faqat mahalliy xizmatlar (SD WebUI, Ollama). Vision uchun rasm tashqariga yuborilmaydi.

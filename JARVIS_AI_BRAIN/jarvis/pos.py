@@ -65,6 +65,65 @@ class FileExportConnector:
         return p.exists() and json.loads(p.read_text(encoding="utf-8")) == doc
 
 
+class RestApiConnector:
+    """Umumiy REST konnektor — POS rasmiy API bersa. Sozlama (maxfiy emas) `pos_api`:
+      {"base_url": "https://pos.example.uz/api", "create_path": "/documents",
+       "find_path": "/documents?external_key={key}", "auth_header": "Authorization", "auth_scheme": "Bearer"}
+    Token: `python scripts/set_secret.py pos_api_token` (cheklangan huquqli token tavsiya etiladi).
+    * Har so'rovda `Idempotency-Key` sarlavhasi va `external_key` maydoni — takroriy kiritishdan himoya.
+    * Tarmoq xatosi/timeout → UnknownOutcome (qayta yuborilmaydi, find_path bilan tekshiriladi).
+    * Faqat o'qish rejimida yozish bloklanadi (POSManager.submit)."""
+    name = "api"
+
+    def __init__(self, settings):
+        self.cfg = dict(getattr(settings, "pos_api", {}) or {})
+
+    def _url(self, key: str, path_key: str, k: str = "") -> str:
+        base = self.cfg.get("base_url", "").rstrip("/")
+        if not base.startswith("https://"):
+            raise POSError("pos_api.base_url https:// bilan boshlanishi kerak")
+        return base + self.cfg.get(path_key, "").replace("{key}", k)
+
+    def _headers(self, extra: dict | None = None) -> dict:
+        from .secrets import get_secret
+        tok = get_secret("pos_api_token")
+        if not tok:
+            raise POSError("POS API tokeni yo'q: python scripts/set_secret.py pos_api_token")
+        return {self.cfg.get("auth_header", "Authorization"): f"{self.cfg.get('auth_scheme', 'Bearer')} {tok}".strip()} | (extra or {})
+
+    def status(self) -> dict:
+        from .secrets import has_secret
+        ok = bool(self.cfg.get("base_url")) and has_secret("pos_api_token")
+        return {"connector": self.name, "connected": ok,
+                "note": "REST API: " + (self.cfg.get("base_url") or "base_url sozlanmagan") + ("" if has_secret("pos_api_token") else " · token yo'q")}
+
+    def find_existing(self, key: str) -> str | None:
+        from . import net
+        try:
+            r = net.get_json(self._url("", "find_path", key), headers=self._headers(), timeout=20)
+        except net.NetError as e:
+            raise POSError(f"POS API (qidiruv) xatosi: {e}") from None
+        items = r.get("data", r.get("items", r if isinstance(r, list) else []))
+        if isinstance(items, list) and items:
+            first = items[0]
+            return str(first.get("id", first)) if isinstance(first, dict) else str(first)
+        return None
+
+    def create(self, key: str, doc: dict) -> str:
+        from . import net
+        try:
+            r = net.post_json(self._url(key, "create_path"), json_body=doc | {"external_key": key},
+                              headers=self._headers({"Idempotency-Key": key}), timeout=30)
+        except net.NetError as e:
+            if e.status is None:           # javob kelmadi — natija noma'lum
+                raise UnknownOutcome(str(e)) from None
+            raise POSError(f"POS API rad etdi: HTTP {e.status} {e.body[:200]}") from None
+        return str(r.get("id") or r.get("document_id") or key)
+
+    def verify(self, key: str, doc: dict) -> bool:
+        return self.find_existing(key) is not None
+
+
 class NotConfiguredConnector:
     """API yoki brauzer konnektori — POS manzili va ruxsat berilgach yoziladi."""
 
@@ -81,6 +140,14 @@ class NotConfiguredConnector:
     find_existing = create = verify = _fail
 
 
+def make_connector(settings):
+    if settings.pos_connector == "file_export":
+        return FileExportConnector()
+    if settings.pos_connector == "api":
+        return RestApiConnector(settings)
+    return NotConfiguredConnector(settings.pos_connector)
+
+
 def doc_payload(doc: dict, site: str) -> dict:
     """Tasdiq xeshi hisoblanadigan kanonik ko'rinish."""
     return {"site": site, "account": doc["account"] or "", "doc_type": doc["doc_type"], "party": doc["party"],
@@ -91,8 +158,7 @@ class POSManager:
     def __init__(self, db: Database, audit: Audit, approvals: ApprovalEngine, settings, connector=None):
         self.db, self.audit, self.approvals, self.settings = db, audit, approvals, settings
         db.conn.executescript(POS_SCHEMA)
-        self.connector = connector or (FileExportConnector() if settings.pos_connector == "file_export"
-                                       else NotConfiguredConnector(settings.pos_connector))
+        self.connector = connector or make_connector(settings)
 
     @property
     def site(self) -> str:

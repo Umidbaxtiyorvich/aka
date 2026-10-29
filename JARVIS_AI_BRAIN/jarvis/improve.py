@@ -101,6 +101,45 @@ class Improver:
             self.core.kgraph.on_proposal(self.get(cur.lastrowid), paths)
         return self.get(cur.lastrowid)
 
+    def suggest_patch(self, error_id: int | None = None, description: str = "", file: str = "") -> dict:
+        """AI'dan xatoni tuzatuvchi unified diff so'raydi va uni TAKLIF sifatida saqlaydi.
+        Taklif keyin odatdagi oqimdan o'tadi: test (alohida worktree) → tasdiq → alohida branch."""
+        if self.core.ai.name == "offline":
+            raise ImproveError("AI modeli ulanmagan — patch taklifi uchun Ollama yoki boshqa model kerak")
+        err = None
+        if error_id is not None:
+            err = self.core.db.one("SELECT * FROM errors WHERE id=?", (error_id,))
+            if not err:
+                raise ImproveError("Xato topilmadi")
+        if not file:
+            mod = (err["module"] if err else "").removesuffix("_agent")
+            cand = {"pos": "pos.py", "bi": "bi.py", "telegram": "telegram_bot.py", "computer": "computer.py", "studio": "studio.py",
+                    "ai_router": "router.py", "ai_engine": "ai_engine.py", "research": "research.py", "instagram": "instagram.py"}.get(mod, f"{mod}.py")
+            file = f"jarvis/{cand}"
+        if file in self.core.settings.protected_paths:
+            raise ImproveError(f"{file} himoyalangan — AI uni o'zgartira olmaydi")
+        fp = (self.project / file).resolve()
+        if self.project not in fp.parents or not fp.exists():
+            raise ImproveError(f"Fayl topilmadi: {file}")
+        problem = (f"Xato (error#{error_id}, modul {err['module']}): {err['message']}" if err else "") + ("\n" + description if description else "")
+        if not problem.strip():
+            raise ImproveError("Xato yoki muammo tavsifi kerak")
+        code = fp.read_text(encoding="utf-8")[:14000]
+        prompt = (f"Sen tajribali Python dasturchisan. Quyidagi muammoni tuzatuvchi MINIMAL o'zgarish yoz.\n{problem}\n\n"
+                  f"Fayl: {file}\n```python\n{code}\n```\n"
+                  f"Faqat bitta ```diff``` bloki qaytar: unified diff, sarlavhalar '--- a/{file}' va '+++ b/{file}'. "
+                  "Testlarni o'chirma, xavfsizlik tekshiruvlarini olib tashlama.")
+        r = self.core.ai.route([{"role": "user", "content": prompt}], purpose="code")
+        m = re.search(r"```(?:diff|patch)?\s*\n(.*?)```", r["text"], re.S)
+        diff = (m.group(1) if m else r["text"]).strip() + "\n"
+        if not diff_paths(diff):
+            raise ImproveError("AI yaroqli unified diff qaytarmadi")
+        title = f"AI taklifi: {file}" + (f" (error#{error_id})" if error_id else "")
+        prop = self.create(title, diff, f"{problem}\nModel: {r['route']['provider']} ({r['route']['model']})")
+        self.core.db.ensure_columns("proposals", {"source": "TEXT"})
+        self.core.db.execute("UPDATE proposals SET source='ai' WHERE id=?", (prop["id"],))
+        return self.get(prop["id"]) | {"route": r["route"], "next": "Taklifni 'test' qiling — testdan o'tmasa, qo'llab bo'lmaydi."}
+
     def get(self, pid: int) -> dict:
         r = self.core.db.one("SELECT * FROM proposals WHERE id=?", (pid,))
         if not r:

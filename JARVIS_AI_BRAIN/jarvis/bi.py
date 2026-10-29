@@ -358,3 +358,50 @@ class BusinessIntelligence:
                 "low_stock": self.low_stock(), "price_issues": self.price_issues(),
                 "duplicates": self.duplicate_documents(), "discrepancies": self.discrepancies(),
                 "debts": self.debts(), "sales_by_day": self.sales_by_day()}
+
+
+    def export_xlsx(self) -> bytes:
+        """BI hisobotini Excel faylga (har bo'lim alohida varaq). Faqat import qilingan ma'lumotlar."""
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill
+        except ImportError as e:
+            raise BIError("Excel eksport uchun 'openpyxl' kerak") from e
+        import io as _io
+        r = self.report()
+        if not r["has_data"]:
+            raise BIError("Eksport qilish uchun ma'lumot yo'q")
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Xulosa"
+        p = r["profit"]
+        rows = [("Ko'rsatkich", "Qiymat"), ("Savdo summasi", p["revenue"]), ("Tannarx", p["cost_of_goods"]),
+                ("Yalpi foyda", p["gross_profit"] if p["gross_profit"] is not None else f"{p['gross_profit_known_only']} (to'liq emas)"),
+                ("Tannarxi noma'lum mahsulotlar", ", ".join(p["skus_without_cost"]) or "—"), ("Kam qolgan", len(r["low_stock"])),
+                ("Narx muammolari", len(r["price_issues"])), ("Takroriy hujjatlar", len(r["duplicates"])),
+                ("Qoldiq tafovutlari", len(r["discrepancies"]))]
+        for row in rows:
+            ws.append(row)
+        sheets = {"Kam qolgan": (r["low_stock"], ["sku", "name", "current", "limit", "unit"]),
+                  "Narx muammolari": (r["price_issues"], ["sku", "issue", "value"]),
+                  "Takroriy hujjatlar": (r["duplicates"], ["type", "doc_no", "date", "party", "sku", "n", "imports"]),
+                  "Tafovutlar": (r["discrepancies"], ["sku", "name", "reported_stock", "computed_from_movements", "difference", "note"]),
+                  "Qarzdorlik": (r["debts"], ["party", "purchases", "paid_out", "we_owe", "sales", "paid_in", "they_owe"]),
+                  "Kunlik savdo": (r["sales_by_day"], ["date", "checks", "qty", "total"]),
+                  "Mahsulot foydasi": (p["by_product"], ["sku", "qty", "revenue", "cost", "profit"]),
+                  "Qoldiq": (self.stock(), ["sku", "name", "unit", "kirim", "chiqim", "sotuv", "qaytarish", "computed_from_movements", "reported_stock", "difference"])}
+        for title, (data, cols) in sheets.items():
+            sh = wb.create_sheet(title)
+            sh.append(cols)
+            for d in data:
+                sh.append([d.get(c) for c in cols])
+        head = PatternFill("solid", fgColor="0B2A4D")
+        for sh in wb.worksheets:
+            for c in sh[1]:
+                c.font, c.fill = Font(bold=True, color="FFFFFF"), head
+            for col in sh.columns:
+                sh.column_dimensions[col[0].column_letter].width = min(40, max(10, *(len(str(c.value or "")) + 2 for c in col)))
+        buf = _io.BytesIO()
+        wb.save(buf)
+        self.audit.log("bi_agent", "BI hisobot Excel'ga eksport qilindi", target="bi_report.xlsx", risk="A")
+        return buf.getvalue()

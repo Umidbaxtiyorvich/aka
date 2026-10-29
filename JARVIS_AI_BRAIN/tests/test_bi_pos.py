@@ -140,3 +140,67 @@ def test_pos_validation(core):
         core.pos.create_draft("kirim", "A", [{"sku": "A1", "qty": -1, "price": 1}])
     with pytest.raises(POSError):
         core.pos.create_draft("kirim", "A", ITEMS + ITEMS)
+
+
+def test_rest_api_connector(core, monkeypatch):
+    import json
+
+    from jarvis import net
+    from jarvis.pos import RestApiConnector
+    core.settings.pos_api = {"base_url": "https://pos.example.uz/api", "create_path": "/docs", "find_path": "/docs?external_key={key}"}
+    monkeypatch.setenv("JARVIS_POS_API_TOKEN", "pos-token-" + "x" * 20)
+    store, calls = {}, []
+
+    def fake(method, url, data, headers, timeout):
+        calls.append((method, url, headers.get("Idempotency-Key")))
+        assert headers["Authorization"].startswith("Bearer ")
+        if method == "GET":
+            key = url.split("external_key=")[1]
+            return 200, json.dumps({"data": [{"id": store[key]}] if key in store else []})
+        body = json.loads(data)
+        store[body["external_key"]] = "POS-77"
+        return 201, json.dumps({"id": "POS-77"})
+    monkeypatch.setattr(net, "TRANSPORT", fake)
+    core.pos.connector = RestApiConnector(core.settings)
+    assert core.pos.status()["connected"]
+    core.settings.read_only_mode = False
+    d = core.pos.create_draft("kirim", "Ali MChJ", ITEMS)
+    _approve(core, core.pos.request_approval(d["id"])["approval"])
+    r = core.pos.submit(d["id"])
+    assert r["status"] == "verified" and r["external_id"] == "POS-77"
+    assert [c[0] for c in calls] == ["GET", "POST", "GET"] and calls[1][2] == f"pos-{d['id']}-v1"
+
+
+def test_rest_api_timeout_is_unknown(core, monkeypatch):
+    from jarvis import net
+    from jarvis.pos import RestApiConnector
+    core.settings.pos_api = {"base_url": "https://pos.example.uz/api", "create_path": "/docs", "find_path": "/docs?k={key}"}
+    monkeypatch.setenv("JARVIS_POS_API_TOKEN", "pos-token-" + "x" * 20)
+
+    def fake(method, url, data, headers, timeout):
+        if method == "GET":
+            return 200, '{"data": []}'
+        raise net.NetError("Tarmoq xatosi: timed out")
+    monkeypatch.setattr(net, "TRANSPORT", fake)
+    core.pos.connector = RestApiConnector(core.settings)
+    core.settings.read_only_mode = False
+    d = core.pos.create_draft("sotuv", "Mijoz", ITEMS)
+    _approve(core, core.pos.request_approval(d["id"])["approval"])
+    assert core.pos.submit(d["id"])["status"] == "unknown"
+    core.settings.pos_api["base_url"] = "http://insecure"
+    with pytest.raises(POSError, match="https"):
+        RestApiConnector(core.settings).find_existing("x")
+
+
+def test_bi_excel_export(client, core):
+    assert client.get("/api/bi/export.xlsx").status_code == 400          # ma'lumot yo'q — bo'sh fayl to'qilmaydi
+    core.bi.import_file(_write(core, "m.csv", PRODUCTS), "products")
+    core.bi.import_file(_write(core, "h.csv", MOVES), "movements")
+    r = client.get("/api/bi/export.xlsx")
+    assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
+    import io
+
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(r.content))
+    assert {"Xulosa", "Kam qolgan", "Qarzdorlik", "Qoldiq"} <= set(wb.sheetnames)
+    assert wb["Xulosa"]["B2"].value == 39000

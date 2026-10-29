@@ -42,18 +42,56 @@ def step_for(text: str) -> dict:
     return {"agent": "manager", "payload": {"text": text}}
 
 
+AI_PROMPT = ("Foydalanuvchi maqsadini 1–8 ta qisqa, aniq bosqichga ajrat. Har bosqich bitta amal bo'lsin "
+             "(masalan: 'savdo hisobotini ko'rsat', 'fayllarni ko'rsat', 'internetdan qidir: ...', 'test'). "
+             "Faqat JSON ro'yxat qaytar, boshqa matn yozma: [\"1-bosqich\", \"2-bosqich\"]. Maqsad: <untrusted>{goal}</untrusted>")
+
+
+def parse_ai_steps(text: str) -> list[str] | None:
+    m = re.search(r"\[.*\]", text or "", re.S)
+    if not m:
+        return None
+    try:
+        data = json.loads(m.group(0))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, list) or not (1 <= len(data) <= 12):
+        return None
+    steps = [str(x).strip()[:300] for x in data if isinstance(x, (str, int, float)) and str(x).strip()]
+    return steps or None
+
+
 class Planner:
     def __init__(self, core):
         self.core = core
         core.db.conn.executescript(SCHEMA)
+        core.db.ensure_columns("plans", {"source": "TEXT NOT NULL DEFAULT 'rules'", "note": "TEXT"})
 
-    def create(self, goal: str) -> dict:
+    def _ai_split(self, goal: str) -> tuple[list[str] | None, str]:
+        if not getattr(self.core.settings, "planner_use_ai", False) or self.core.ai.name == "offline":
+            return None, "AI mavjud emas — qoidalar bo'yicha ajratildi"
+        try:
+            r = self.core.ai.route([{"role": "user", "content": AI_PROMPT.format(goal=goal)}], purpose="analysis")
+        except Exception as e:
+            return None, f"AI javob bermadi ({str(e)[:80]}) — qoidalar bo'yicha ajratildi"
+        steps = parse_ai_steps(r["text"])
+        if not steps:
+            return None, "AI javobi tushunarsiz — qoidalar bo'yicha ajratildi"
+        return steps, f"AI ({r['route']['provider']}) bosqichlarga ajratdi; agentlar qoidalar bo'yicha tanlandi"
+
+    def create(self, goal: str, use_ai: bool | None = None) -> dict:
         if not goal.strip():
             raise PlannerError("Maqsad bo'sh")
-        steps = [{"n": i + 1, "text": t, **step_for(t), "status": "planned", "task_id": None}
-                 for i, t in enumerate(split_goal(goal))]
-        cur = self.core.db.execute("INSERT INTO plans(goal, steps) VALUES (?,?)", (goal, json.dumps(steps, ensure_ascii=False)))
-        self.core.audit.log("planner", f"Reja tuzildi: {goal[:80]} ({len(steps)} bosqich)", target=f"plan#{cur.lastrowid}", risk="B")
+        parts, note, source = None, "qoidalar bo'yicha ajratildi", "rules"
+        if use_ai is not False:
+            parts, note = self._ai_split(goal)
+            source = "ai" if parts else "rules"
+        parts = parts or split_goal(goal)
+        # AI faqat matnni ajratadi; agent va payload har doim qoidalar bilan, xavfli amallar baribir tasdiqdan o'tadi
+        steps = [{"n": i + 1, "text": t, **step_for(t), "status": "planned", "task_id": None} for i, t in enumerate(parts)]
+        cur = self.core.db.execute("INSERT INTO plans(goal, steps, source, note) VALUES (?,?,?,?)",
+                                   (goal, json.dumps(steps, ensure_ascii=False), source, note))
+        self.core.audit.log("planner", f"Reja tuzildi: {goal[:80]} ({len(steps)} bosqich, {source})", target=f"plan#{cur.lastrowid}", risk="B")
         return self.get(cur.lastrowid)
 
     def get(self, pid: int) -> dict:

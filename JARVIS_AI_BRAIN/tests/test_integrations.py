@@ -209,3 +209,29 @@ def test_scheduled_post_requests_approval_not_publish(core, monkeypatch):
     assert [x["post"] for x in due] == [p["id"]] and core.instagram.get(p["id"])["status"] == "pending_approval"
     assert not fake.calls                                               # hech narsa nashr qilinmadi
     assert any("nashr vaqti" in n["title"] for n in core.notifier.list())
+
+
+def test_twilio_call_only_after_approval_and_rules(core, monkeypatch):
+    from jarvis.telephony import TelephonyError
+    core.settings.telephony_provider, core.settings.telephony_cost_per_min = "twilio", 0.5
+    core.settings.telephony_account_sid, core.settings.telephony_from = "AC123", "+15550001111"
+    monkeypatch.setenv("JARVIS_TWILIO_AUTH_TOKEN", "tw-" + "t" * 30)
+    calls = []
+    monkeypatch.setattr(net, "TRANSPORT", lambda m, u, d, h, t: (calls.append((u, d)) or (201, json.dumps({"sid": "CA9", "status": "queued"}))))
+    assert core.telephony.status()["ready"]
+    core.settings.telephony_rules = [{"category": "pos", "severity": "critical", "phone": "+998901234567"}]
+    core.notifier.notify("POS ishlamayapti", "3 urinish", severity="critical", category="pos")
+    assert not calls                                                    # avtomatik qo'ng'iroq yo'q
+    appr = [a for a in core.approvals.list("pending") if a["action_type"] == "phone_call"][0]
+    assert appr["payload"]["phone"] == "+998901234567" and appr["level"] == "D"
+    assert any(n["category"] == "telephony" for n in core.notifier.list())
+    from jarvis.approval import ApprovalError
+    with pytest.raises(ApprovalError):
+        core.telephony.call(appr["id"])
+    core.approvals.decide(appr["id"], True, appr["payload_hash"])
+    r = core.telephony.call(appr["id"])
+    assert r["call_sid"] == "CA9" and len(calls) == 1 and b"Twiml" in calls[0][1] and b"%3CSay" in calls[0][1]
+    with pytest.raises(ApprovalError, match="allaqachon"):
+        core.telephony.call(appr["id"])
+    with pytest.raises(TelephonyError):
+        core.telephony.plan_call("+99890", "x", "y")

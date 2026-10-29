@@ -44,10 +44,15 @@ class Settings:
     instagram_accounts: list[dict] = field(default_factory=list)    # [{"name":..., "ig_user_id":...}] — tokensiz
     pos_site: str = ""                    # POS manzili (keyin beriladi)
     pos_connector: str = "file_export"    # file_export | api | browser
+    pos_api: dict = field(default_factory=dict)   # RestApiConnector sozlamasi (tokensiz)
     low_stock_threshold: float = 5
     save_voice_recordings: bool = False
     telephony_provider: str = ""          # bo'sh = o'chirilgan
     telephony_cost_per_min: float = 0.0
+    telephony_from: str = ""
+    telephony_account_sid: str = ""
+    telephony_voice_language: str = "ru-RU"
+    telephony_rules: list[dict] = field(default_factory=list)
     # Adaptive AI Router: [{"id","kind","model","base_url","tier","local","paid","price_in_per_1k","price_out_per_1k","enabled"}]
     ai_providers: list[dict] = field(default_factory=list)
     # Resource & Cost Guard (pullik AI standart holatda o'chiq)
@@ -69,6 +74,10 @@ class Settings:
     app_allowlist: dict = field(default_factory=lambda: (
         {"bloknot": ["notepad.exe"], "kalkulyator": ["calc.exe"], "paint": ["mspaint.exe"], "explorer": ["explorer.exe"]}
         if os.name == "nt" else {}))
+    # Mahalliy rasm generatori va vision (ixtiyoriy)
+    image_gen_url: str = ""               # masalan http://127.0.0.1:7860 (Stable Diffusion WebUI --api)
+    vision_model: str = ""                # masalan moondream (Ollama)
+    planner_use_ai: bool = True           # AI mavjud bo'lsa, maqsadni bosqichlarga AI ajratadi
     # Dashboard himoyasi
     auth_enabled: bool = True             # PIN talab qilinadi (birinchi kirishda o'rnatiladi)
     session_hours: float = 12

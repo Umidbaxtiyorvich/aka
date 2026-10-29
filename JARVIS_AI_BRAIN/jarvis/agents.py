@@ -196,7 +196,11 @@ class AgentManager:
         ops = {"analyze": lambda: st.analyze_image(p["path"]), "resize": lambda: st.resize(p["path"], p["preset"], p.get("mode", "fit")),
                "text": lambda: st.add_text(p["path"], p["text"], p.get("position", "bottom")),
                "logo": lambda: st.make_logo(p["text"], shape=p.get("shape", "circle")),
-               "prompt": lambda: st.image_prompt(p["subject"], p.get("purpose", "instagram_post"), p.get("style", "zamonaviy, toza"))}
+               "prompt": lambda: st.image_prompt(p["subject"], p.get("purpose", "instagram_post"), p.get("style", "zamonaviy, toza")),
+               "generate": lambda: self.core.imagegen.generate(p["prompt"], negative=p.get("negative", ""), width=int(p.get("width", 1024)),
+                                                               height=int(p.get("height", 1024)), steps=int(p.get("steps", 25))),
+               "edit": lambda: self.core.imagegen.edit(p["path"], p["prompt"], strength=float(p.get("strength", 0.5))),
+               "describe": lambda: self.core.imagegen.describe(p["path"], p.get("question") or "Bu rasmda nima tasvirlangan? O'zbek tilida qisqa tasvirlab ber.")}
         if op not in ops:
             raise ValueError(f"op: {list(ops)}")
         return ops[op]()

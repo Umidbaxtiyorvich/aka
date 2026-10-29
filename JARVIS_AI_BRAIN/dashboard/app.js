@@ -207,7 +207,7 @@ async function renderAgents(v) {
   const drawPlans = async () => { const ps = await api("/api/plans");
     $("#plans").innerHTML = ps.slice(0, 8).map((p) => `<div style="margin-top:8px"><b>#${p.id}</b> ${esc(p.goal)} <span class="pill">${esc(p.status)}</span>
       ${["planned", "partial", "waiting_approval"].includes(p.status) ? `<button class="ghost" data-run="${p.id}">Bajarish</button>` : ""}
-      <div class="muted">${p.steps.map((s) => `${s.n}. ${esc(s.text)} → ${s.agent} [${s.status}]`).join(" · ")}</div></div>`).join(""); };
+      <div class="muted">${p.steps.map((s) => `${s.n}. ${esc(s.text)} → ${s.agent} [${s.status}]`).join(" · ")}</div>${p.note ? `<div class="muted">ⓘ ${esc(p.note)}</div>` : ""}</div>`).join(""); };
   drawPlans();
   $("#mkplan").onclick = async () => { try { await api("/api/plans", { method: "POST", body: { text: $("#goal").value } }); drawPlans(); } catch (e) { alert(e.message); } };
   $("#plans").onclick = async (e) => { const id = e.target.dataset.run; if (id) { await api(`/api/plans/${id}/run`, { method: "POST" }); drawPlans(); } };
@@ -246,7 +246,15 @@ async function renderFiles(v) {
 
 async function renderComputer(v) {
   v.innerHTML = `<div class="warnbox">Buyruq darhol bajarilmaydi: avval xavf darajasi va tushuntirish ko'rsatiladi, so'ng "Tasdiqlashlar" bo'limida tasdiqlaysiz. Faqat o'qish rejimida faqat A darajali buyruqlar bajariladi.</div>
-    <div class="card"><div class="row"><input id="cmd" placeholder="Masalan: dir   yoki   git status"><button id="p">Taklif qilish</button></div><div id="r"></div></div>`;
+    <div class="card"><div class="row"><input id="cmd" placeholder="Masalan: dir   yoki   git status"><button id="p">Taklif qilish</button></div><div id="r"></div></div>
+    <div class="card" style="margin-top:12px"><h3>Dasturni ochish</h3><div id="apps" class="muted">yuklanmoqda…</div>
+      <div class="row" style="margin-top:8px"><select id="app" style="width:200px"></select><input id="appfile" placeholder="ochiladigan fayl (ixtiyoriy, ruxsat berilgan papkadan)"><button id="appgo">Tasdiq so'rash</button></div><div id="appr"></div>
+      <p class="muted">Ro'yxat (app_allowlist) faqat data/settings.json orqali o'zgartiriladi. Har bir ochish — alohida tasdiq.</p></div>`;
+  const apps = await api("/api/apps");
+  $("#apps").innerHTML = Object.keys(apps).length ? Object.entries(apps).map(([k, v]) => `<code>${esc(k)}</code> → ${esc(v)}`).join("<br>") : "Ruxsat berilgan dastur yo'q";
+  $("#app").innerHTML = Object.keys(apps).map((k) => `<option>${esc(k)}</option>`).join("");
+  $("#appgo").onclick = async () => { try { const r = await api("/api/apps/propose", { method: "POST", body: { name: $("#app").value, file: $("#appfile").value || null } });
+    $("#appr").innerHTML = `Tasdiq #${r.approval.id} yaratildi. <a href="#approvals">Tasdiqlashlar →</a> (tasdiqlagach, o'sha yerda «Ochish»)`; } catch (e) { $("#appr").innerHTML = `<span class="bad">${esc(e.message)}</span>`; } };
   $("#p").onclick = async () => {
     try { const r = await api("/api/computer/propose", { method: "POST", body: { command: $("#cmd").value } });
       $("#r").innerHTML = `<p>Xavf darajasi: <b>${r.risk}</b> — ${esc(r.explanation)}</p><p>Tasdiq #${r.approval.id}: ${esc(r.approval.status)}. <a href="#approvals">Tasdiqlashlar →</a></p>`;
@@ -271,13 +279,18 @@ async function renderApprovals(v) {
     ${a.status === "approved" && a.action_type === "code_change" ? '<a href="#tests">Branch yaratish →</a>' : ""}
     ${a.status === "approved" && a.action_type === "plugin_enable" ? '<a href="#plugins">Kengaytmani yoqish →</a>' : ""}
     ${a.status === "approved" && a.action_type === "backup_restore" ? '<a href="#backups">Tiklashni bajarish →</a>' : ""}
-    ${a.status === "approved" && a.action_type === "sandbox_unsafe_run" ? '<a href="#sandbox">Sandbox\'da ishga tushirish →</a>' : ""}</div><pre id="o${a.id}" hidden></pre></div>`).join("")
+    ${a.status === "approved" && a.action_type === "sandbox_unsafe_run" ? '<a href="#sandbox">Sandbox\'da ishga tushirish →</a>' : ""}
+    ${a.status === "approved" && a.action_type === "app_launch" ? `<button data-app="${a.id}">Ochish</button>` : ""}
+    ${a.status === "approved" && a.action_type === "phone_call" ? `<button class="danger" data-call="${a.id}">Qo'ng'iroq qilish (pullik)</button>` : ""}
+    ${a.status === "approved" && a.action_type === "instagram_dm" ? '<a href="#instagram">Direct javobni yuborish →</a>' : ""}</div><pre id="o${a.id}" hidden></pre></div>`).join("")
     : '<div class="card muted">Tasdiq so\'rovlari yo\'q</div>';
   v.onclick = async (e) => {
     const d = e.target.dataset;
     try {
       if (d.ok || d.no) { await api(`/api/approvals/${d.ok || d.no}/decide`, { method: "POST", body: { approve: !!d.ok, confirm_hash: d.h } }); show(); }
       if (d.run) { const r = await api(`/api/approvals/${d.run}/execute`, { method: "POST" }); const o = $("#o" + d.run); o.hidden = false; o.textContent = `exit=${r.exit_code}\n${r.output}`; }
+      if (d.app) { const r = await api(`/api/apps/launch/${d.app}`, { method: "POST" }); const o = $("#o" + d.app); o.hidden = false; o.textContent = `Ochildi: ${r.app} (pid ${r.pid})`; }
+      if (d.call && confirm("Pullik qo'ng'iroq amalga oshiriladi. Davom etasizmi?")) { const r = await api(`/api/telephony/call/${d.call}`, { method: "POST" }); const o = $("#o" + d.call); o.hidden = false; o.textContent = JSON.stringify(r); }
     } catch (er) { alert(er.message); }
   };
 }
@@ -287,7 +300,12 @@ async function renderAudit(v) {
 }
 async function renderErrors(v) {
   const rows = await api("/api/errors");
-  v.innerHTML = `<div class="card">${rows.length ? table(rows, ["ts", "module", "message"]) : '<span class="ok">Xatolar yo\'q</span>'}</div>`;
+  v.innerHTML = `<div class="card">${rows.length ? `<table><tr><th>vaqt</th><th>modul</th><th>xabar</th><th></th></tr>${rows.map((e) => `<tr><td>${esc(e.ts)}</td><td>${esc(e.module)}</td><td>${esc(e.message)}</td>
+    <td><button class="ghost" data-sug="${e.id}">AI tuzatish taklifi</button></td></tr>`).join("")}</table>` : '<span class="ok">Xatolar yo\'q</span>'}<pre id="so" hidden></pre>
+    <p class="muted">AI taklifi faqat patch loyihasi: u "Testlar va yaxshilash" bo'limida test qilinadi va tasdiqlanmaguncha qo'llanmaydi.</p></div>`;
+  v.onclick = async (e) => { const id = e.target.dataset.sug; if (!id) return; const o = $("#so"); o.hidden = false; o.textContent = "AI'dan so'ralmoqda…";
+    try { const r = await api("/api/improve/suggest", { method: "POST", body: { error_id: Number(id) } }); o.textContent = `Taklif #${r.id}: ${r.title}\n${r.next}\n\n${r.diff}`; }
+    catch (er) { o.textContent = er.message; } };
 }
 
 async function renderTests(v) {
@@ -355,15 +373,22 @@ async function renderSettings(v) {
       <label><input type="checkbox" id="tgn" style="width:auto" ${s.telegram_notify ? "checked" : ""}> Muhim bildirishnomalarni Telegram'ga yuborish</label>
       <label>Brauzer agentiga ruxsat berilgan domenlar (vergul bilan)</label><input id="doms" value="${esc(s.browser_allowed_domains.join(", "))}">
       <label>POS sayti manzili</label><input id="pos" value="${esc(s.pos_site)}" placeholder="https://...">
-      <label>POS konnektori</label><select id="posc"><option value="file_export">file_export (lokal fayl, tayyor)</option><option value="api">api (sozlanmagan)</option><option value="browser">browser (sozlanmagan)</option></select>
+      <label>POS konnektori</label><select id="posc"><option value="file_export">file_export (lokal fayl, tayyor)</option><option value="api">api (REST — pastda sozlang)</option><option value="browser">browser (sozlanmagan)</option></select>
       <label>Kam qolgan mahsulot chegarasi (min_stock bo'lmasa)</label><input id="low" type="number" value="${s.low_stock_threshold}">
+      <label>POS REST API sozlamasi (JSON, tokensiz — token: set_secret.py pos_api_token)</label><textarea id="posapi" style="min-height:70px">${esc(JSON.stringify(s.pos_api || {}, null, 1))}</textarea>
+      <label>Rasm generatori (Stable Diffusion WebUI --api)</label><input id="sdurl" value="${esc(s.image_gen_url || "")}" placeholder="http://127.0.0.1:7860">
+      <label>Vision modeli (Ollama)</label><input id="vism" value="${esc(s.vision_model || "")}" placeholder="moondream">
+      <label><input type="checkbox" id="pai" style="width:auto" ${s.planner_use_ai ? "checked" : ""}> Planner AI bilan bosqichlarga ajratsin (AI mavjud bo'lsa)</label>
+      <label>Dashboard sessiyasi (soat)</label><input id="sess" type="number" value="${s.session_hours}">
       <div class="row" style="margin-top:10px"><button id="save2">Saqlash</button></div><div id="msg2"></div>
       <p class="muted">Telegram ID'lari, o'qish/yozish papkalari va faqat-o'qish rejimi xavfsizlik uchun faqat data/settings.json orqali o'zgartiriladi.</p></div>
     <div class="card" style="margin-top:12px"><h3>Model katalogi (taxminiy talablar)</h3>${table(sys.model_catalog, ["name", "disk_gb", "ram_gb", "note"])}</div>`;
   $("#pv").value = s.ai_provider; $("#posc").value = s.pos_connector;
   $("#save2").onclick = async () => {
     try { await api("/api/settings", { method: "POST", body: { internet_enabled: $("#inet").checked, save_voice_recordings: $("#vrec").checked, telegram_notify: $("#tgn").checked,
-      browser_allowed_domains: $("#doms").value.split(",").map((x) => x.trim()).filter(Boolean), pos_site: $("#pos").value.trim(), pos_connector: $("#posc").value, low_stock_threshold: Number($("#low").value) } });
+      browser_allowed_domains: $("#doms").value.split(",").map((x) => x.trim()).filter(Boolean), pos_site: $("#pos").value.trim(), pos_connector: $("#posc").value, low_stock_threshold: Number($("#low").value),
+      pos_api: JSON.parse($("#posapi").value || "{}"), image_gen_url: $("#sdurl").value.trim(), vision_model: $("#vism").value.trim(),
+      planner_use_ai: $("#pai").checked, session_hours: Number($("#sess").value) } });
       $("#msg2").innerHTML = '<span class="ok">Saqlandi (audit jurnaliga yozildi)</span>'; } catch (e) { $("#msg2").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
   };
   $("#save").onclick = async () => {

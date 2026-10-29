@@ -21,6 +21,24 @@ O'zbek tilida ishlaydigan, doimiy xotirali, agentli va **har bir muhim amalni fa
 | Observability | ✅ | yagona diagnostika, "tekshirib bo'lmadi" holati, javob vaqtlari, eksport |
 | Release Gate | ✅ | toifalangan testlar, frontend e2e, PASS/FAIL/INCOMPLETE, CI |
 
+## v0.4.0 — qolib ketgan rejalar
+
+| Funksiya | Holat |
+|---|---|
+| Instagram Reels: konteyner qayta ishlanishini kutish, noma'lum natijani qayta yubormaslik | ✅ (mock API bilan testlangan) |
+| Instagram Direct: suhbatlar, javob loyihasi, 24 soat qoidasi, har xabarga tasdiq | ✅ (mock) |
+| Rejalashtirilgan Instagram postlari → vaqtida tasdiq so'rovi (avtomatik nashr yo'q) | ✅ |
+| Dashboard PIN (PBKDF2), sessiya, urinishlarni bloklash, Host/Origin himoyasi | ✅ |
+| Dasturni tasdiq bilan ochish (app_allowlist) | ✅ |
+| Avtomatik subtitr (mahalliy Whisper) | ✅ (Whisper o'rnatilsa) |
+| O'zbekcha TTS (espeak-ng) — chat javobi va videoga ovoz | ✅ (real espeak-ng bilan testlangan) |
+| AI bilan reja tuzish, xatodan AI patch taklifi | ✅ (AI ulansa) |
+| Mahalliy rasm generatsiyasi (Stable Diffusion WebUI) va vision tahlil (Ollama) | ✅ (o'rnatilsa) |
+| POS REST API konnektori (Idempotency-Key, noma'lum natija himoyasi) | ✅ (POS API bo'lsa) |
+| Twilio qo'ng'irog'i + qoidalar (faqat reja va tasdiq; qo'ng'iroq tasdiqdan keyin) | ✅ (pullik, sozlansa) |
+| BI hisobotini Excel'ga eksport | ✅ |
+| Windows'ga kirganda avtomatik ishga tushirish (`scripts\install_autostart.ps1`) | ✅ (Windows'da sinalmagan) |
+
 Tafsilotlar: [docs/IMPROVEMENTS_PLAN.md](docs/IMPROVEMENTS_PLAN.md), [docs/RELEASE.md](docs/RELEASE.md), [docs/BACKUP.md](docs/BACKUP.md).
 
 ## Holat (0.2.0 modullari)
@@ -72,7 +90,8 @@ git clone https://github.com/Umidbaxtiyorvich/aka.git
 cd aka\JARVIS_AI_BRAIN
 powershell -ExecutionPolicy Bypass -File scripts\check_system.ps1   # GPU/RAM/disk diagnostikasi (faqat o'qiydi)
 powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1  # .venv + kutubxonalar (~60 MB) + testlar
-powershell -ExecutionPolicy Bypass -File scripts\start_windows.ps1  # http://127.0.0.1:8765
+powershell -ExecutionPolicy Bypass -File scripts\start_windows.ps1  # http://127.0.0.1:8765 — birinchi kirishda PIN o'rnatasiz
+powershell -ExecutionPolicy Bypass -File scripts\install_autostart.ps1   # (ixtiyoriy) Windows'ga kirganda avtomatik ishga tushirish
 ```
 
 Ma'lumotlar standart holatda `JARVIS_AI_BRAIN\data\` ichida. Boshqa diskda saqlash ixtiyoriy: `setx JARVIS_HOME D:\JARVIS_DATA`.

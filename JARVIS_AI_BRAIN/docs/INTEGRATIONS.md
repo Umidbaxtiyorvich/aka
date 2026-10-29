@@ -74,3 +74,68 @@ Keyin Sozlamalar → Brauzer domenlari ga kerakli saytlarni qo'shing.
 Haqiqiy qo'ng'iroq uchun SIP yoki telephony provayder kerak. Bu pullik: daqiqa uchun to'lov va raqam ijarasi.
 - Hozir faqat rejalashtirish va tasdiq so'rovi tayyor.
 - Provayder adapteri siz tanlaganingizdan va narxini ko'rib chiqqaningizdan keyin yoziladi.
+
+## Dashboard PIN
+- Birinchi kirishda PIN o'rnatasiz. U faqat shu kompyuterdan o'rnatiladi va xeshlangan holda saqlanadi.
+- PIN'ni unutsangiz: `python scripts\reset_pin.py`.
+- Tarmoqdan kirish kerak bo'lsa (tavsiya etilmaydi):
+  1. `--host 0.0.0.0` bilan ishga tushiring.
+  2. `data\settings.json` → `allowed_hosts` ga kompyuter IP manzilini qo'shing.
+  3. Bunda HTTPS yo'qligini yodda tuting.
+
+## O'zbekcha ovoz (TTS)
+- espeak-ng'ni o'rnating (bepul, ~5 MB): https://github.com/espeak-ng/espeak-ng/releases → `espeak-ng.msi`.
+- O'rnatilgach, Voice bo'limi brauzerda o'zbekcha ovoz bo'lmasa espeak-ng (`uz`) ni ishlatadi.
+- Video studiyada "O'zbekcha ovoz qo'shish" ishlaydi.
+
+## Avtomatik subtitr
+1. `pip install faster-whisper` ni bajaring.
+2. Voice → modelni yuklang (small ≈480 MB).
+3. Studiya → "Avtomatik subtitr" ni tanlang.
+
+Natijani nashrdan oldin tekshiring.
+
+## Mahalliy rasm generatsiyasi
+- Talab: NVIDIA GPU, kamida 4 GB VRAM (SD 1.5) yoki 6–8 GB (SDXL).
+- Sozlash:
+  1. Stable Diffusion WebUI (AUTOMATIC1111 yoki Forge) ni `--api` bilan ishga tushiring.
+  2. Sozlamalar → "Rasm generatori" ga `http://127.0.0.1:7860` ni yozing.
+- Model fayllarini (2–7 GB) o'zingiz yuklaysiz.
+
+## Rasm mazmunini tahlil qilish (vision)
+1. `ollama pull moondream` (≈1.7 GB) yoki `llava:7b` (≈4.7 GB).
+2. Sozlamalar → "Vision modeli": `moondream`.
+
+Rasm tashqariga yuborilmaydi.
+
+## POS REST API
+POS rasmiy API bersa:
+1. Sozlamalar → POS konnektori: `api`.
+2. "POS REST API sozlamasi" ga yozing:
+   ```json
+   {"base_url": "https://pos.example.uz/api", "create_path": "/documents",
+    "find_path": "/documents?external_key={key}", "auth_header": "Authorization", "auth_scheme": "Bearer"}
+   ```
+3. Tokenni kiriting: `python scripts\set_secret.py pos_api_token`. Faqat kerakli huquqlarga ega token tavsiya etiladi.
+
+Har bir hujjat `Idempotency-Key` bilan yuboriladi. Javob kelmasa, qayta yuborilmaydi.
+
+## Telefon qo'ng'irog'i (Twilio, pullik)
+1. `data\settings.json` ga yozing:
+   ```json
+   "telephony_provider": "twilio", "telephony_account_sid": "AC...", "telephony_from": "+1...",
+   "telephony_cost_per_min": 0.3, "telephony_rules": [{"category": "pos", "severity": "critical", "phone": "+998..."}]
+   ```
+2. Tokenni kiriting: `python scripts\set_secret.py twilio_auth_token`.
+
+Ishlash tartibi:
+- Kritik bildirishnoma qoidaga mos kelsa, faqat qo'ng'iroq **rejasi** va tasdiq so'rovi yaratiladi.
+- Qo'ng'iroq faqat siz "Qo'ng'iroq qilish" tugmasini bosganingizda amalga oshadi.
+- Twilio o'zbek tilida o'qimaydi: xabar `telephony_voice_language` (standart `ru-RU`) tilida o'qiladi.
+- Narxlar uchun Twilio saytini tekshiring.
+
+## Avtomatik ishga tushirish (Windows)
+- O'rnatish: `powershell -ExecutionPolicy Bypass -File scripts\install_autostart.ps1`
+- O'chirish: `... -Uninstall`
+
+Faqat sizning foydalanuvchingiz uchun ishlaydi, administrator huquqi kerak emas. Server xato bilan to'xtasa, 3 martagacha qayta ishga tushadi.
