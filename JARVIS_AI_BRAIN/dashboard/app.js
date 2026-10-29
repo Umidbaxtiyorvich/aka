@@ -9,8 +9,43 @@ async function api(path, opts = {}) {
     body: opts.body ? JSON.stringify(opts.body) : undefined });
   const ct = res.headers.get("content-type") || "";
   const data = ct.includes("json") ? await res.json() : await res.text();
+  if (res.status === 401 && data.detail === "auth_required") {
+    showLogin(data.pin_set);
+    throw new Error("Kirish talab qilinadi");
+  }
   if (!res.ok) throw new Error(data.detail || data || res.statusText);
   return data;
+}
+
+// ---------------- Kirish (PIN) ----------------
+function showLogin(pinSet) {
+  if (document.getElementById("login")) return;
+  const el = document.createElement("div");
+  el.id = "login";
+  el.innerHTML = `<div class="card" style="max-width:380px;width:100%">
+    <div class="brand" style="padding:0 0 10px">J.A.R.V.I.S<small>AI BRAIN</small></div>
+    <h3>${pinSet ? "Kirish" : "Birinchi kirish: PIN o'rnating"}</h3>
+    ${pinSet ? "" : '<p class="muted">PIN shu kompyuterda xeshlangan holda saqlanadi. Kamida 6 belgi; oson PIN qabul qilinmaydi.</p>'}
+    <input id="pin1" type="password" placeholder="PIN" autocomplete="${pinSet ? "current-password" : "new-password"}" autofocus>
+    ${pinSet ? "" : '<input id="pin2" type="password" placeholder="PIN (qayta)" autocomplete="new-password" style="margin-top:8px">'}
+    <div class="row" style="margin-top:10px"><button id="pinok">${pinSet ? "Kirish" : "O'rnatish va kirish"}</button></div>
+    <div id="pinmsg"></div><p class="muted">PIN unutilsa: kompyuterda <code>python scripts/reset_pin.py</code></p></div>`;
+  document.body.appendChild(el);
+  const go = async () => {
+    const p1 = document.getElementById("pin1").value;
+    if (!pinSet && p1 !== document.getElementById("pin2").value) { document.getElementById("pinmsg").innerHTML = '<span class="bad">PINlar mos emas</span>'; return; }
+    const res = await fetch(pinSet ? "/api/auth/login" : "/api/auth/setup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: p1 }) });
+    if (res.ok) { location.reload(); return; }
+    const d = await res.json().catch(() => ({}));
+    document.getElementById("pinmsg").innerHTML = `<span class="bad">${esc(d.detail || res.statusText)}</span>`;
+  };
+  document.getElementById("pinok").onclick = go;
+  el.addEventListener("keydown", (e) => e.key === "Enter" && go());
+}
+
+async function logout() {
+  await fetch("/api/auth/logout", { method: "POST" });
+  location.reload();
 }
 
 const SECTIONS = [
@@ -54,6 +89,10 @@ function buildMenu() {
   $("#menu").innerHTML = SECTIONS.map(([id, name]) =>
     `<a data-id="${id}">${name}${PLANNED.has(id) ? '<span class="tag">tez orada</span>' : ""}</a>`).join("");
   $("#menu").onclick = (e) => { const a = e.target.closest("a"); if (a) location.hash = a.dataset.id; };
+  fetch("/api/auth/status").then((r) => r.json()).then((st) => {
+    if (st.enabled && st.authenticated) $("#menu").insertAdjacentHTML("beforeend", '<a id="logout" style="margin-top:12px">⏻ Chiqish</a>');
+    const lo = document.getElementById("logout"); if (lo) lo.onclick = (e) => { e.stopPropagation(); logout(); };
+  }).catch(() => {});
 }
 
 let timer = null;
@@ -289,7 +328,11 @@ async function renderSecurity(v) {
     <div>Tasdiq talab qilinadi: <b class="ok">${s.require_approval ? "ha" : "yo'q"}</b></div>
     <div>O'qish ruxsati: ${s.allowed_read_dirs.map(esc).join(", ")}</div><div>Yozish ruxsati: ${s.allowed_write_dirs.map(esc).join(", ")}</div>
     <p class="muted">Bu kalitlar (${s.locked_keys.join(", ")}) dashboard yoki JARVIS tomonidan o'zgartirilmaydi — faqat siz settings.json faylini qo'lda tahrirlab.</p></div>
+    <div class="card"><h3>Dashboard PIN'ini almashtirish</h3><input id="pc1" type="password" placeholder="Joriy PIN"><input id="pc2" type="password" placeholder="Yangi PIN" style="margin-top:6px">
+      <div class="row" style="margin-top:8px"><button class="ghost" id="pcgo">Almashtirish</button></div><div id="pcm" class="muted">Almashtirilgach, boshqa barcha sessiyalar bekor bo'ladi.</div></div>
     <div class="card"><h3>Matnni tekshirish</h3><textarea id="t" placeholder="Matn yoki buyruq"></textarea><div class="row" style="margin-top:8px"><button id="c">Tekshirish</button></div><pre id="r" hidden></pre></div></div>`;
+  $("#pcgo").onclick = async () => { try { await api("/api/auth/change", { method: "POST", body: { current: $("#pc1").value, new: $("#pc2").value } });
+    $("#pcm").innerHTML = '<span class="ok">PIN almashtirildi</span>'; } catch (e) { $("#pcm").innerHTML = `<span class="bad">${esc(e.message)}</span>`; } };
   $("#c").onclick = async () => {
     const t = await api("/api/tasks", { method: "POST", body: { agent: "security", title: "Matn tekshiruvi", payload: { text: $("#t").value, is_command: true } } });
     await new Promise((s) => setTimeout(s, 500));

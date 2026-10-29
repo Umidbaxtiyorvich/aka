@@ -47,3 +47,4 @@ a{color:var(--neon2)}
 label{display:block;margin-top:6px}
 .row label{margin-top:0}
 #mode:empty{display:none}
+#login{position:fixed;inset:0;background:#060b14f2;display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}

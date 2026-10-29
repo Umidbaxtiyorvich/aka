@@ -15,6 +15,7 @@ from .ai_engine import MODEL_CATALOG
 from .approval import ApprovalError
 from .config import LOCKED_KEYS, PROJECT_ROOT
 from .core import CAPABILITIES, JarvisCore
+from .auth import AuthError
 from .backup import BackupError
 from .bi import BIError
 from .dag import DagError
@@ -47,6 +48,7 @@ EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "br
 PROVIDER_KINDS = {"ollama", "openai_compatible", "anthropic", "offline"}
 
 DASHBOARD = PROJECT_ROOT / "dashboard"
+SESSION_COOKIE = "jarvis_session"
 
 
 class ChatIn(BaseModel):
@@ -167,6 +169,11 @@ class IgReplyIn(BaseModel):
     comment_text: str
     reply: str = ""
 
+class IgDmIn(BaseModel):
+    account: str
+    conversation_id: str
+    reply: str = ""
+
 class TextIn(BaseModel):
     text: str
 
@@ -211,6 +218,18 @@ class PluginRunIn(BaseModel):
 class PluginStatusIn(BaseModel):
     status: str
 
+class PinIn(BaseModel):
+    pin: str
+
+class PinChangeIn(BaseModel):
+    current: str
+    new: str
+
+class AppIn(BaseModel):
+    name: str
+    file: str | None = None
+    reason: str = ""
+
 class CallIn(BaseModel):
     phone: str
     message: str
@@ -222,6 +241,28 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     app = FastAPI(title="JARVIS AI BRAIN", version=__version__)
     app.state.core = core or JarvisCore()
     C = lambda: app.state.core  # noqa: E731
+
+    from fastapi.responses import JSONResponse
+    from urllib.parse import urlparse
+
+    @app.middleware("http")
+    async def security(request: Request, call_next):
+        """1) Host tekshiruvi — DNS rebinding'dan himoya. 2) Begona Origin'dan o'zgartiruvchi so'rovlar rad etiladi.
+        3) PIN sessiyasi (auth_enabled)."""
+        c = app.state.core
+        allowed = set(c.settings.allowed_hosts)
+        host = (request.headers.get("host") or "").rsplit(":", 1)[0].strip("[]").lower()
+        if host not in allowed:
+            return JSONResponse({"detail": "Ruxsat etilmagan Host sarlavhasi"}, status_code=400)
+        origin = request.headers.get("origin")
+        if origin and request.method not in ("GET", "HEAD", "OPTIONS"):
+            if (urlparse(origin).hostname or "").lower() not in allowed:
+                return JSONResponse({"detail": "Begona saytdan so'rov rad etildi"}, status_code=403)
+        path = request.url.path
+        if c.settings.auth_enabled and path.startswith("/api/") and not path.startswith("/api/auth/"):
+            if not c.auth.check(request.cookies.get(SESSION_COOKIE)):
+                return JSONResponse({"detail": "auth_required", "pin_set": c.auth.has_pin()}, status_code=401)
+        return await call_next(request)
 
     @app.middleware("http")
     async def timing(request: Request, call_next):
@@ -241,6 +282,58 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
             return fn(*a, **kw)
         except USER_ERRORS as e:
             raise HTTPException(400, str(e).strip("'"))
+
+    # Auth
+    from fastapi.responses import JSONResponse as _J
+
+    def _with_cookie(token: str) -> _J:
+        r = _J({"ok": True})
+        r.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="strict", max_age=int(C().settings.session_hours * 3600), path="/")
+        return r
+
+    def _auth(fn, *a):
+        try:
+            return fn(*a)
+        except AuthError as e:
+            raise HTTPException(e.status, str(e))
+
+    @app.get("/api/auth/status")
+    def auth_status(request: Request):
+        return C().auth.status(request.cookies.get(SESSION_COOKIE))
+
+    @app.post("/api/auth/setup")
+    def auth_setup(body: PinIn, request: Request):
+        return _with_cookie(_auth(C().auth.setup, body.pin, request.client.host if request.client else ""))
+
+    @app.post("/api/auth/login")
+    def auth_login(body: PinIn, request: Request):
+        return _with_cookie(_auth(C().auth.login, body.pin, request.client.host if request.client else ""))
+
+    @app.post("/api/auth/change")
+    def auth_change(body: PinChangeIn, request: Request):
+        if C().settings.auth_enabled and not C().auth.check(request.cookies.get(SESSION_COOKIE)):
+            raise HTTPException(401, "auth_required")
+        return _with_cookie(_auth(C().auth.change, body.current, body.new, request.client.host if request.client else ""))
+
+    @app.post("/api/auth/logout")
+    def auth_logout(request: Request):
+        C().auth.logout(request.cookies.get(SESSION_COOKIE))
+        r = _J({"ok": True})
+        r.delete_cookie(SESSION_COOKIE, path="/")
+        return r
+
+    # Dasturlar
+    @app.get("/api/apps")
+    def apps():
+        return C().computer.apps()
+
+    @app.post("/api/apps/propose")
+    def app_propose(body: AppIn):
+        return guard(C().computer.propose_app, body.name, body.file, body.reason)
+
+    @app.post("/api/apps/launch/{aid}")
+    def app_launch(aid: int):
+        return guard(C().computer.launch_app, aid)
 
     @app.get("/api/status")
     def status():
@@ -767,6 +860,38 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def ig_publish(pid: int):
         return guard(C().instagram.publish, pid)
 
+    @app.post("/api/instagram/posts/{pid}/check")
+    def ig_check(pid: int):
+        return guard(C().instagram.check_unknown, pid)
+
+    @app.post("/api/instagram/scheduled/run")
+    def ig_sched():
+        return C().instagram.due_scheduled()
+
+    @app.get("/api/instagram/{account}/conversations")
+    def ig_convs(account: str):
+        return guard(C().instagram.conversations, account)
+
+    @app.get("/api/instagram/{account}/conversations/{cid}")
+    def ig_msgs(account: str, cid: str):
+        return guard(C().instagram.messages, account, cid)
+
+    @app.get("/api/instagram/dm")
+    def ig_dms():
+        return C().instagram.dm_drafts()
+
+    @app.post("/api/instagram/dm")
+    def ig_dm_draft(body: IgDmIn):
+        return guard(C().instagram.draft_dm, body.account, body.conversation_id, body.reply)
+
+    @app.post("/api/instagram/dm/{did}/request")
+    def ig_dm_req(did: int):
+        return guard(C().instagram.request_dm, did)
+
+    @app.post("/api/instagram/dm/{did}/send")
+    def ig_dm_send(did: int):
+        return guard(C().instagram.send_dm, did)
+
     @app.post("/api/instagram/hashtags")
     def ig_tags(body: TextIn):
         return {"hashtags": suggest_hashtags(body.text)}
@@ -895,9 +1020,11 @@ def main():
     ap.add_argument("--port", type=int, default=8765)
     a = ap.parse_args()
     if a.host not in ("127.0.0.1", "localhost"):
-        print("OGOHLANTIRISH: server tarmoqqa ochilmoqda. Autentifikatsiya hali yo'q — faqat ishonchli tarmoqda!")
+        print("OGOHLANTIRISH: server tarmoqqa ochilmoqda. PIN himoyasi bor, lekin HTTPS yo'q — faqat ishonchli tarmoqda!"
+              " allowed_hosts ga kompyuter IP manzilini settings.json orqali qo'shing.")
     app = create_app()
     app.state.core.backup.start_auto()        # jadval bo'yicha avtomatik zaxira (backup_interval_hours)
+    app.state.core.start_scheduler()          # rejalashtirilgan Instagram postlari → tasdiq so'rovi
     uvicorn.run(app, host=a.host, port=a.port)
 
 

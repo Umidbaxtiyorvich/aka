@@ -6,7 +6,10 @@ ruxsatlari. Token: `python scripts/set_secret.py instagram_token_<akkaunt_nomi>`
 
 API cheklovlari (ishlayotgandek ko'rsatilmaydi):
 * Nashr uchun media OMMAVIY URL'da bo'lishi kerak (lokal faylni API to'g'ridan-to'g'ri qabul qilmaydi).
-* Direct xabarlar Instagram Messaging API va alohida App Review talab qiladi — bu yerda faqat javob loyihasi.
+* Video (Reels/Stories) konteyneri qayta ishlanadi: status_code FINISHED bo'lmaguncha nashr qilinmaydi.
+* media_publish javobi kelmasa — natija 'unknown': qayta yuborilmaydi, avval akkauntdagi postlar tekshiriladi.
+* Direct: Instagram Messaging API (`instagram_manage_messages`, App Review). Javob faqat oxirgi kiruvchi
+  xabardan 24 soat ichida yuboriladi (Meta qoidasi); har bir xabar — D darajali tasdiq.
 * Statistika faqat API bergan ko'rsatkichlar; ma'lumot bo'lmasa — bo'sh, to'qib chiqarilmaydi.
 Har bir nashr va izohga javob — D daraja: aniq akkaunt, matn va media bilan alohida tasdiq.
 """
@@ -14,6 +17,8 @@ from __future__ import annotations
 
 import json
 import re
+import time
+from datetime import datetime, timedelta, timezone
 
 from . import net
 from .secrets import get_secret
@@ -25,6 +30,11 @@ CREATE TABLE IF NOT EXISTS ig_posts (
     media_url TEXT, scheduled_at TEXT, status TEXT NOT NULL DEFAULT 'draft',
     approval_id INTEGER, external_id TEXT, last_error TEXT, version INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS ig_dm_drafts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, account TEXT NOT NULL, conversation_id TEXT, recipient_id TEXT NOT NULL,
+    last_incoming TEXT, last_incoming_at TEXT, reply TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'draft',
+    approval_id INTEGER, external_id TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS ig_replies (
     id INTEGER PRIMARY KEY AUTOINCREMENT, account TEXT NOT NULL, comment_id TEXT NOT NULL, comment_text TEXT,
@@ -52,6 +62,9 @@ def suggest_hashtags(text: str, extra: list[str] | None = None, limit: int = 12)
 
 
 class InstagramManager:
+    poll_interval = 3.0       # testlarda 0 qilinadi
+    poll_timeout = 300.0
+
     def __init__(self, core):
         self.core = core
         core.db.conn.executescript(SCHEMA)
@@ -183,17 +196,163 @@ class InstagramManager:
             params["video_url" if p["media_url"].lower().endswith((".mp4", ".mov")) else "image_url"] = p["media_url"]
         try:
             container = self._api("POST", f"{acc['ig_user_id']}/media", p["account"], **params)
+            self._wait_container(container["id"], p["account"])
+        except InstagramError as e:
+            return self._publish_failed(p, str(e))
+        try:
             res = self._api("POST", f"{acc['ig_user_id']}/media_publish", p["account"], creation_id=container["id"])
         except InstagramError as e:
-            self.core.db.execute("UPDATE ig_posts SET status='failed', last_error=? WHERE id=?", (str(e), pid))
-            self.core.audit.log("instagram_agent", f"Nashr xatosi: post#{pid}", target=f"ig:{p['account']}", risk="D",
-                                approval_status="approved", error_code="IG_API", error_note=str(e))
-            raise
+            if "Tarmoq" in str(e) or "timeout" in str(e).lower():
+                # So'rov yetib bordimi — noma'lum. Qayta yubormaymiz; avval akkauntda tekshiriladi.
+                self.core.approvals.mark_result(p["approval_id"], "unknown")
+                self.core.db.execute("UPDATE ig_posts SET status='unknown', last_error=? WHERE id=?", (str(e), pid))
+                self.core.audit.log("instagram_agent", f"Nashr natijasi noma'lum: post#{pid}", target=f"ig:{p['account']}",
+                                    risk="D", approval_status="approved", error_code="UNKNOWN", error_note=str(e))
+                return self.get(pid)
+            return self._publish_failed(p, str(e))
         self.core.approvals.mark_result(p["approval_id"], "executed")
         self.core.db.execute("UPDATE ig_posts SET status='published', external_id=? WHERE id=?", (res.get("id"), pid))
         self.core.audit.log("instagram_agent", f"Nashr qilindi: post#{pid}", target=f"ig:{p['account']}", risk="D",
                             approval_status="approved", result=str(res.get("id")), verified="api_id")
         return self.get(pid)
+
+    def _publish_failed(self, p: dict, msg: str):
+        self.core.db.execute("UPDATE ig_posts SET status='failed', last_error=? WHERE id=?", (msg, p["id"]))
+        self.core.audit.log("instagram_agent", f"Nashr xatosi: post#{p['id']}", target=f"ig:{p['account']}", risk="D",
+                            approval_status="approved", error_code="IG_API", error_note=msg)
+        raise InstagramError(msg)
+
+    def _wait_container(self, container_id: str, account: str) -> None:
+        """Meta video konteynerni qayta ishlaydi; FINISHED bo'lmaguncha media_publish chaqirilmaydi."""
+        deadline = time.monotonic() + self.poll_timeout
+        while True:
+            st = self._api("GET", container_id, account, fields="status_code,status").get("status_code", "FINISHED")
+            if st in ("FINISHED", "PUBLISHED"):
+                return
+            if st in ("ERROR", "EXPIRED"):
+                raise InstagramError(f"Media konteyneri qayta ishlanmadi: {st}")
+            if time.monotonic() > deadline:
+                raise InstagramError(f"Media qayta ishlash {int(self.poll_timeout)} soniyada tugamadi (holat: {st})")
+            time.sleep(self.poll_interval)
+
+    def check_unknown(self, pid: int) -> dict:
+        """'unknown' post: akkauntning oxirgi postlarida shu caption bormi — tekshiradi."""
+        p = self.get(pid)
+        if p["status"] != "unknown":
+            raise InstagramError("Post 'unknown' holatida emas")
+        acc = self._account(p["account"])
+        media = self._api("GET", f"{acc['ig_user_id']}/media", p["account"], fields="id,caption,timestamp", limit=10).get("data", [])
+        hit = next((m for m in media if (m.get("caption") or "").strip() == p["caption"].strip()), None)
+        if hit:
+            self.core.approvals.mark_result(p["approval_id"], "executed")
+            self.core.db.execute("UPDATE ig_posts SET status='published', external_id=? WHERE id=?", (hit["id"], pid))
+            self.core.audit.log("instagram_agent", f"Tekshiruv: post#{pid} akkauntda topildi", target=f"ig:{p['account']}",
+                                risk="D", approval_status="approved", verified="api_lookup")
+        else:
+            self.core.db.execute("UPDATE approvals SET status='invalidated' WHERE id=?", (p["approval_id"],))
+            self.core.db.execute("UPDATE ig_posts SET status='draft', approval_id=NULL WHERE id=?", (pid,))
+            self.core.audit.log("instagram_agent", f"Tekshiruv: post#{pid} topilmadi — qayta tasdiq kerak", target=f"ig:{p['account']}",
+                                risk="D", approval_status="invalidated")
+        return self.get(pid)
+
+    # --- Direct (Instagram Messaging API) ---
+    def _msg_id(self, acc: dict) -> str:
+        return acc.get("messaging_id") or acc["ig_user_id"]
+
+    def conversations(self, account: str, limit: int = 20) -> list[dict]:
+        acc = self._account(account)
+        data = self._api("GET", f"{self._msg_id(acc)}/conversations", account, platform="instagram",
+                         fields="id,updated_time,participants", limit=limit).get("data", [])
+        return data
+
+    def messages(self, account: str, conversation_id: str) -> list[dict]:
+        r = self._api("GET", conversation_id, account, fields="messages{id,from,to,message,created_time}")
+        return (r.get("messages") or {}).get("data", [])
+
+    def draft_dm(self, account: str, conversation_id: str, reply: str = "") -> dict:
+        acc = self._account(account)
+        msgs = self.messages(account, conversation_id)
+        own = {acc["ig_user_id"], self._msg_id(acc), acc.get("username", "")}
+        incoming = [m for m in msgs if (m.get("from") or {}).get("id") not in own and (m.get("from") or {}).get("username") not in own]
+        if not incoming:
+            raise InstagramError("Bu suhbatda kiruvchi xabar topilmadi")
+        last = max(incoming, key=lambda m: m.get("created_time", ""))
+        reply = reply or self._suggest_reply(last.get("message", ""))
+        cur = self.core.db.execute(
+            "INSERT INTO ig_dm_drafts(account, conversation_id, recipient_id, last_incoming, last_incoming_at, reply) VALUES (?,?,?,?,?,?)",
+            (account, conversation_id, last["from"]["id"], last.get("message", "")[:1000], last.get("created_time"), reply))
+        self.core.audit.log("instagram_agent", "Direct javob loyihasi", target=f"ig:{account}", risk="B")
+        return self.dm(cur.lastrowid)
+
+    def dm(self, did: int) -> dict:
+        r = self.core.db.one("SELECT * FROM ig_dm_drafts WHERE id=?", (did,))
+        if not r:
+            raise InstagramError("Direct loyihasi topilmadi")
+        return r | {"within_24h": self._within_24h(r["last_incoming_at"])}
+
+    def dm_drafts(self) -> list[dict]:
+        return [self.dm(r["id"]) for r in self.core.db.query("SELECT id FROM ig_dm_drafts ORDER BY id DESC LIMIT 100")]
+
+    @staticmethod
+    def _within_24h(ts: str | None) -> bool:
+        if not ts:
+            return False
+        try:
+            t = datetime.fromisoformat(ts.replace("Z", "+00:00").replace("+0000", "+00:00"))
+        except ValueError:
+            return False
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) - t < timedelta(hours=24)
+
+    def _dm_payload(self, r: dict) -> dict:
+        return {"account": r["account"], "recipient_id": r["recipient_id"], "reply": r["reply"]}
+
+    def request_dm(self, did: int) -> dict:
+        r = self.dm(did)
+        if not r["within_24h"]:
+            raise InstagramError("Oxirgi kiruvchi xabardan 24 soatdan ko'p o'tgan — Meta qoidasi bo'yicha javob yuborib bo'lmaydi")
+        appr = self.core.approvals.request(
+            action_type="instagram_dm", target="instagram", account=r["account"], level="D", payload=self._dm_payload(r),
+            requested_by="instagram_agent", idempotency_key=f"igdm-{did}",
+            summary=f"@{r['account']}: Direct javob «{r['reply'][:80]}» (mijoz yozgan: «{(r['last_incoming'] or '')[:60]}»)",
+            purpose="Mijozning Direct xabariga javob")
+        self.core.db.execute("UPDATE ig_dm_drafts SET status='pending_approval', approval_id=? WHERE id=?", (appr["id"], did))
+        return appr
+
+    def send_dm(self, did: int) -> dict:
+        r = self.dm(did)
+        if not r["approval_id"]:
+            raise InstagramError("Tasdiq so'ralmagan")
+        if not r["within_24h"]:
+            raise InstagramError("24 soatlik javob oynasi yopilgan")
+        self.core.approvals.authorize_execution(r["approval_id"], self._dm_payload(r))
+        acc = self._account(r["account"])
+        res = self._api("POST", f"{self._msg_id(acc)}/messages", r["account"],
+                        recipient=json.dumps({"id": r["recipient_id"]}), message=json.dumps({"text": r["reply"]}, ensure_ascii=False))
+        self.core.approvals.mark_result(r["approval_id"], "executed")
+        self.core.db.execute("UPDATE ig_dm_drafts SET status='sent', external_id=? WHERE id=?", (res.get("message_id") or res.get("id"), did))
+        self.core.audit.log("instagram_agent", f"Direct javob yuborildi #{did}", target=f"ig:{r['account']}", risk="D",
+                            approval_status="approved", verified="api_id")
+        return self.dm(did)
+
+    # --- rejalashtirilgan postlar ---
+    def due_scheduled(self) -> list[dict]:
+        """Vaqti kelgan loyihalar uchun nashr tasdig'ini so'raydi (avtomatik nashr YO'Q — baribir siz tasdiqlaysiz)."""
+        out = []
+        now = datetime.now().strftime("%Y-%m-%dT%H:%M")
+        for p in self.core.db.query("SELECT * FROM ig_posts WHERE status='draft' AND scheduled_at<>'' AND scheduled_at<=?", (now,)):
+            try:
+                appr = self.request_publish(p["id"])
+                self.core.notifier.notify(f"Instagram: nashr vaqti keldi (@{p['account']})",
+                                          f"Post #{p['id']} tasdiqingizni kutmoqda (tasdiq #{appr['id']}).", severity="warning",
+                                          category="instagram")
+                out.append({"post": p["id"], "approval": appr["id"]})
+            except InstagramError as e:
+                self.core.notifier.notify(f"Instagram: rejalashtirilgan post #{p['id']} tayyor emas", str(e), severity="warning",
+                                          category="instagram")
+                self.core.db.execute("UPDATE ig_posts SET last_error=? WHERE id=?", (str(e), p["id"]))
+        return out
 
     # --- izohlar ---
     def comments(self, account: str, media_id: str) -> list[dict]:

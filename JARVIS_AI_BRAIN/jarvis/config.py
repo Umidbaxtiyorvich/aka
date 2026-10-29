@@ -15,7 +15,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Foydalanuvchi o'zgartira olmaydigan (va JARVIS o'zi o'zgartira olmaydigan) kalitlar.
 LOCKED_KEYS = {"read_only_mode", "require_approval", "allowed_read_dirs", "allowed_write_dirs",
-               "telegram_allowed_ids", "protected_paths", "command_allowlist", "forbidden_actions"}
+               "telegram_allowed_ids", "protected_paths", "command_allowlist", "forbidden_actions", "app_allowlist",
+               "auth_enabled", "allowed_hosts"}
 
 
 def jarvis_home() -> Path:
@@ -64,6 +65,14 @@ class Settings:
         "dir", "ls", "type", "cat", "echo", "git", "python", "py", "pip", "ffmpeg", "ffprobe", "ollama",
         "whoami", "systeminfo", "Get-ChildItem", "Get-Content", "mkdir", "md", "findstr", "grep", "sort", "more",
         "head", "tail", "wc", "pytest", "node", "npm"])
+    # Ruxsat berilgan dasturlar: nom -> buyruq (shell'siz). Faqat settings.json orqali o'zgartiriladi.
+    app_allowlist: dict = field(default_factory=lambda: (
+        {"bloknot": ["notepad.exe"], "kalkulyator": ["calc.exe"], "paint": ["mspaint.exe"], "explorer": ["explorer.exe"]}
+        if os.name == "nt" else {}))
+    # Dashboard himoyasi
+    auth_enabled: bool = True             # PIN talab qilinadi (birinchi kirishda o'rnatiladi)
+    session_hours: float = 12
+    allowed_hosts: list[str] = field(default_factory=lambda: ["127.0.0.1", "localhost"])
     sandbox_backend: str = "process"      # process | docker
     sandbox_timeout_sec: int = 30
     sandbox_memory_mb: int = 256

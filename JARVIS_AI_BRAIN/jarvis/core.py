@@ -9,6 +9,7 @@ from . import system_info
 from .agents import AgentManager
 from .ai_engine import SYSTEM_PROMPT, AIError
 from .approval import ApprovalEngine
+from .auth import AuthManager
 from .backup import BackupManager
 from .bi import BusinessIntelligence
 from .audit import Audit
@@ -90,8 +91,23 @@ class JarvisCore:
         self.dag = TaskGraph(self)
         self.plugins = PluginManager(self)
         self.diagnostics = Diagnostics(self)
+        self.auth = AuthManager(self)
         self.improver = Improver(self)
         self.agents = AgentManager(self)
+
+    def start_scheduler(self, every_sec: int = 60):
+        """Fon jadvali: rejalashtirilgan Instagram postlari uchun tasdiq so'rash (avtomatik nashr yo'q)."""
+        import threading
+        import time as _t
+
+        def loop():
+            while True:
+                _t.sleep(every_sec)
+                try:
+                    self.instagram.due_scheduled()
+                except Exception as e:  # jadval xatosi serverni to'xtatmasin
+                    self.audit.error("scheduler", str(e))
+        threading.Thread(target=loop, daemon=True).start()
 
     def reload_ai(self):
         self.ai._avail_cache.clear()

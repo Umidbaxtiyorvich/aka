@@ -36,6 +36,8 @@ ACTIONS: dict[str, tuple[str, str, bool, str]] = {
     "pos_tolov": ("high", "D", False, "Moliyaviy to'lov yozuvi kiritiladi"),
     "instagram_publish": ("high", "D", False, "Instagram'da ommaviy nashr"),
     "instagram_reply": ("high", "D", False, "Instagram izohiga ommaviy javob"),
+    "instagram_dm": ("high", "D", False, "Instagram Direct orqali mijozga xabar yuboriladi"),
+    "app_launch": ("medium", "C", True, "Kompyuterda ruxsat berilgan dastur ochiladi"),
     "telegram_send": ("high", "D", False, "Telegram orqali xabar yuboriladi"),
     "phone_call": ("high", "D", False, "Pullik telefon qo'ng'irog'i"),
     "paid_ai_call": ("high", "D", False, "Pullik AI xizmatiga so'rov (xarajat)"),

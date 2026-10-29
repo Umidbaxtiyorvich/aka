@@ -97,3 +97,26 @@ def test_core_user_flows(server, page, core):
     page.goto(server + "#approvals")
     page.wait_for_timeout(300)
     assert not page.errors, page.errors
+
+
+def test_login_flow(server, page, core):
+    core.settings.auth_enabled = True
+    page.goto(server)
+    page.wait_for_selector("#login")
+    assert "PIN o'rnating" in page.text_content("#login")
+    page.fill("#pin1", "jarvis-2026-uz")
+    page.fill("#pin2", "jarvis-2026-uz")
+    page.click("#pinok")
+    page.wait_for_selector("#login", state="detached")
+    page.wait_for_selector("text=AI HOLATI")
+    page.wait_for_selector("#logout")
+    page.click("#logout")
+    page.wait_for_selector("#login")
+    page.fill("#pin1", "notogri")
+    page.click("#pinok")
+    page.wait_for_selector("#pinmsg .bad")
+    page.fill("#pin1", "jarvis-2026-uz")
+    page.click("#pinok")
+    page.wait_for_selector("#login", state="detached")
+    errs = [e for e in page.errors if "401" not in e]      # kirishdan oldingi 401 javoblar kutilgan
+    assert not errs, errs

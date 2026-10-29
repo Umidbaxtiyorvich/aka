@@ -100,7 +100,8 @@ def _ig(core, monkeypatch, routes):
 
 
 def test_instagram_publish_requires_exact_approval(core, monkeypatch):
-    fake = _ig(core, monkeypatch, {"1784/media_publish": (200, {"id": "MEDIA9"}), "1784/media": (200, {"id": "CONT1"})})
+    fake = _ig(core, monkeypatch, {"1784/media_publish": (200, {"id": "MEDIA9"}), "1784/media": (200, {"id": "CONT1"}),
+                                   "/CONT1": (200, {"status_code": "FINISHED"})})
     p = core.instagram.draft("shop", "post", "Yangi mahsulot", "https://cdn.example.com/a.jpg", hashtags=["#non"])
     assert core.instagram.preview(p["id"])["ready"]
     appr = core.instagram.request_publish(p["id"])
@@ -139,3 +140,72 @@ def test_telephony_disabled_by_default(core):
     core.settings.telephony_provider, core.settings.telephony_cost_per_min = "sip_demo", 500
     a = core.telephony.plan_call("+998901234567", "POS ishlamayapti", "test", 2)
     assert a["status"] == "pending" and a["payload"]["est_cost"] == 1000
+
+
+def test_reels_waits_for_processing_and_unknown_not_resent(core, monkeypatch):
+    core.instagram.poll_interval = 0
+    states = iter(["IN_PROGRESS", "IN_PROGRESS", "FINISHED"])
+    publish_calls = []
+
+    def publish(m, u, d):
+        publish_calls.append(u)
+        raise net.NetError("Tarmoq xatosi: timed out")
+    _ig(core, monkeypatch, {"1784/media_publish": publish, "1784/media?": (200, {"data": [{"id": "M77", "caption": "Reels matni"}]}),
+                            "1784/media": (200, {"id": "VID1"}), "/VID1": lambda m, u, d: (200, {"status_code": next(states)})})
+    p = core.instagram.draft("shop", "reel", "Reels matni", "https://cdn.example.com/v.mp4")
+    a = core.instagram.request_publish(p["id"])
+    core.approvals.decide(a["id"], True, a["payload_hash"])
+    r = core.instagram.publish(p["id"])
+    assert r["status"] == "unknown" and len(publish_calls) == 1        # qayta yuborilmadi
+    from jarvis.approval import ApprovalError
+    with pytest.raises(ApprovalError, match="noma'lum"):
+        core.instagram.publish(p["id"])
+    assert core.instagram.check_unknown(p["id"])["status"] == "published" and len(publish_calls) == 1
+
+
+def test_container_error_stops_publish(core, monkeypatch):
+    core.instagram.poll_interval = 0
+    fake = _ig(core, monkeypatch, {"1784/media_publish": (200, {"id": "X"}), "1784/media": (200, {"id": "V2"}),
+                                   "/V2": (200, {"status_code": "ERROR"})})
+    p = core.instagram.draft("shop", "reel", "x", "https://cdn.example.com/v.mp4")
+    a = core.instagram.request_publish(p["id"])
+    core.approvals.decide(a["id"], True, a["payload_hash"])
+    with pytest.raises(InstagramError, match="qayta ishlanmadi"):
+        core.instagram.publish(p["id"])
+    assert not any("media_publish" in c[1] for c in fake.calls)
+
+
+def test_direct_messages_24h_and_approval(core, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    recent = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%S+0000")
+    old = (datetime.now(timezone.utc) - timedelta(hours=30)).strftime("%Y-%m-%dT%H:%M:%S+0000")
+    sent = []
+    routes = {"1784/conversations": (200, {"data": [{"id": "C1"}, {"id": "C2"}]}),
+              "/C1?": (200, {"messages": {"data": [{"id": "m1", "from": {"id": "555"}, "message": "Narxi qancha?", "created_time": recent}]}}),
+              "/C2?": (200, {"messages": {"data": [{"id": "m2", "from": {"id": "666"}, "message": "salom", "created_time": old}]}}),
+              "1784/messages": lambda m, u, d: (sent.append(d) or (200, {"message_id": "MID1"}))}
+    _ig(core, monkeypatch, routes)
+    assert [c["id"] for c in core.instagram.conversations("shop")] == ["C1", "C2"]
+    d = core.instagram.draft_dm("shop", "C1")
+    assert d["within_24h"] and "Narx" in d["reply"] and d["recipient_id"] == "555"
+    a = core.instagram.request_dm(d["id"])
+    assert a["level"] == "D" and a["risk"] == "high"
+    from jarvis.approval import ApprovalError
+    with pytest.raises(ApprovalError):
+        core.instagram.send_dm(d["id"])
+    core.approvals.decide(a["id"], True, a["payload_hash"])
+    assert core.instagram.send_dm(d["id"])["status"] == "sent" and len(sent) == 1
+    d2 = core.instagram.draft_dm("shop", "C2")
+    assert not d2["within_24h"]
+    with pytest.raises(InstagramError, match="24 soat"):
+        core.instagram.request_dm(d2["id"])
+
+
+def test_scheduled_post_requests_approval_not_publish(core, monkeypatch):
+    fake = _ig(core, monkeypatch, {})
+    p = core.instagram.draft("shop", "post", "Rejali post", "https://cdn.example.com/a.jpg", scheduled_at="2020-01-01T09:00")
+    core.instagram.draft("shop", "post", "Kelajak", "https://cdn.example.com/b.jpg", scheduled_at="2099-01-01T09:00")
+    due = core.instagram.due_scheduled()
+    assert [x["post"] for x in due] == [p["id"]] and core.instagram.get(p["id"])["status"] == "pending_approval"
+    assert not fake.calls                                               # hech narsa nashr qilinmadi
+    assert any("nashr vaqti" in n["title"] for n in core.notifier.list())

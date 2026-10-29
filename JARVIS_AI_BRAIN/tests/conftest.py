@@ -35,7 +35,9 @@ def core(tmp_path, monkeypatch):
     monkeypatch.setenv("JARVIS_HOME", str(tmp_path))
     ws = tmp_path / "workspace"
     ws.mkdir()
-    s = Settings(allowed_read_dirs=[str(ws)], allowed_write_dirs=[str(ws)])
+    # Umumiy testlarda PIN o'chiq; himoya test_auth.py da alohida sinaladi
+    s = Settings(allowed_read_dirs=[str(ws)], allowed_write_dirs=[str(ws)], auth_enabled=False,
+                 allowed_hosts=["127.0.0.1", "localhost", "testserver"])
     return JarvisCore(db_path=tmp_path / "t.db", settings=s)
 
 
