@@ -45,6 +45,7 @@ class AuthManager:
     def __init__(self, core):
         self.core = core
         self._sessions: dict[str, float] = {}
+        self._meta: dict[str, dict] = {}          # Everywhere JARVIS: qaysi qurilma/manzildan kirilgan
         self._fails: dict[str, dict] = {}
         self._lock = threading.Lock()
 
@@ -94,7 +95,7 @@ class AuthManager:
             validate_pin(pin)
             self._store(pin)
         self.core.audit.log("auth", "Dashboard PIN o'rnatildi", target="dashboard", risk="C", approval_status="user_action")
-        return self._new_session()
+        return self._new_session(client)
 
     def login(self, pin: str, client: str) -> str:
         with self._lock:
@@ -107,7 +108,7 @@ class AuthManager:
                 raise AuthError("PIN noto'g'ri")
             self._fails.pop(client, None)
         self.core.audit.log("auth", "Dashboardga kirildi", target=f"client:{client}", risk="A")
-        return self._new_session()
+        return self._new_session(client)
 
     def change(self, current: str, new: str, client: str) -> str:
         with self._lock:
@@ -120,12 +121,33 @@ class AuthManager:
             self._sessions.clear()
         self.core.audit.log("auth", "Dashboard PIN almashtirildi, barcha sessiyalar bekor qilindi", target="dashboard", risk="C",
                             approval_status="user_action")
-        return self._new_session()
+        return self._new_session(client)
 
-    def _new_session(self) -> str:
+    def _new_session(self, client: str = "") -> str:
         token = secrets.token_urlsafe(32)
         self._sessions[token] = time.time() + self.core.settings.session_hours * 3600
+        self._meta[token] = {"client": client or "?", "created": time.time()}
         return token
+
+    @staticmethod
+    def sid(token: str) -> str:
+        import hashlib
+        return hashlib.sha256(token.encode()).hexdigest()[:12]
+
+    def sessions(self, current: str | None = None) -> list[dict]:
+        now = time.time()
+        return [{"id": self.sid(t), "client": self._meta.get(t, {}).get("client", "?"), "created": self._meta.get(t, {}).get("created"),
+                 "expires": exp, "current": t == current, "local": self._meta.get(t, {}).get("client") in ("127.0.0.1", "::1", "localhost")}
+                for t, exp in list(self._sessions.items()) if exp > now]
+
+    def revoke(self, sid: str) -> bool:
+        for t in list(self._sessions):
+            if self.sid(t) == sid:
+                self._sessions.pop(t, None)
+                self._meta.pop(t, None)
+                self.core.audit.log("auth", f"Qurilma sessiyasi bekor qilindi: {sid}", target="dashboard", risk="C", approval_status="user_action")
+                return True
+        return False
 
     def check(self, token: str | None) -> bool:
         if not token:
@@ -140,6 +162,7 @@ class AuthManager:
 
     def logout(self, token: str | None):
         self._sessions.pop(token or "", None)
+        self._meta.pop(token or "", None)
 
     def status(self, token: str | None) -> dict:
         return {"enabled": self.core.settings.auth_enabled, "pin_set": self.has_pin(), "authenticated": self.check(token)}

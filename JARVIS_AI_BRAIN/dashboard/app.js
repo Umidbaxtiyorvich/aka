@@ -58,6 +58,8 @@ const SECTIONS = [
   ["projmap", "Projects Map", (v) => renderBrainHub(v, "graph", ["projects", "memories", "files", "decisions", "tasks"])],
   ["mission", "🎯 Mission Control", renderMissionControl],
   ["agentcmd", "🤝 Agent Command", renderAgentCommand],
+  ["guardian", "🛡 Guardian va Avtonomlik", renderGuardian],
+  ["twin", "🪞 Digital Twin", renderTwin],
   ["superbrain", "⚡ Super Brain Control", renderSuperBrain],
   ["aihub", "🤖 AI Provider Center", renderProviderCenter],
   ["smartrouter", "🚦 Smart AI Router", renderSmartRouter],
@@ -75,12 +77,17 @@ const SECTIONS = [
   ["dag", "Vazifalar grafi", renderDag],
   ["router", "AI Router va xarajat", renderRouter],
   ["files", "Fayllar", renderFiles],
+  ["assets", "🗂 Asset Manager", renderAssets],
+  ["simlab", "🧪 Simulation Lab", renderSimLab],
+  ["researcher", "🔎 Knowledge Researcher", renderResearcher],
+  ["creative", "🎬 Creative Factory", renderCreative],
   ["computer", "Kompyuter boshqaruvi", renderComputer],
   ["research", "Internet tadqiqoti", renderResearch],
   ["browser", "Brauzer agenti", renderBrowser],
   ["studio", "Rasm va video", renderStudio],
   ["instagram", "Instagram", renderInstagram],
   ["telegram", "Telegram", renderTelegram],
+  ["business", "📊 Business Command Center", renderBusiness],
   ["bi", "Business Intelligence", renderBI],
   ["pos", "POS ulanishi", renderPOS],
   ["docs", "Hujjatlar", renderDocs],
@@ -91,7 +98,9 @@ const SECTIONS = [
   ["tests", "Testlar va yaxshilash", renderTests],
   ["diagnostics", "System Health (Diagnostika)", renderDiagnostics],
   ["sandbox", "Sandbox", renderSandbox],
+  ["skills", "🧩 Skills Factory", renderSkills],
   ["plugins", "Kengaytmalar", renderPlugins],
+  ["devices", "📱 Qurilmalar (Everywhere)", renderDevices],
   ["backups", "Zaxira nusxalar", renderBackups],
   ["security", "Xavfsizlik", renderSecurity],
   ["policy", "Siyosat (Policy)", renderPolicy],
@@ -255,14 +264,24 @@ async function renderAgents(v) {
 }
 
 async function renderOffice(v) {
+  v.innerHTML = `<p class="muted">Har bir xona — haqiqiy agent. Yashil: bo'sh, ko'k: ishlayapti, qizil: xato, xira: hali yaratilmagan. Xonani bosing — vazifalari, missiya bosqichlari va natijalari.</p>
+    <div id="orooms"></div><div id="ocollab"></div><div id="odet"></div>`;
   const draw = async () => {
-    const agents = await api("/api/agents");
-    v.innerHTML = `<p class="muted">Har bir xona — haqiqiy agent. Yashil: bo'sh, ko'k: ishlayapti, qizil: xato, xira: hali yaratilmagan.</p>
-    <div class="office">${agents.map((a) => `<div class="room ${a.status}"><span class="dot"></span><b>${esc(a.title)}</b>
-      <div class="muted">${esc(a.role)}</div><div>holat: ${esc(a.status)} · ruxsat: ${a.permission}</div>
+    const [agents, o] = await Promise.all([api("/api/agents"), api("/api/office/rooms")]);
+    const st = Object.fromEntries(o.rooms.map((r) => [r.key, r]));
+    $("#orooms").innerHTML = `<div class="office">${agents.map((a) => `<div class="room ${a.status}" data-room="${esc(a.key)}" style="cursor:pointer"><span class="dot"></span><b>${esc(a.title)}</b>
+      <div class="muted">${esc(a.role)}</div><div>holat: ${esc(a.status)} · ruxsat: ${a.permission}${st[a.key] ? ` · ${st[a.key].tasks_done}/${st[a.key].tasks_total} bajarilgan` : ""}</div>
       ${a.current_task ? `<div>vazifa #${a.current_task}</div>` : ""}${a.last_error ? `<div class="bad">${esc(a.last_error)}</div>` : ""}</div>`).join("")}</div>`;
+    $("#ocollab").innerHTML = o.collaborations.length ? `<div class="card"><h3>Hamkorlikdagi missiyalar</h3>${o.collaborations.map((c) => `<div class="kv"><span>#${c.mission_id} ${esc(c.goal)}</span><b class="small">${esc(c.agents.join(" + "))} · ${esc(c.status)}</b></div>`).join("")}</div>` : "";
+    $("#orooms").querySelectorAll("[data-room]").forEach((el) => { el.onclick = async () => {
+      const r = await api(`/api/office/rooms/${el.dataset.room}`);
+      $("#odet").innerHTML = `<div class="card"><h3>${esc(r.agent.title)} xonasi</h3><div class="kv"><span>Model turi / ruxsat / xotira</span><b>${esc(r.agent.router_task)} / ${esc(r.agent.max_risk)} / ${esc(r.agent.memory_access)}</b></div>
+        <div class="kv"><span>Vositalar</span><b>${esc(r.agent.tools.join(", "))}</b></div><div class="kv"><span>Tekshiruv qoidasi</span><b>${esc(r.agent.verify)}</b></div>
+        <h3>Ish jurnali</h3>${r.conversation.map((m) => `<div class="small">💬 ${esc(m.text)}</div>`).join("") || '<p class="muted small">Hali vazifa yo\'q</p>'}
+        <h3>Missiya bosqichlari</h3>${table(r.mission_steps.map((x) => ({ missiya: x.mission_id, bosqich: x.title, holat: x.status, tekshiruv: x.verify_note })), ["missiya", "bosqich", "holat", "tekshiruv"])}</div>`;
+    }; });
   };
-  await draw(); timer = setInterval(draw, 3000);
+  await draw(); timer = setInterval(draw, 4000);
 }
 
 async function renderFiles(v) {

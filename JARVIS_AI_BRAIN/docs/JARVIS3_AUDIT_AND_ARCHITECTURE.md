@@ -214,3 +214,27 @@ Taklif etiladigan birinchi qadam: **A + B** (bitta reliz) — xavfsiz avtonomiya
 2. Safe siyosati uchun standart daraja **Level 2** ma'qulmi?
 3. Level 4 dagi "muddatli oldindan ruxsat" (HIGH amallar uchun) kerakmi yoki HIGH har doim tasdiq bo'lib qolsinmi?
 4. Eski `plans` (Planner) API'sini muzlatib, faqat Mission Engine'ni rivojlantirishga rozimisiz?
+
+---
+
+## 8. v1.1.0 — amalga oshirildi (JARVIS 3.0, Safe Autonomous)
+Foydalanuvchi tanlovi: hammasi, Safe siyosati → standart **Level 2**, HIGH amallar har doim alohida tasdiq (oldindan "muddatli ruxsat" yo'q).
+
+| # | Modul | Fayl | Nima ishlaydi | Cheklov (halol) |
+|---|---|---|---|---|
+| A | Xavfsizlik | `core.py`, `mission.py`, `approval.py` | favqulodda to'xtatish missiyalarni ham pauza qiladi; C–E tasdiqlar 72 soatda eskiradi (`approval_ttl_hours`, qulflangan) | — |
+| 11 | Autonomy Levels | `mission.py`, `integrations`, `pos_sync.py` | 0 — bajarmaydi; 1 — o'zi boshlamaydi; 2 — LOW avtomatik; 3–4 — HIGH/CRITICAL bo'lmasa; 4 — restartdan o'zi davom; jadval bo'yicha sinxronlash Level ≥2 | MEDIUM+ amallar baribir Approval Engine'da tasdiq |
+| 1 | Digital Twin | `twin.py` | faqat tasdiqlangan xotiradan profil, tahrir/o'chirish, takliflar (takroriy vazifa, tugallanmagan ish, so'nggi loyiha) | profil AI promptiga avtomatik qo'shilmaydi |
+| 2 | Virtual AI Office | `workspace.Office` | agent xonasi: profil, vazifalar, missiya bosqichlari, ish jurnali; hamkorlikdagi missiyalar | agentlararo erkin suhbat yo'q (token tejash) |
+| 3 | Simulation Lab | `simlab.py` | SQLite nusxasida SQL (oldin/keyin, qator diff), POS yozuvi oldin→keyin, missiya dry-run, kod sandbox | PostgreSQL/MSSQL uchun test bazasi kerak |
+| 4 | Proactive | `proactive.Proactive` | muddati o'tgan/yaqin missiya, tugallanmagan ish, eskirayotgan tasdiq, uzilgan ulanish, bloklangan AI, xatolar → kuniga bir xabar; kunlik/haftalik hisobot | tashqi amal yo'q; Telegram — faqat `proactive` yoqilsa |
+| 5 | Knowledge Researcher | `workspace.KnowledgeResearcher` | bir nechta manba, mustaqil domenlar, umumiy faktlar, injection belgilari, xotiraga tasdiq bilan | ishonch — heuristik |
+| 6 | Asset Manager | `assets.py` | ruxsatli papkalar indeksi, xesh dublikatlar, tasnif, qidiruv, zaxira nusxa | qidiruv kalit so'z bo'yicha (vektor — keyin); hech narsa o'chirilmaydi |
+| 7 | Business Command Center | `workspace.BusinessCenter` | savdo, top, qoldiq, qarz, do'konlar (mavjud tahlilchi), prognoz (trend × hafta kuni), anomaliyalar (z ≥ 2.5) | prognoz — taxmin; ≥14 kun ma'lumot kerak |
+| 8 | Creative Factory | `workspace.CreativeFactory` | har xizmatning real holati (FFmpeg, Pillow, SD WebUI, vision, TTS/STT, bulut modellari) | bulut rasm/video generatsiya adapteri hali yo'q |
+| 9 | Everywhere | `auth.py` | qurilma sessiyalari (manzil, vaqt), chiqarib yuborish; bitta baza — bir xil xotira/missiya | HTTPS va internet orqali kirish yo'q |
+| 10 | Guardian | `proactive.Guardian` | CPU/RAM/disk, baza, AI, xarajat anomaliyasi, zaxira, xatolar, xavfsizlik, ulanishlar; xavfsiz amallar oq ro'yxati; bloklangan provayderni soatiga bepul qayta tekshirish | avtomatik tiklash faqat ta'sirsiz amallar |
+| 12 | Skills Factory | `plugins.py` | qoralama (AI yoki shablon), statik tekshiruv, sandbox testlari, tasdiq bilan yoqish, versiya nusxalari, rollback | AI kodi baribir tasdiqsiz ishga tushmaydi |
+
+Testlar: `tests/test_jarvis3.py` (23 ta) + brauzer testi. Barcha tashqi tizimlar mock; real POS/AI kalitlari bilan sinalmagan.
+Keyingi: Memory Brain (vektor), Computer Use (Windows'da real test), File Intelligence (DOCX/PPTX/OCR), Workflow Studio, bulut media adapterlari, HTTPS.

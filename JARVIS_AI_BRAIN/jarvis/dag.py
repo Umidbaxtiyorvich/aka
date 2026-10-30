@@ -211,7 +211,7 @@ class TaskGraph:
             st = self.core.approvals.get(n["approval_id"])["status"]
             if st == "executed":
                 self._set(n["id"], status="done", finished_at=_now())
-            elif st in ("rejected", "invalidated"):
+            elif st in ("rejected", "invalidated", "expired"):
                 self._set(n["id"], status="failed", error=f"tasdiq holati: {st}", finished_at=_now())
 
     def _try_reuse(self, rid: int, n: dict, nodes: list[dict]) -> bool:

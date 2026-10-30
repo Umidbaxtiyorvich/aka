@@ -46,7 +46,27 @@ class ApprovalEngine:
     def __init__(self, db: Database, audit: Audit, policy: PolicyEngine | None = None):
         self.db, self.audit, self.policy = db, audit, policy
         self.on_pending = None       # masalan, Telegram'ga tugmali so'rov yuborish (core ulaydi)
+        self.ttl_hours = 72          # tasdiq muddati: kutilayotgan va tasdiqlangan-bajarilmagan so'rovlar shundan keyin eskiradi
         db.ensure_columns("approvals", POLICY_COLUMNS)
+
+    def _expired(self, row: dict) -> bool:
+        """C–E darajali tasdiq muddati: pending — yaratilgandan, approved — qaror qilingandan boshlab."""
+        if row["level"] in AUTO_LEVELS or not self.ttl_hours:
+            return False
+        ts = row["decided_at"] if row["status"] == "approved" and row.get("decided_at") else row["created_at"]
+        try:
+            t = datetime.fromisoformat(str(ts).replace(" ", "T"))
+        except ValueError:
+            return False
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - t).total_seconds() > self.ttl_hours * 3600
+
+    def _expire(self, row: dict):
+        self.db.execute("UPDATE approvals SET status='expired' WHERE id=?", (row["id"],))
+        self.audit.log("approval_engine", f"Tasdiq muddati o'tdi: #{row['id']} {row['summary'][:80]}", target=row["target"],
+                       risk=row["level"], approval_status="expired")
+        raise ApprovalError(f"Tasdiq muddati o'tgan ({self.ttl_hours} soat) — amalni qayta so'rang.")
 
     def request(self, *, action_type: str, target: str, level: str, payload: dict, summary: str,
                 requested_by: str, account: str | None = None, idempotency_key: str | None = None,
@@ -111,6 +131,8 @@ class ApprovalEngine:
         row = self.get(approval_id)
         if row["status"] != "pending":
             raise ApprovalError(f"Bu tasdiq holati: {row['status']}")
+        if self._expired(row):
+            self._expire(row)
         if confirm_hash != row["payload_hash"]:
             raise ApprovalError("Xesh mos emas: siz boshqa versiyani tasdiqlayapsiz.")
         status = "approved" if approve else "rejected"
@@ -139,6 +161,8 @@ class ApprovalEngine:
             raise ApprovalError("Oldingi natija noma'lum — avval tashqi tizimdagi holatni tekshiring.")
         if row["status"] != "approved":
             raise ApprovalError(f"Tasdiqlanmagan (holat: {row['status']}).")
+        if self._expired(row):
+            self._expire(row)
         h = payload_hash(row["action_type"], row["target"], row["account"], payload)
         if h != row["payload_hash"]:
             self.db.execute("UPDATE approvals SET status='invalidated' WHERE id=?", (approval_id,))

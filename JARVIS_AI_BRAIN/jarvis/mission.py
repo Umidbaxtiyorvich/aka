@@ -104,7 +104,7 @@ class MissionEngine:
         return nodes, note, source
 
     def create(self, goal: str, *, use_ai: bool | None = None, max_minutes: int = 60, max_cost: float = 0.0, max_attempts: int = 2,
-               auto_start: bool = False) -> dict:
+               auto_start: bool = False, due_at: str | None = None) -> dict:
         goal = (goal or "").strip()
         if not goal:
             raise MissionError("Maqsad bo'sh")
@@ -113,6 +113,8 @@ class MissionEngine:
         cur = self.core.db.execute("INSERT INTO missions(goal, status, max_minutes, max_cost, max_attempts) VALUES (?,?,?,?,?)",
                                    (goal, "planning", max(1, min(int(max_minutes), 24 * 60)), max(0.0, float(max_cost)), max(1, min(int(max_attempts), 5))))
         mid = cur.lastrowid
+        if due_at:
+            self._set(mid, due_at=str(due_at)[:25])
         self._log(mid, "tushunish", goal[:200])
         u = self.understand(goal)
         nodes, note, source = self._plan_nodes(goal, use_ai)
@@ -131,8 +133,7 @@ class MissionEngine:
         self._set(mid, status=status, understanding=u, plan_note=note, plan_source=source, risks=risks, questions=u["questions"], dag_run_id=run["id"])
         self._log(mid, "reja", f"{len(nodes)} bosqich ({source}); {note}")
         self.core.audit.log("mission", f"Missiya yaratildi #{mid}: {goal[:80]}", target=f"mission#{mid}", risk="B")
-        safe = all(r.get("risk") == "LOW" for r in risks)
-        if auto_start and status == "pending" and safe:
+        if auto_start and status == "pending" and self.may_auto_start(risks):
             self.start(mid)
         return self.get(mid)
 
@@ -154,6 +155,10 @@ class MissionEngine:
             raise MissionError("Tugagan yoki bekor qilingan missiyani qayta boshlab bo'lmaydi")
         if m["status"] == "needs_input":
             raise MissionError("Avval savollarga javob bering")
+        if getattr(self.core, "automation_paused", False):
+            raise MissionError("Favqulodda to'xtatish yoqilgan — avval avtomatikani qayta yoqing")
+        if int(self.core.settings.autonomy_level) <= 0:
+            raise MissionError("Avtonomlik darajasi 0 (faqat maslahat) — missiya bajarilmaydi, faqat reja ko'rsatiladi")
         self._set(mid, status="running", started_at=m["started_at"] or _now(), stop_reason=None, finished_at=None)
         self._log(mid, "bajarish", "boshlandi" if not m["started_at"] else "davom ettirildi (oxirgi checkpointdan)")
         self.core.audit.log("user", f"Missiya ishga tushirildi #{mid}", target=f"mission#{mid}", risk="B", approval_status="user_action")
@@ -167,6 +172,8 @@ class MissionEngine:
 
     def _stop_check(self, mid: int):
         def check():
+            if getattr(self.core, "automation_paused", False):
+                return "favqulodda to'xtatish (Guardian / Telegram)"
             m = self.core.db.one("SELECT * FROM missions WHERE id=?", (mid,))
             if m["status"] in ("paused", "cancelled"):
                 return m["stop_reason"] or "foydalanuvchi to'xtatdi"
@@ -219,6 +226,15 @@ class MissionEngine:
         self._log(mid, "pauza", "foydalanuvchi to'xtatdi — ishlayotgan bosqich tugagach to'xtaydi")
         return self.get(mid)
 
+    def pause_all(self, reason: str) -> list[int]:
+        ids = [r["id"] for r in self.core.db.query("SELECT id FROM missions WHERE status IN ('running','retrying','verifying')")]
+        for mid in ids:
+            m = self.get(mid, with_report=False)
+            self._set(mid, status="paused", stop_reason=reason)
+            self.core.dag.pause(m["dag_run_id"], reason)
+            self._log(mid, "pauza", reason)
+        return ids
+
     def cancel(self, mid: int) -> dict:
         m = self.get(mid)
         if m["status"] in ("completed", "cancelled"):
@@ -235,6 +251,17 @@ class MissionEngine:
         self._log(mid, "qayta", f"{key} qayta navbatga qo'yildi")
         return self.get(mid)
 
+    def may_auto_start(self, risks: list[dict]) -> bool:
+        """Avtonomlik darajasi: 0–1 — hech qachon o'zi boshlamaydi; 2 — faqat LOW; 3–4 — HIGH/CRITICAL bo'lmasa.
+        Har qanday darajada MEDIUM+ amallar agent ichida Approval Engine orqali tasdiq so'raydi."""
+        lvl = int(self.core.settings.autonomy_level)
+        risk = {r.get("risk") for r in risks}
+        if lvl <= 1 or getattr(self.core, "automation_paused", False):
+            return False
+        if lvl == 2:
+            return risk <= {"LOW"}
+        return not (risk & {"HIGH", "CRITICAL"})
+
     def recover(self, resume: bool = False) -> list[int]:
         """Server qayta ishga tushganda: uzilgan missiyalar pauzaga, xohlansa — oxirgi checkpointdan davom."""
         self.core.dag.recover()
@@ -242,7 +269,7 @@ class MissionEngine:
         for mid in ids:
             self._set(mid, status="paused", stop_reason="JARVIS qayta ishga tushdi")
             self._log(mid, "tiklash", "server qayta ishga tushdi — checkpoint saqlangan")
-            if resume:
+            if resume and int(self.core.settings.autonomy_level) >= 4:      # o'zi davom ettirish — faqat Level 4
                 self.start(mid)
         return ids
 

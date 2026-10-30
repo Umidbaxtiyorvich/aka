@@ -443,7 +443,7 @@ class IntegrationHub:
                     self.test(c["id"])
                 except IntegrationError:
                     pass
-            if c["sync_interval_min"] and not getattr(self.core, "automation_paused", False):
+            if c["sync_interval_min"] and not getattr(self.core, "automation_paused", False) and int(self.core.settings.autonomy_level) >= 2:
                 last = c["last_sync"]
                 if not last or (datetime.now(timezone.utc) - datetime.strptime(last, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)).total_seconds() > c["sync_interval_min"] * 60:
                     try:

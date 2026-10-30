@@ -38,8 +38,9 @@ EVENTS = {
     "approval": "Tasdiqlash so'rovlari (tugmalar bilan)", "resources": "Kompyuter resurslari chegarada",
     "backup": "Zaxira nusxa xatolari", "security": "Xavfsizlik hodisalari", "code": "Kod o'zgarishlari", "pos": "POS hisobotlari",
     "integration": "Tashqi tizimlar (POS/ERP/sayt/API) ulanishi uzilganda",
+    "proactive": "Proaktiv takliflar va kunlik/haftalik hisobot",
 }
-INFO_EVENTS = {"startup", "task", "approval", "instagram", "code"}   # bular 'info' darajasida ham yuboriladi
+INFO_EVENTS = {"startup", "task", "approval", "instagram", "code", "proactive"}   # bular 'info' darajasida ham yuboriladi
 HELP = ("JARVIS buyruqlari:\n"
         "/status — tizim holati\n/tasks — vazifalar\n/agents — agentlar\n/approvals — kutilayotgan tasdiqlar\n"
         "/approve ID — tasdiqlash\n/reject ID — rad etish\n/report — umumiy hisobot\n/voice — ovozli hisobot\n"

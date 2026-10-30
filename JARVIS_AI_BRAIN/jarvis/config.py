@@ -16,7 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # Foydalanuvchi o'zgartira olmaydigan (va JARVIS o'zi o'zgartira olmaydigan) kalitlar.
 LOCKED_KEYS = {"read_only_mode", "require_approval", "allowed_read_dirs", "allowed_write_dirs",
                "telegram_allowed_ids", "protected_paths", "command_allowlist", "forbidden_actions", "app_allowlist",
-               "auth_enabled", "allowed_hosts", "telegram_approval_max_level"}
+               "auth_enabled", "allowed_hosts", "telegram_approval_max_level", "approval_ttl_hours"}
 
 
 def jarvis_home() -> Path:
@@ -81,6 +81,8 @@ class Settings:
     ai_strategy: str = "balanced"                            # balanced | cheapest | quality | speed | free_only
     ai_allowed_providers: list[str] = field(default_factory=list)   # bo'sh = hammasi
     ai_confirm_paid: bool = False                            # pullik modeldan oldin foydalanuvchi tasdig'i
+    approval_ttl_hours: int = 72                             # C–E tasdiqlar muddati (qulflangan: faqat settings.json)
+    autonomy_level: int = 2                                  # 0 maslahat · 1 reja+tasdiq · 2 xavfsiz amallar · 3 agentlar · 4 to'liq sikl
     mission_auto_resume: bool = True                         # qayta ishga tushganda uzilgan missiyalarni checkpointdan davom ettirish
     ai_max_request_cost: float = 0.0                         # bir so'rov uchun maksimal xarajat (0 = cheklanmagan, kunlik/oylik limit baribir)
     # Resource & Cost Guard (pullik AI standart holatda o'chiq)

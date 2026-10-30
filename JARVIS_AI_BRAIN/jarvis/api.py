@@ -32,6 +32,9 @@ from .integrations import IntegrationError
 from .integrations.vault import VaultError
 from .ai_hub import HubError
 from .mission import MissionError
+from .assets import AssetError
+from .simlab import SimError
+from .workspace import WorkspaceError
 from .memory_import import MAX_UPLOAD as MI_MAX, ImportError_ as MIError
 from .voice_pro import VoiceProError
 from .kgraph import KGError
@@ -49,11 +52,11 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError, MissionError)
+               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError, MissionError, AssetError, SimError, WorkspaceError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
-            "ai_providers", "ai_task_routes", "paid_ai_allowed", "ai_strategy", "ai_allowed_providers", "ai_confirm_paid", "ai_max_request_cost", "mission_auto_resume",
+            "ai_providers", "ai_task_routes", "paid_ai_allowed", "ai_strategy", "ai_allowed_providers", "ai_confirm_paid", "ai_max_request_cost", "mission_auto_resume", "autonomy_level",
             "ai_custom_catalog", "voice_tts_engine", "voice_stt_engine", "voice_gender", "voice_rate",
             "voice_volume", "voice_stt_language", "voice_silence_ms", "voice_mic_sensitivity", "azure_speech_region", "currency", "daily_cost_limit", "monthly_cost_limit", "daily_request_limit",
             "cost_warn_percent", "medium_auto_actions", "sandbox_backend", "sandbox_timeout_sec", "sandbox_memory_mb",
@@ -157,6 +160,7 @@ class SettingsIn(BaseModel):
     ai_confirm_paid: bool | None = None
     ai_max_request_cost: float | None = None
     mission_auto_resume: bool | None = None
+    autonomy_level: int | None = None
     ai_custom_catalog: dict | None = None
     voice_tts_engine: str | None = None
     voice_stt_engine: str | None = None
@@ -392,10 +396,39 @@ class MissionIn(BaseModel):
     max_cost: float = 0.0
     max_attempts: int = 2
     auto_start: bool = False
+    due_at: str | None = None
 
 
 class MissionAnswerIn(BaseModel):
     text: str = ""
+
+
+class TwinEditIn(BaseModel):
+    content: str
+
+
+class SimSqlIn(BaseModel):
+    target: str = "jarvis"
+    statements: list[str]
+
+
+class SimWriteIn(BaseModel):
+    conn_id: int
+    entity: str
+    operation: str = "update"
+    payload: dict = {}
+    record_id: str = ""
+
+
+class SimTextIn(BaseModel):
+    text: str
+
+
+class SkillIn(BaseModel):
+    name: str
+    description: str
+    permissions: list[str] = []
+    use_ai: bool = False
 
 
 class AskIn(BaseModel):
@@ -989,6 +1022,8 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
             from .router import STRATEGIES
             if data["ai_strategy"] not in STRATEGIES:
                 raise HTTPException(400, f"ai_strategy: {', '.join(STRATEGIES)}")
+        if "autonomy_level" in data and not 0 <= int(data["autonomy_level"]) <= 4:
+            raise HTTPException(400, "autonomy_level: 0..4")
         if "ai_max_request_cost" in data and float(data["ai_max_request_cost"]) < 0:
             raise HTTPException(400, "ai_max_request_cost manfiy bo'lmaydi")
         for k, v in (data.get("ai_custom_catalog") or {}).items():
@@ -1121,7 +1156,7 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.post("/api/missions")
     def mission_create(body: MissionIn):
         return guard(C().missions.create, body.goal, use_ai=body.use_ai, max_minutes=body.max_minutes, max_cost=body.max_cost,
-                     max_attempts=body.max_attempts, auto_start=body.auto_start)
+                     max_attempts=body.max_attempts, auto_start=body.auto_start, due_at=body.due_at)
 
     @app.get("/api/missions")
     def mission_list():
@@ -1147,6 +1182,145 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
         if action not in acts:
             raise HTTPException(404, "Noma'lum amal")
         return guard(acts[action])
+
+    # JARVIS 3.0: Digital Twin, Proactive, Guardian, Assets, Simulation Lab, Office, Researcher, Business, Creative, Skills, Devices
+    @app.get("/api/twin")
+    def twin_get():
+        c = C()
+        return {"profile": c.twin.profile(), "suggestions": c.twin.suggestions()}
+
+    @app.post("/api/twin/{mid}")
+    def twin_edit(mid: int, body: TwinEditIn):
+        return guard(C().twin.edit, mid, body.content)
+
+    @app.delete("/api/twin/{mid}")
+    def twin_delete(mid: int):
+        return guard(C().twin.delete, mid)
+
+    @app.get("/api/proactive")
+    def proactive_get():
+        c = C()
+        return {"items": c.proactive.scan(), "reports": c.proactive.reports(10)}
+
+    @app.post("/api/proactive/report")
+    def proactive_report(kind: str = "daily"):
+        if kind not in ("daily", "weekly"):
+            raise HTTPException(400, "kind: daily yoki weekly")
+        return C().proactive.report(kind)
+
+    @app.get("/api/guardian")
+    def guardian_get():
+        return C().guardian.status()
+
+    @app.post("/api/guardian/{action}")
+    def guardian_run(action: str):
+        try:
+            return C().guardian.run(action)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+
+    @app.get("/api/assets")
+    def assets_stats():
+        return C().assets.stats()
+
+    @app.post("/api/assets/index")
+    def assets_index(background: bool = True):
+        return guard(C().assets.index, background)
+
+    @app.get("/api/assets/search")
+    def assets_search(q: str = "", category: str = ""):
+        return C().assets.search(q, category)
+
+    @app.get("/api/assets/duplicates")
+    def assets_dups():
+        return C().assets.duplicates()
+
+    @app.post("/api/assets/backup")
+    def assets_backup(body: SimTextIn):
+        return guard(C().assets.backup, body.text)
+
+    @app.post("/api/simlab/sql")
+    def sim_sql(body: SimSqlIn):
+        return guard(C().simlab.sql, body.target, body.statements)
+
+    @app.post("/api/simlab/write")
+    def sim_write(body: SimWriteIn):
+        return guard(C().simlab.write_preview, body.conn_id, body.entity, body.operation, body.payload, body.record_id)
+
+    @app.post("/api/simlab/mission")
+    def sim_mission(body: SimTextIn):
+        return guard(C().simlab.mission, body.text)
+
+    @app.post("/api/simlab/code")
+    def sim_code(body: SimTextIn):
+        return guard(C().simlab.code, body.text)
+
+    @app.get("/api/simlab/history")
+    def sim_history():
+        return C().simlab.history()
+
+    @app.get("/api/office/rooms")
+    def office_rooms():
+        c = C()
+        return {"rooms": c.office.rooms(), "collaborations": c.office.collaborations()}
+
+    @app.get("/api/office/rooms/{key}")
+    def office_room(key: str):
+        return guard(C().office.room, key)
+
+    @app.post("/api/researcher/investigate")
+    def researcher_go(body: SimTextIn):
+        return guard(C().researcher.investigate, body.text)
+
+    @app.get("/api/researcher/findings")
+    def researcher_findings(status: str = "pending"):
+        return C().researcher.findings(status)
+
+    @app.post("/api/researcher/findings/{fid}")
+    def researcher_decide(fid: int, accept: bool):
+        return guard(C().researcher.decide, fid, accept)
+
+    @app.get("/api/business/overview")
+    def business_overview():
+        return C().business.overview()
+
+    @app.get("/api/business/forecast")
+    def business_forecast(days: int = 7):
+        c = C()
+        return {"daily": c.business.daily_sales(), "forecast": c.business.forecast(max(1, min(days, 30))), "anomalies": c.business.anomalies()}
+
+    @app.get("/api/creative/capabilities")
+    def creative_caps():
+        return C().creative.capabilities()
+
+    @app.post("/api/skills")
+    def skill_create(body: SkillIn):
+        return guard(C().plugins.scaffold, body.name, body.description, body.permissions, body.use_ai)
+
+    @app.post("/api/skills/{name}/test")
+    def skill_test(name: str):
+        return guard(C().plugins.test, name)
+
+    @app.get("/api/skills/{name}/versions")
+    def skill_versions(name: str):
+        return guard(C().plugins.versions, name)
+
+    @app.post("/api/skills/{name}/rollback/{vid}")
+    def skill_rollback(name: str, vid: int):
+        return guard(C().plugins.rollback, name, vid)
+
+    @app.get("/api/devices")
+    def devices(request: Request):
+        c = C()
+        return {"sessions": c.auth.sessions(request.cookies.get(SESSION_COOKIE)), "auth_enabled": c.settings.auth_enabled,
+                "hosts": c.settings.allowed_hosts, "note": "Telefon/boshqa qurilma: bir xil Wi-Fi tarmog'ida http://<kompyuter IP>:8765 (PIN bilan). "
+                "HTTPS hali yo'q — faqat ishonchli tarmoqda. Xotira, missiya va bildirishnomalar bitta bazada — barcha qurilmalarda bir xil."}
+
+    @app.post("/api/devices/{sid}/revoke")
+    def device_revoke(sid: str):
+        if not C().auth.revoke(sid):
+            raise HTTPException(404, "Sessiya topilmadi")
+        return {"ok": True}
 
     @app.get("/api/permissions/agents")
     def perm_agents():

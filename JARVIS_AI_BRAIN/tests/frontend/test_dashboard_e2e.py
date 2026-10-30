@@ -356,3 +356,33 @@ def test_mission_control_end_to_end(server, page, core):
     page.goto(server + "#agentcmd")
     page.wait_for_selector("td:has-text('computer')")
     assert not page.errors, page.errors
+
+
+def test_jarvis3_pages_guardian_simlab_skills(server, page, core):
+    page.goto(server + "#guardian")
+    page.wait_for_selector("#alsave")
+    page.check("[name=alvl][value='1']")
+    page.click("#alsave")
+    page.wait_for_selector("#almsg .ok")
+    assert core.settings.autonomy_level == 1
+    page.click("[data-ga=emergency_stop] >> nth=0")
+    page.wait_for_function("() => document.querySelector('#gmsg') && document.querySelector('#gmsg').textContent.length > 0")
+    assert core.automation_paused
+    core.resume_automation()
+    page.goto(server + "#simlab")
+    page.fill("#ssql", "DELETE FROM audit_log")
+    page.click("#sgo")
+    page.wait_for_selector("#sres:has-text('production bazasi o')")
+    assert core.db.one("SELECT COUNT(*) n FROM audit_log")["n"] > 0
+    page.goto(server + "#skills")
+    page.fill("#skn", "sozlar_soni")
+    page.fill("#skd", "So'zlarni sanaydi")
+    page.click("#skgo")
+    page.wait_for_selector("[data-skt=sozlar_soni]")
+    page.click("[data-skt=sozlar_soni]")
+    page.wait_for_selector("#skx_sozlar_soni:has-text('testlar o')")
+    page.goto(server + "#office")
+    page.wait_for_selector("[data-room=qa]")
+    page.click("[data-room=qa]")
+    page.wait_for_selector("#odet:has-text('xonasi')")
+    assert not page.errors, page.errors

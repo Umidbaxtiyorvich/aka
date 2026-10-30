@@ -127,7 +127,22 @@ class JarvisCore:
         from .permissions import PermissionManager
         self.permissions = PermissionManager(self)
         self.missions = MissionEngine(self)
+        from .assets import AssetManager
+        from .proactive import Guardian, Proactive
+        from .simlab import SimulationLab
+        from .twin import DigitalTwin
+        from .workspace import BusinessCenter, CreativeFactory, KnowledgeResearcher, Office
+        self.twin = DigitalTwin(self)
+        self.proactive = Proactive(self)
+        self.guardian = Guardian(self)
+        self.assets = AssetManager(self)
+        self.simlab = SimulationLab(self)
+        self.office = Office(self)
+        self.researcher = KnowledgeResearcher(self)
+        self.business = BusinessCenter(self)
+        self.creative = CreativeFactory(self)
         self.approvals.on_pending = self.telegram.on_approval_pending
+        self.approvals.ttl_hours = int(self.settings.approval_ttl_hours or 0)
         self.approvals.events = self.events
         self._health_state: dict = {}
         self.automation_paused = False
@@ -194,6 +209,10 @@ class JarvisCore:
         if now - self._health_state.get("integ_at", 0) > 300:          # ulanishlar holati va jadval bo'yicha sinxronlash
             self._health_state["integ_at"] = now
             self.integrations.monitor()
+        if now - self._health_state.get("proactive_at", 0) > 3600:      # soatiga bir: takliflar, kunlik/haftalik hisobot, xavfsiz tiklash
+            self._health_state["proactive_at"] = now
+            out["proactive"] = self.proactive.tick()
+            out["guardian"] = self.guardian.auto_recover()
         last_heal = self._health_state.setdefault("heal_at", now)
         if now - last_heal > 6 * 3600:          # 6 soatda bir yengil tekshiruv: diagnostika + xatolarni guruhlash (test/taklifsiz)
             self._health_state["heal_at"] = now
@@ -228,8 +247,10 @@ class JarvisCore:
     def stop_automation(self, source: str = "dashboard") -> str:
         """Ruxsat etilgan avtomatik jarayonlarni to'xtatadi: jadval, POS sinxronlash, DAG navbati. Qayta yoqish — dashboardda."""
         self.automation_paused = True
-        self.audit.log(source, "Avtomatik jarayonlar to'xtatildi", target="automation", risk="C", approval_status="user_action")
-        return "⏸ Avtomatik jarayonlar to'xtatildi (jadval, POS sinxronlash). Qayta yoqish: dashboard → Telegram → 'Avtomatikani yoqish'."
+        paused = self.missions.pause_all("favqulodda to'xtatish")      # ishlayotgan missiyalar ham (yangi bosqich boshlanmaydi)
+        self.audit.log(source, f"Avtomatik jarayonlar to'xtatildi (missiyalar: {len(paused)})", target="automation", risk="C", approval_status="user_action")
+        return (f"⏸ Avtomatik jarayonlar to'xtatildi (jadval, POS sinxronlash, {len(paused)} ta missiya). "
+                "Qayta yoqish: dashboard → Telegram → 'Avtomatikani yoqish'.")
 
     def resume_automation(self) -> None:
         self.automation_paused = False
