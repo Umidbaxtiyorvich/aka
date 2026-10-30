@@ -239,6 +239,15 @@ try {
     $sh.Description = "JARVIS AI BRAIN"
     $sh.Save()
     Say "Ish stolida 'JARVIS' yorlig'i yaratildi." "Green"
+    # Yangilash yorlig'i: bosilganda shu o'rnatuvchi GitHub'dan qayta ishga tushadi (xotira va sozlamalar saqlanadi)
+    $up = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $desk "JARVIS yangilash.lnk"))
+    $up.TargetPath = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
+    $up.Arguments = "-NoExit -ExecutionPolicy Bypass -Command `"irm https://raw.githubusercontent.com/$Repo/$Branch/JARVIS_AI_BRAIN/install.ps1 | iex`""
+    $up.WorkingDirectory = $InstallDir
+    if (Test-Path $icon) { $up.IconLocation = "$icon,0" }
+    $up.Description = "JARVIS AI BRAIN ni yangilash"
+    $up.Save()
+    Say "Ish stolida 'JARVIS yangilash' yorlig'i yaratildi." "Green"
 } catch { Say "Yorliq yaratilmadi: $launcher ni ishga tushiring." "Yellow" }
 if (Ask "Windows'ga kirganda JARVIS avtomatik ishga tushsinmi?") {
     # Shu jarayonning o'zida (yangi powershell.exe ochmasdan) ishga tushiriladi
