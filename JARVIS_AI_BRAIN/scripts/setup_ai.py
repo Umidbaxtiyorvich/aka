@@ -9,6 +9,7 @@ import argparse
 import json
 import shutil
 import subprocess
+import time
 import sys
 from pathlib import Path
 
@@ -61,10 +62,17 @@ def main() -> int:
         if not a.yes and input(f"{', '.join(models)} (~{total:.1f} GB) yuklansinmi? [ha/yo'q]: ").strip().lower() not in ("ha", "h", "y", "yes"):
             print("Yuklash bekor qilindi.")
             return 0
+        print("Eslatma: internet uzilsa foiz orqaga ketishi mumkin — Ollama uzilgan qismni qayta yuklaydi, "
+              "tayyor qismlar saqlanadi. Xato bo'lsa, avtomatik qayta uriniladi.")
         for m in models:
-            print(f"\n=== ollama pull {m} ===")
-            if subprocess.run(["ollama", "pull", m]).returncode != 0:
-                print(f"{m} yuklanmadi.")
+            for attempt in range(1, 6):
+                print(f"\n=== ollama pull {m} ({attempt}/5) ===")
+                if subprocess.run(["ollama", "pull", m]).returncode == 0:
+                    break
+                print(f"{m} yuklash uzildi — 10 soniyadan keyin davom ettiriladi (tayyor qismlar saqlangan)...")
+                time.sleep(10)
+            else:
+                print(f"{m} yuklanmadi. Internetni tekshirib, keyinroq shu buyruqni qayta ishga tushiring: ollama pull {m}")
                 return 1
     print("Tayyor. JARVIS'ni qayta ishga tushiring: Dashboard → AI Router bo'limida modellar holati ko'rinadi.")
     print(json.dumps({"light": rec["light"], "strong": rec["strong"], "vision": rec["vision"]}, ensure_ascii=False))
