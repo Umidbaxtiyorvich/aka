@@ -3,6 +3,25 @@
 const SETTINGS_FILE = "JARVIS papkasi\\data\\settings.json";
 
 const GUIDES = {
+  aihub: {
+    title: "AI provayder qanday ulanadi?",
+    steps: [
+      "Pastdagi katalogdan provayderni tanlang (OpenAI, Gemini, Claude, OpenRouter, Groq, DeepSeek, Ollama ...).",
+      "Provayder saytidan API kalitni oling va formaga qo'ying — u Windows Credential Manager'ga yoziladi, ekranda qayta ko'rinmaydi.",
+      "<b>Saqlash va tekshirish</b> — ulanish, kalit, modellar ro'yxati va (ruxsat bo'lsa) kichik test so'rovi bajariladi.",
+      "Pullik provayder ishlashi uchun <a href=\"#smartrouter\">Smart AI Router</a>da \"Pullik AI'ga ruxsat\" va kunlik/oylik limitni o'zingiz belgilang.",
+    ],
+    note: "Kalit borligi xizmat bepul yoki cheksiz degani emas. Maxfiy/shaxsiy savollar baribir faqat mahalliy modelga yuboriladi.",
+  },
+  memimport: {
+    title: "ChatGPT xotirasini qanday ko'chiraman?",
+    steps: [
+      "chatgpt.com → Settings → Data controls → <b>Export data</b> → emaildagi havoladan ZIP'ni yuklab oling.",
+      "ZIP'ni shu yerga yuklang. Tahlil kompyuteringizda bajariladi, arxiv keyin o'chiriladi.",
+      "Kategoriyalarni ko'rib chiqing: kerak bo'lmaganini rad eting, matnni tahrirlang, keraklisini <b>import qiling</b>.",
+    ],
+    note: "ChatGPT'ning ichki Memory bo'limi eksportga kirmaydi — xotira suhbatlardan tuziladi. Eski suhbatdagi buyruqlar bajarilmaydi.",
+  },
   connections: {
     title: "POS, ERP, sayt yoki API qanday ulanadi?",
     steps: [

@@ -30,6 +30,8 @@ from .instagram import InstagramError, suggest_hashtags
 from .instagram_mcp import MCPError
 from .integrations import IntegrationError
 from .integrations.vault import VaultError
+from .ai_hub import HubError
+from .memory_import import MAX_UPLOAD as MI_MAX, ImportError_ as MIError
 from .voice_pro import VoiceProError
 from .kgraph import KGError
 from .memory import MemoryError_
@@ -46,11 +48,12 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError)
+               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
-            "ai_providers", "ai_task_routes", "paid_ai_allowed", "voice_tts_engine", "voice_stt_engine", "voice_gender", "voice_rate",
+            "ai_providers", "ai_task_routes", "paid_ai_allowed", "ai_strategy", "ai_allowed_providers", "ai_confirm_paid", "ai_max_request_cost",
+            "ai_custom_catalog", "voice_tts_engine", "voice_stt_engine", "voice_gender", "voice_rate",
             "voice_volume", "voice_stt_language", "voice_silence_ms", "voice_mic_sensitivity", "azure_speech_region", "currency", "daily_cost_limit", "monthly_cost_limit", "daily_request_limit",
             "cost_warn_percent", "medium_auto_actions", "sandbox_backend", "sandbox_timeout_sec", "sandbox_memory_mb",
             "sandbox_max_retries", "backup_interval_hours", "backup_keep", "backup_max_total_mb", "backup_include_workspace",
@@ -58,7 +61,7 @@ EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "br
             "instagram_accounts", "telephony_provider", "telephony_from", "telephony_account_sid", "telephony_cost_per_min",
             "telegram_owner_phone", "telegram_events", "telegram_voice_alerts", "telegram_approvals", "telegram_approval_ttl_min",
             "telegram_autostart", "telegram_execute_after_approval", "instagram_mcp_url", "meta_app_id"}
-PROVIDER_KINDS = {"ollama", "openai_compatible", "anthropic", "offline"}
+PROVIDER_KINDS = {"ollama", "openai_compatible", "anthropic", "offline", "azure_openai"}
 
 DASHBOARD = PROJECT_ROOT / "dashboard"
 SESSION_COOKIE = "jarvis_session"
@@ -66,6 +69,7 @@ SESSION_COOKIE = "jarvis_session"
 
 class ChatIn(BaseModel):
     text: str
+    allow_paid: bool = False
 
 class MemoryIn(BaseModel):
     content: str
@@ -147,6 +151,11 @@ class SettingsIn(BaseModel):
     save_voice_recordings: bool | None = None
     ai_providers: list[dict] | None = None
     ai_task_routes: dict | None = None
+    ai_strategy: str | None = None
+    ai_allowed_providers: list[str] | None = None
+    ai_confirm_paid: bool | None = None
+    ai_max_request_cost: float | None = None
+    ai_custom_catalog: dict | None = None
     voice_tts_engine: str | None = None
     voice_stt_engine: str | None = None
     voice_gender: str | None = None
@@ -333,6 +342,47 @@ class QueryIn(BaseModel):
     params: list = []
 
 
+class ProviderIn(BaseModel):
+    catalog_id: str
+    pid: str = ""
+    base_url: str = ""
+    model: str = ""
+    api_key: str = ""
+    api_type: str = ""
+    params: dict = {}
+    price_in: float = 0.0
+    price_out: float = 0.0
+    tier: str = ""
+    verify: bool = True
+
+
+class ProviderUpdateIn(BaseModel):
+    model: str | None = None
+    base_url: str | None = None
+    tier: str | None = None
+    api_key: str | None = None
+    enabled: bool | None = None
+    price_in_per_1k: float | None = None
+    price_out_per_1k: float | None = None
+    params: dict | None = None
+
+
+class CapsIn(BaseModel):
+    model_id: str
+    caps: list[str] = []
+
+
+class ImportDecideIn(BaseModel):
+    action: str
+    ids: list[int] = []
+    category: str = ""
+
+
+class ImportEditIn(BaseModel):
+    content: str | None = None
+    category: str | None = None
+
+
 class AskIn(BaseModel):
     question: str
 
@@ -501,7 +551,7 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def chat(body: ChatIn):
         if not body.text.strip():
             raise HTTPException(400, "Bo'sh xabar")
-        return C().chat(body.text)
+        return C().chat(body.text, allow_paid=body.allow_paid)
 
     @app.get("/api/chat/history")
     def history(limit: int = 50):
@@ -866,10 +916,13 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
         for prov in data.get("ai_providers") or []:
             if not isinstance(prov, dict) or not prov.get("id") or prov.get("kind") not in PROVIDER_KINDS or not prov.get("model"):
                 raise HTTPException(400, f"Provayder noto'g'ri: id, kind ({sorted(PROVIDER_KINDS)}), model kerak")
-            if prov["kind"] in ("openai_compatible", "anthropic"):
-                prov["paid"], prov["local"] = True, False
-                if prov["kind"] == "openai_compatible" and not str(prov.get("base_url", "")).startswith("https://"):
-                    raise HTTPException(400, "Tashqi provayder uchun https:// base_url kerak")
+            if prov["kind"] in ("openai_compatible", "anthropic", "azure_openai"):
+                from .ai_hub import LOCAL_HOST
+                url = str(prov.get("base_url", ""))
+                is_local = prov["kind"] != "anthropic" and bool(LOCAL_HOST.match(url))
+                prov["paid"], prov["local"] = not is_local, is_local
+                if prov["kind"] != "anthropic" and not (url.startswith("https://") or is_local):
+                    raise HTTPException(400, "Tashqi provayder uchun https:// base_url kerak (mahalliy server: http://localhost)")
         if "medium_auto_actions" in data:
             from .policy import ACTIONS
             bad = [a for a in data["medium_auto_actions"] if ACTIONS.get(a, ("high",))[0] != "medium"]
@@ -917,6 +970,16 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
             raise HTTPException(400, "Azure mintaqasi, masalan: westeurope")
         if data.get("telephony_provider") not in (None, "", "twilio"):
             raise HTTPException(400, "telephony_provider: bo'sh yoki twilio")
+        if "ai_strategy" in data:
+            from .router import STRATEGIES
+            if data["ai_strategy"] not in STRATEGIES:
+                raise HTTPException(400, f"ai_strategy: {', '.join(STRATEGIES)}")
+        if "ai_max_request_cost" in data and float(data["ai_max_request_cost"]) < 0:
+            raise HTTPException(400, "ai_max_request_cost manfiy bo'lmaydi")
+        for k, v in (data.get("ai_custom_catalog") or {}).items():
+            if not re.fullmatch(r"[a-z0-9_-]{2,40}", k) or not isinstance(v, dict) or v.get("kind") not in ("openai_compatible", "anthropic", "ollama", "azure_openai") \
+                    or not str(v.get("base_url", "")).startswith(("https://", "http://localhost", "http://127.0.0.1")):
+                raise HTTPException(400, "ai_custom_catalog: {id: {title, kind, base_url (https:// yoki localhost), model}}")
         if "sandbox_backend" in data and data["sandbox_backend"] not in ("process", "docker"):
             raise HTTPException(400, "sandbox_backend: process yoki docker")
         if "ai_provider" in data and data["ai_provider"] not in ("offline", "ollama"):
@@ -937,6 +1000,107 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def ai_router():
         c = C()
         return {"providers": c.ai.status(), "last_route": c.ai.last_route, "metrics": c.guard.providers()}
+
+    # AI Provider Hub (kalit qiymatlari hech qachon qaytmaydi)
+    @app.get("/api/ai/hub/catalog")
+    def hub_catalog():
+        return C().ai_hub.catalog()
+
+    @app.get("/api/ai/hub/overview")
+    def hub_overview():
+        return C().ai_hub.overview()
+
+    @app.get("/api/ai/hub/providers")
+    def hub_list():
+        return C().ai_hub.list()
+
+    @app.post("/api/ai/hub/providers")
+    def hub_add(body: ProviderIn):
+        c = C()
+        d = body.model_dump()
+        do_verify = d.pop("verify")
+        p = guard(c.ai_hub.add, **d)
+        return p | {"verification": guard(c.ai_hub.verify, p["id"]) if do_verify else None}
+
+    @app.post("/api/ai/hub/providers/{pid}")
+    def hub_update(pid: str, body: ProviderUpdateIn):
+        c = C()
+        d = body.model_dump()
+        p = guard(c.ai_hub.update, pid, **d)
+        return p | {"verification": guard(c.ai_hub.verify, pid) if d.get("api_key") else None}   # kalit kiritilsa — avtomatik tekshiruv
+
+    @app.delete("/api/ai/hub/providers/{pid}")
+    def hub_remove(pid: str):
+        return guard(C().ai_hub.remove, pid)
+
+    @app.post("/api/ai/hub/providers/{pid}/verify")
+    def hub_verify(pid: str, test_model: bool = True):
+        return guard(C().ai_hub.verify, pid, test_model)
+
+    @app.post("/api/ai/hub/providers/{pid}/default")
+    def hub_default(pid: str, task: str = "chat"):
+        return guard(C().ai_hub.set_default, pid, task)
+
+    @app.post("/api/ai/hub/providers/{pid}/models")
+    def hub_add_model(pid: str, body: CapsIn):
+        return guard(C().ai_hub.add_model, pid, body.model_id)
+
+    @app.post("/api/ai/hub/providers/{pid}/caps")
+    def hub_caps(pid: str, body: CapsIn):
+        return guard(C().ai_hub.set_caps, pid, body.model_id, body.caps)
+
+    @app.get("/api/ai/hub/models")
+    def hub_models(provider: str | None = None):
+        return C().ai_hub.models(provider)
+
+    @app.get("/api/ai/hub/capabilities")
+    def hub_capmap():
+        return C().ai_hub.capability_map()
+
+    @app.get("/api/ai/live")
+    def ai_live():
+        from .router import STRATEGIES
+        c = C()
+        cur = c.ai.current
+        return {"current": cur and (cur | {"elapsed_ms": int((time.time() - cur["started"]) * 1000)}), "last": c.ai.last_route,
+                "strategy": c.settings.ai_strategy, "strategies": STRATEGIES}
+
+    @app.get("/api/ai/log")
+    def ai_log(limit: int = 100):
+        return C().db.query("SELECT id, ts, provider, model, purpose, tokens_in, tokens_out, tokens_measured, cost, duration_ms, ok, error, fallback_from "
+                            "FROM ai_usage ORDER BY id DESC LIMIT ?", (min(limit, 500),))
+
+    # Memory Import Center (ChatGPT eksporti) — tahlil mahalliy, import faqat tasdiq bilan
+    @app.post("/api/memory-import/upload")
+    async def mi_upload(file: UploadFile):
+        data = await file.read(MI_MAX + 1)
+        if len(data) > MI_MAX:
+            raise HTTPException(400, "ZIP 512 MB dan katta")
+        return guard(C().memory_import.start, file.filename or "export.zip", data)
+
+    @app.get("/api/memory-import")
+    def mi_list():
+        return {"imports": C().memory_import.list(), "categories": C().memory_import.categories()}
+
+    @app.get("/api/memory-import/{iid}")
+    def mi_get(iid: int):
+        return guard(C().memory_import.get, iid)
+
+    @app.get("/api/memory-import/{iid}/items")
+    def mi_items(iid: int, category: str = "", status: str = "", q: str = "", limit: int = 200, offset: int = 0):
+        return C().memory_import.items(iid, category, status, q, limit, offset)
+
+    @app.post("/api/memory-import/{iid}/decide")
+    def mi_decide(iid: int, body: ImportDecideIn):
+        return guard(C().memory_import.decide, iid, body.action, body.ids, body.category)
+
+    @app.post("/api/memory-import/items/{item_id}")
+    def mi_edit(item_id: int, body: ImportEditIn):
+        return guard(C().memory_import.edit, item_id, body.content, body.category)
+
+    @app.delete("/api/memory-import/{iid}")
+    def mi_delete(iid: int, purge: bool = False):
+        return guard(C().memory_import.delete, iid, purge)
 
     @app.get("/api/ai/presets")
     def ai_presets():

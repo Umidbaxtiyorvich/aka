@@ -57,6 +57,10 @@ const SECTIONS = [
   ["agentmap", "Agent Connections", (v) => renderBrainHub(v, "graph", ["agents", "tasks", "skills", "apis"])],
   ["projmap", "Projects Map", (v) => renderBrainHub(v, "graph", ["projects", "memories", "files", "decisions", "tasks"])],
   ["superbrain", "⚡ Super Brain Control", renderSuperBrain],
+  ["aihub", "🤖 AI Provider Center", renderProviderCenter],
+  ["smartrouter", "🚦 Smart AI Router", renderSmartRouter],
+  ["models", "📚 Model Catalog", renderModelCatalog],
+  ["memimport", "📥 Memory Import Center", renderMemoryImport],
   ["connections", "🔌 Universal Connection Center", renderConnections],
   ["chat", "AI Chat", renderChat],
   ["voice", "Voice", renderVoice],
@@ -175,13 +179,22 @@ async function renderChat(v) {
   const log = $("#log");
   const add = (role, text, usage) => { log.insertAdjacentHTML("beforeend", `<div class="msg ${role}">${esc(text)}${usage ? `<div class="fb" style="margin-top:6px">
       <button class="ghost" data-fb="${usage}" data-g="1" title="Yaxshi javob">👍</button> <button class="ghost" data-fb="${usage}" data-g="0" title="Yomon javob">👎</button></div>` : ""}</div>`); log.scrollTop = 1e9; };
-  log.onclick = async (e) => { const d = e.target.dataset; if (!d.fb) return;
+  log.onclick = async (e) => { const d = e.target.dataset;
+    if (d.paid) {      // foydalanuvchi shu savol uchun pullik modelni tugma bilan tasdiqladi
+      e.target.disabled = true;
+      try { const r = await api("/api/chat", { method: "POST", body: { text: d.paid, allow_paid: true } }); add("assistant", r.text, r.route && r.route.usage_id); }
+      catch (er) { add("assistant", "Xato: " + er.message); }
+      return;
+    }
+    if (!d.fb) return;
     try { await post("/api/ai/feedback", { usage_id: Number(d.fb), good: d.g === "1" }); e.target.parentElement.innerHTML = '<span class="muted">Rahmat — baho saqlandi</span>'; } catch (er) { alert(er.message); } };
   (await api("/api/chat/history?limit=40")).forEach((m) => add(m.role, m.content));
   const send = async () => {
     const t = $("#msg").value.trim(); if (!t) return;
     $("#msg").value = ""; add("user", t);
-    try { const r = await api("/api/chat", { method: "POST", body: { text: t } }); add("assistant", r.text, r.route && r.route.usage_id); }
+    try { const r = await api("/api/chat", { method: "POST", body: { text: t } }); add("assistant", r.text, r.route && r.route.usage_id);
+      if (r.paid_confirm_needed) log.insertAdjacentHTML("beforeend", `<div class="msg assistant"><button data-paid="${esc(t)}">💳 Pullik (kuchliroq) model bilan qayta so'rash</button>
+        <span class="small muted">Xarajat kunlik/oylik limit ichida hisoblanadi.</span></div>`); }
     catch (e) { add("assistant", "Xato: " + e.message); }
   };
   $("#send").onclick = send;

@@ -82,6 +82,8 @@ class JarvisCore:
         self.computer = ComputerAgent(self.settings, self.approvals, self.audit)
         self.guard = ResourceGuard(self)
         self.ai = Router(self)
+        from .ai_hub import AIHub
+        self.ai_hub = AIHub(self)
         self.bi = BusinessIntelligence(self.db, self.audit, self.settings, self.files)
         self.pos = POSManager(self.db, self.audit, self.approvals, self.settings)
         self.notifier = Notifier(self.db, self.settings)
@@ -119,6 +121,8 @@ class JarvisCore:
         self.integrations = IntegrationHub(self)
         self.analyst = Analyst(self)
         self.brain_core = BrainCore(self)
+        from .memory_import import MemoryImporter
+        self.memory_import = MemoryImporter(self)
         self.approvals.on_pending = self.telegram.on_approval_pending
         self.approvals.events = self.events
         self._health_state: dict = {}
@@ -230,8 +234,12 @@ class JarvisCore:
     def reload_ai(self):
         self.ai._avail_cache.clear()
 
+    def router_cache_clear(self, pid: str):
+        self.ai._avail_cache.pop(pid, None)
+
     # --- chat ---
-    def chat(self, text: str) -> dict:
+    def chat(self, text: str, allow_paid: bool = False) -> dict:
+        self._allow_paid = allow_paid                   # foydalanuvchi shu xabar uchun pullik modelni tugma bilan tasdiqladi
         safe_in = redact(text)
         intent, conf = intent_mod.detect(text)
         self.db.execute("INSERT INTO conversations(role, content, intent) VALUES ('user',?,?)", (safe_in, intent))
@@ -355,10 +363,13 @@ class JarvisCore:
         messages = [{"role": "system", "content": SYSTEM_PROMPT + ("\nXotiradan:\n" + mem if mem else "")}]
         messages += [{"role": h["role"], "content": h["content"]} for h in history[:-1]]
         messages.append({"role": "user", "content": text})
+        from .router import classify
+        purpose = "code" if re.search(r"(?i)```|\bkod\b|python|javascript|funksiya yoz|code|script", text) else (
+            "reasoning" if classify([{"role": "user", "content": text}]) == "complex" else "chat")
         try:
-            r = self.ai.route(messages)
+            r = self.ai.route(messages, purpose=purpose, allow_paid=getattr(self, "_allow_paid", False))
             return {"text": r["text"] + "\n\n" + self.ai.notice(r["route"]), "provider": r["route"]["provider"],
-                    "route": r["route"]}
+                    "route": r["route"], "paid_confirm_needed": r["route"].get("paid_confirm_needed", False)}
         except AIError as e:
             self.audit.error("ai_engine", str(e))
             return {"text": "AI modeli javob bermadi. Xato logga yozildi. Sozlamalar → AI bo'limida holatni tekshiring.",

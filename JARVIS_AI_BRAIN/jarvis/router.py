@@ -17,7 +17,7 @@ from . import net
 from .ai_engine import AIError, OfflineProvider, OllamaProvider
 from .resource_guard import estimate_tokens
 from .secrets import get_secret
-from .security import contains_secret
+from .security import contains_secret, redact
 
 COMPLEX_HINTS = re.compile(
     r"(?i)(```|traceback|exception|xato(ni|lar)?\b|debug|kod(ni)?\b|funksiya|python|sql|javascript|tahlil|analiz|"
@@ -26,29 +26,44 @@ PII = re.compile(r"(?i)(\b[A-Z]{2}\s?\d{7}\b|\+?998[\s-]?\d{2}[\s-]?\d{3}[\s-]?\
 
 
 class OpenAICompatProvider:
-    """OpenAI-compatible /v1/chat/completions (OpenRouter, Groq, LM Studio va boshqalar)."""
+    """OpenAI-compatible /v1/chat/completions (OpenRouter, Groq, Gemini, LiteLLM Proxy, LM Studio, vLLM va boshqalar)."""
 
-    def __init__(self, pid: str, base_url: str, model: str, timeout: int = 60):
+    def __init__(self, pid: str, base_url: str, model: str, timeout: int = 60, *, needs_key: bool = True, params: dict | None = None):
         self.name, self.base_url, self.model, self.timeout = pid, base_url.rstrip("/"), model, timeout
+        self.needs_key, self.params = needs_key, dict(params or {})
 
     def available(self) -> tuple[bool, str]:
-        return (True, "kalit bor") if get_secret(f"ai_key_{self.name}") else (False, f"Kalit yo'q: set_secret.py ai_key_{self.name}")
+        if not self.needs_key:
+            return True, "kalit talab qilinmaydi (mahalliy server)"
+        return (True, "kalit bor") if get_secret(f"ai_key_{self.name}") else (False, f"Kalit yo'q: ai_key_{self.name}")
+
+    def _url_headers(self, key: str) -> tuple[str, dict]:
+        return f"{self.base_url}/chat/completions", ({"Authorization": f"Bearer {key}"} if key else {})
 
     def chat_ex(self, messages: list[dict]) -> dict:
-        key = get_secret(f"ai_key_{self.name}")
-        if not key:
+        key = get_secret(f"ai_key_{self.name}") or ""
+        if self.needs_key and not key:
             raise AIError("API kaliti yo'q")
+        url, headers = self._url_headers(key)
+        extra = {k: v for k, v in self.params.items() if k in ("temperature", "top_p", "max_tokens", "reasoning_effort")}
         try:
-            r = net.post_json(f"{self.base_url}/chat/completions", json_body={"model": self.model, "messages": messages},
-                              headers={"Authorization": f"Bearer {key}"}, timeout=self.timeout)
+            r = net.post_json(url, json_body={"model": self.model, "messages": messages, **extra}, headers=headers, timeout=self.timeout)
         except net.NetError as e:
-            raise AIError(f"{self.name}: {e}") from None
+            raise AIError(f"{self.name}: {e} {redact(e.body or '')[:160]}".strip()) from None
         try:
             text = r["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError):
             raise AIError(f"{self.name}: kutilmagan javob") from None
         u = r.get("usage") or {}
         return {"text": text, "tokens_in": u.get("prompt_tokens"), "tokens_out": u.get("completion_tokens")}
+
+
+class AzureOpenAIProvider(OpenAICompatProvider):
+    """Azure OpenAI: deployment nomi model o'rnida, `api-key` sarlavhasi."""
+
+    def _url_headers(self, key: str) -> tuple[str, dict]:
+        ver = self.params.get("api_version", "2024-10-21")
+        return f"{self.base_url}/openai/deployments/{self.model}/chat/completions?api-version={ver}", {"api-key": key}
 
 
 class AnthropicProvider:
@@ -58,7 +73,7 @@ class AnthropicProvider:
         self.name, self.model, self.base_url, self.timeout = pid, model, base_url.rstrip("/"), timeout
 
     def available(self) -> tuple[bool, str]:
-        return (True, "kalit bor") if get_secret(f"ai_key_{self.name}") else (False, f"Kalit yo'q: set_secret.py ai_key_{self.name}")
+        return (True, "kalit bor") if get_secret(f"ai_key_{self.name}") else (False, f"Kalit yo'q: ai_key_{self.name}")
 
     def chat_ex(self, messages: list[dict]) -> dict:
         key = get_secret(f"ai_key_{self.name}")
@@ -71,7 +86,7 @@ class AnthropicProvider:
             r = net.post_json(f"{self.base_url}/v1/messages", json_body=body, timeout=self.timeout,
                               headers={"x-api-key": key, "anthropic-version": "2023-06-01"})
         except net.NetError as e:
-            raise AIError(f"{self.name}: {e}") from None
+            raise AIError(f"{self.name}: {e} {redact(e.body or '')[:160]}".strip()) from None
         text = "".join(b.get("text", "") for b in r.get("content", []) if b.get("type") == "text")
         if not text:
             raise AIError(f"{self.name}: bo'sh javob")
@@ -103,7 +118,13 @@ PROVIDER_PRESETS = {
 }
 # Vazifa turlari → afzal provayder id (settings.ai_task_routes). Maxfiy ma'lumot baribir faqat mahalliy modelga ketadi.
 TASK_TYPES = {"chat": "Oddiy suhbat", "reasoning": "Murakkab fikrlash", "code": "Kod yozish", "pos": "POS / biznes tahlili",
-              "voice": "Ovozli javob", "vision": "Rasm va hujjat tahlili", "research": "Internet qidiruvi", "agents": "Agent boshqaruvi"}
+              "voice": "Ovozli javob", "vision": "Rasm va hujjat tahlili", "research": "Internet qidiruvi", "agents": "Agent boshqaruvi",
+              "document": "Katta hujjat tahlili", "translation": "Tarjima"}
+# Vazifa → kerakli imkoniyat. required=True — imkoniyatsiz model ishlatilmaydi (masalan, rasmni matn modeli ko'rmaydi).
+PURPOSE_CAP = {"code": ("coding", False), "analysis": ("reasoning", False), "reasoning": ("reasoning", False), "vision": ("image_understanding", True),
+               "research": ("web_search", False), "document": ("long_context", False), "translation": ("translation", False),
+               "agents": ("tool_calling", False), "pos": ("reasoning", False)}
+STRATEGIES = {"balanced": "Muvozanat", "cheapest": "Avval eng arzon", "quality": "Sifat ustuvor", "speed": "Tezlik ustuvor", "free_only": "Faqat bepul/mahalliy"}
 
 
 class Router:
@@ -113,6 +134,7 @@ class Router:
         self.core = core
         self._avail_cache: dict[str, tuple[float, bool, str]] = {}
         self.last_route: dict | None = None
+        self.current: dict | None = None
 
     # --- provayderlar ---
     def profiles(self) -> list[dict]:
@@ -128,7 +150,7 @@ class Router:
         for p in profs:
             p.setdefault("tier", "light")
             p.setdefault("local", p["kind"] in ("ollama", "offline"))
-            p.setdefault("paid", p["kind"] in ("openai_compatible", "anthropic"))
+            p.setdefault("paid", p["kind"] in ("openai_compatible", "anthropic", "azure_openai") and not p["local"])
             p.setdefault("price_in_per_1k", 0.0)
             p.setdefault("price_out_per_1k", 0.0)
         return profs
@@ -139,8 +161,9 @@ class Router:
             return OfflineProvider()
         if p["kind"] == "ollama":
             return OllamaProvider(p.get("base_url") or s.ollama_url, p["model"], s.ai_timeout_sec)
-        if p["kind"] == "openai_compatible":
-            return OpenAICompatProvider(p["id"], p["base_url"], p["model"], s.ai_timeout_sec)
+        if p["kind"] in ("openai_compatible", "azure_openai"):
+            cls = AzureOpenAIProvider if p["kind"] == "azure_openai" else OpenAICompatProvider
+            return cls(p["id"], p["base_url"], p["model"], s.ai_timeout_sec, needs_key=p.get("auth", "bearer") != "none", params=p.get("params"))
         if p["kind"] == "anthropic":
             return AnthropicProvider(p["id"], p["model"], p.get("base_url") or "https://api.anthropic.com", s.ai_timeout_sec)
         raise AIError(f"Noma'lum provayder turi: {p['kind']}")
@@ -154,6 +177,10 @@ class Router:
             ok, note = self._build(p).available()
         except AIError as e:
             ok, note = False, str(e)
+        hub = getattr(self.core, "ai_hub", None)
+        blk = hub.blocked(p["id"]) if hub and ok and p["kind"] != "offline" else None
+        if blk:
+            ok, note = False, blk
         self._avail_cache[p["id"]] = (now, ok, note)
         return ok, note
 
@@ -165,23 +192,70 @@ class Router:
         return out
 
     # --- tanlash ---
-    def plan(self, messages: list[dict], purpose: str = "", private: bool | None = None) -> dict:
+    def _speed(self) -> dict:
+        rows = self.core.db.query("SELECT provider, AVG(duration_ms) ms FROM (SELECT provider, duration_ms FROM ai_usage WHERE ok=1 ORDER BY id DESC LIMIT 300) GROUP BY provider")
+        return {r["provider"]: r["ms"] or 0 for r in rows}
+
+    def _pick_model(self, p: dict, cap: str | None, required: bool) -> dict | None:
+        """Provayder ichidan vazifaga mos modelni tanlaydi (imkoniyatlar katalogi bo'yicha)."""
+        hub = getattr(self.core, "ai_hub", None)
+        if not cap or not hub or p["kind"] == "offline":
+            return p
+        from .ai_hub import guess_caps
+        known = {m["model_id"]: m["caps"] for m in hub.models(p["id"])}
+        own = known.get(p["model"]) or guess_caps(p["model"])
+        if cap in own:
+            return p | {"cap_match": True}
+        alt = hub.models_with(p["id"], cap)
+        if alt:
+            return p | {"model": alt[0], "cap_match": True, "model_switched": f"{p['model']} → {alt[0]} ({cap})"}
+        return None if required else p | {"cap_match": False}
+
+    def plan(self, messages: list[dict], purpose: str = "", private: bool | None = None, allow_paid: bool = False) -> dict:
+        s = self.core.settings
         complexity = classify(messages, purpose)
         priv = is_private(messages) if private is None else private
         order = ["strong", "light"] if complexity == "complex" else ["light", "strong"]
+        cap, required = PURPOSE_CAP.get(purpose, (None, False))
+        strategy = getattr(s, "ai_strategy", "balanced") or "balanced"
+        allowed = set(getattr(s, "ai_allowed_providers", []) or [])
         cands, skipped = [], []
         for p in self.profiles():
             if p["kind"] == "offline":
                 continue
+            if allowed and p["id"] not in allowed and not p["local"]:
+                skipped.append({"provider": p["id"], "reason": "ruxsat berilgan provayderlar ro'yxatida yo'q"})
+                continue
             if priv and not p["local"]:
                 skipped.append({"provider": p["id"], "reason": "maxfiy ma'lumot — faqat mahalliy model"})
                 continue
-            cands.append(p)
+            if p["paid"] and strategy == "free_only":
+                skipped.append({"provider": p["id"], "reason": "strategiya: faqat bepul/mahalliy"})
+                continue
+            if p["paid"] and getattr(s, "ai_confirm_paid", False) and not allow_paid:
+                skipped.append({"provider": p["id"], "reason": "pullik — sizning tasdig'ingiz kerak", "needs_confirm": True})
+                continue
+            m = self._pick_model(p, cap, required)
+            if m is None:
+                skipped.append({"provider": p["id"], "reason": f"{cap} imkoniyati yo'q"})
+                continue
+            cands.append(m)
         q = self.quality()
-        # Bir xil daraja/narx/joylashuvda — foydalanuvchi fikri va testlar bo'yicha yaxshirog'i oldinda (kamida 5 baho bo'lsa)
-        cands.sort(key=lambda p: (order.index(p["tier"]) if p["tier"] in order else 2, p["paid"], not p["local"],
-                                  -(q.get(p["id"], {}).get("score", 0.5) if q.get(p["id"], {}).get("enough") else 0.5)))
-        pref = (getattr(self.core.settings, "ai_task_routes", {}) or {}).get(purpose or "chat")
+        spd = self._speed() if strategy == "speed" else {}
+        qs = lambda p: -(q.get(p["id"], {}).get("score", 0.5) if q.get(p["id"], {}).get("enough") else 0.5)  # noqa: E731
+        tier = lambda p: order.index(p["tier"]) if p["tier"] in order else 2  # noqa: E731
+        capk = lambda p: 0 if p.get("cap_match", True) else 1  # noqa: E731
+        if strategy == "cheapest":
+            key = lambda p: (capk(p), p["paid"], p["price_in_per_1k"] + p["price_out_per_1k"], tier(p), qs(p))  # noqa: E731
+        elif strategy == "quality":
+            key = lambda p: (capk(p), 0 if p["tier"] == "strong" else 1, qs(p), p["paid"])  # noqa: E731
+        elif strategy == "speed":
+            key = lambda p: (capk(p), spd.get(p["id"], 5000 if not p["local"] else 8000), p["paid"])  # noqa: E731
+        else:
+            # Bir xil daraja/narx/joylashuvda — foydalanuvchi fikri va testlar bo'yicha yaxshirog'i oldinda (kamida 5 baho bo'lsa)
+            key = lambda p: (capk(p), tier(p), p["paid"], not p["local"], qs(p))  # noqa: E731
+        cands.sort(key=key)
+        pref = (getattr(s, "ai_task_routes", {}) or {}).get(purpose or "chat")
         routed = None
         if pref:
             hit = next((p for p in cands if p["id"] == pref), None)
@@ -190,25 +264,29 @@ class Router:
                 cands.insert(0, hit)
                 routed = pref
             elif any(x["provider"] == pref for x in skipped):
-                routed = f"{pref} (maxfiylik sababli o'tkazib yuborildi)"
+                why = next(x["reason"] for x in skipped if x["provider"] == pref)
+                routed = f"{pref} (maxfiylik sababli o'tkazib yuborildi)" if why.startswith("maxfiy") else f"{pref} (o'tkazib yuborildi: {why})"
+        # Fallback tartibi: tanlangan → boshqa mos modellar → mahalliy → JARVIS ichki funksiyalari (offline) — oxirida
         cands.append(next(p for p in self.profiles() if p["kind"] == "offline"))
-        return {"complexity": complexity, "task_route": routed, "private": priv, "candidates": cands, "skipped": skipped}
+        return {"complexity": complexity, "task_route": routed, "private": priv, "candidates": cands, "skipped": skipped,
+                "capability": cap, "strategy": strategy, "paid_confirm_needed": any(x.get("needs_confirm") for x in skipped)}
 
-    def route(self, messages: list[dict], purpose: str = "", private: bool | None = None) -> dict:
+    def route(self, messages: list[dict], purpose: str = "", private: bool | None = None, allow_paid: bool = False) -> dict:
         ev = getattr(self.core, "events", None)
         if ev:
             ev.publish("ai.start", purpose=purpose or "chat")
         ok, provider = False, None
         try:
-            res = self._route(messages, purpose, private)
+            res = self._route(messages, purpose, private, allow_paid)
             ok, provider = True, res["route"]["provider"]
             return res
         finally:
+            self.current = None
             if ev:
                 ev.publish("ai.end", ok=ok, provider=provider)
 
-    def _route(self, messages: list[dict], purpose: str = "", private: bool | None = None) -> dict:
-        plan = self.plan(messages, purpose, private)
+    def _route(self, messages: list[dict], purpose: str = "", private: bool | None = None, allow_paid: bool = False) -> dict:
+        plan = self.plan(messages, purpose, private, allow_paid)
         guard = self.core.guard
         attempts, est_in = [], estimate_tokens(" ".join(m["content"] for m in messages))
         for p in plan["candidates"]:
@@ -222,14 +300,24 @@ class Router:
                 attempts.append({"provider": p["id"], "error": why})
                 continue
             t0 = time.monotonic()
+            self.current = {"provider": p["id"], "model": p["model"], "task": purpose or "chat", "task_label": TASK_TYPES.get(purpose or "chat", purpose),
+                            "capability": plan["capability"], "paid": p["paid"], "local": p["local"], "attempt": len(attempts) + 1,
+                            "fallback": bool(attempts), "strategy": plan["strategy"], "started": time.time()}
+            ev = getattr(self.core, "events", None)
+            if ev:
+                ev.publish("ai.route", provider=p["id"], model=p["model"], task=purpose or "chat", fallback=bool(attempts))
             try:
                 res = self._build(p).chat_ex(messages)
             except AIError as e:
                 ms = int((time.monotonic() - t0) * 1000)
                 guard.record(provider=p["id"], model=p["model"], tier=p["tier"], purpose=purpose, paid=p["paid"],
-                             tokens_in=est_in, tokens_measured=False, duration_ms=ms, ok=False, error=str(e))
+                             tokens_in=est_in, tokens_measured=False, duration_ms=ms, ok=False, error=str(e),
+                             fallback_from=",".join(a["provider"] for a in attempts))
                 self.core.audit.error("ai_router", f"{p['id']}: {e}")
                 self._avail_cache.pop(p["id"], None)
+                hub = getattr(self.core, "ai_hub", None)
+                if hub and p["kind"] != "offline":
+                    hub.mark_runtime_error(p["id"], str(e))
                 attempts.append({"provider": p["id"], "error": str(e)})
                 continue
             ms = int((time.monotonic() - t0) * 1000)
@@ -245,11 +333,15 @@ class Router:
                       + (", maxfiy ma'lumot → mahalliy" if plan["private"] else "")
                       + (", pullik" if p["paid"] else ", bepul/mahalliy")
                       + (f", sifat bahosi past ({qp['score']:.0%})" if qp.get("enough") and qp["score"] < 0.4 else ""))
-            self.last_route = {"provider": p["id"], "model": p["model"], "tier": p["tier"], "reason": reason,
+            if p.get("model_switched"):
+                reason += f", vazifaga mos model: {p['model_switched']}"
+            self.last_route = {"provider": p["id"], "model": p["model"], "tier": p["tier"], "reason": reason, "task": purpose or "chat",
+                               "capability": plan["capability"], "strategy": plan["strategy"], "paid_confirm_needed": plan["paid_confirm_needed"],
                                "fallbacks": attempts, "skipped": plan["skipped"], "duration_ms": ms,
                                "tokens_in": tin, "tokens_out": tout, "tokens_measured": measured, **cost}
             return {"text": res["text"], "route": self.last_route}
-        raise AIError("Hech bir model javob bermadi: " + "; ".join(f"{a['provider']}: {a['error']}" for a in attempts))
+        raise AIError("Hech bir model javob bermadi: " + "; ".join(f"{a['provider']}: {a['error']}" for a in attempts)
+                      + (" · Pullik model sizning tasdig'ingizni kutmoqda" if plan["paid_confirm_needed"] else ""))
 
     # --- sifat: foydalanuvchi fikri + o'rnatilgan testlar ---
     EVAL_PROBES = [("2+2 nechiga teng? Faqat raqam yoz.", r"\b4\b"),
@@ -315,6 +407,8 @@ class Router:
         parts = [f"Model: {route['provider']} ({route['model']}) — {route['reason']}"]
         if route["fallbacks"]:
             parts.append("Avval urinilgan: " + "; ".join(f"{a['provider']} ({a['error'][:60]})" for a in route["fallbacks"]))
+        if route.get("paid_confirm_needed"):
+            parts.append("Pullik (kuchliroq) model sizning tasdig'ingizni kutmoqda — chatdagi tugma bilan ruxsat bering")
         if route.get("cost"):
             parts.append(f"Xarajat: {route['cost']} {'(token o‘lchangan)' if route.get('cost_measured') else '(taxminiy)'}")
         return "ℹ️ " + " · ".join(parts)

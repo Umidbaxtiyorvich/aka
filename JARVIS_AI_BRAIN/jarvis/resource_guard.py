@@ -87,6 +87,9 @@ class ResourceGuard:
             return False, "Pullik AI o'chirilgan (Sozlamalar → Xarajat nazorati)"
         if self.s.daily_cost_limit <= 0 or self.s.monthly_cost_limit <= 0:
             return False, "Pullik AI uchun kunlik va oylik xarajat limiti belgilanmagan"
+        mx = float(getattr(self.s, "ai_max_request_cost", 0) or 0)
+        if mx > 0 and est_cost > mx:
+            return False, f"Bir so'rov uchun maksimal xarajatdan oshadi ({est_cost:.4f} > {mx} {self.s.currency})"
         if t["cost"] + est_cost > self.s.daily_cost_limit:
             self._alert("daily_limit", f"Kunlik limit ({self.s.daily_cost_limit} {self.s.currency}) tugadi — pullik so'rovlar to'xtatildi")
             return False, f"Kunlik xarajat limiti tugaydi ({t['cost']}+{est_cost:.4f} > {self.s.daily_cost_limit} {self.s.currency})"

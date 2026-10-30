@@ -293,3 +293,47 @@ def test_connection_center_and_super_brain(server, page, core, tmp_path):
     page.wait_for_selector("#trmsg .ok")
     assert core.settings.ai_task_routes.get("pos") == model_id
     assert not page.errors, page.errors
+
+
+def test_ai_provider_center_router_and_memory_import(server, page, core, tmp_path):
+    import json
+    import zipfile
+    page.goto(server + "#aihub")
+    page.click("[data-addp=lmstudio]")
+    page.wait_for_selector("#hpsave")
+    page.fill("#hpurl", "http://127.0.0.1:9/v1")            # hech narsa tinglamaydigan port — halol "ulanib bo'lmadi"
+    page.fill("#hpmodel", "qwen2.5-7b-instruct")
+    page.click("#hpsave")
+    page.wait_for_selector("#hpmsg:has-text('Ulanib bo')")
+    assert core.ai_hub.get("lmstudio")["status"] == "connection_failed"
+    page.click("#hpdone")
+    page.wait_for_selector("button[data-h=verify][data-id=lmstudio]")
+    page.goto(server + "#smartrouter")
+    page.wait_for_selector("#srs")
+    page.select_option("#srs", "free_only")
+    page.fill("#srreq", "0.05")
+    page.click("#srsave")
+    page.wait_for_selector("#srmsg .ok")
+    assert core.settings.ai_strategy == "free_only" and core.settings.ai_max_request_cost == 0.05
+    page.goto(server + "#models")
+    page.wait_for_selector("#mcid")
+    page.fill("#mcid", "deepseek-r1-distill")
+    page.click("#mcadd")
+    page.wait_for_selector("td:has-text('deepseek-r1-distill')")
+    conv = {"id": "c1", "title": "Test", "create_time": 1735689600, "current_node": "n1", "mapping": {
+        "n0": {"message": None, "parent": None, "children": ["n1"]},
+        "n1": {"message": {"author": {"role": "user"}, "content": {"content_type": "text", "parts": ["Qaror qildim: bazaga SQLite ishlatamiz."]}, "create_time": 1735689600},
+               "parent": "n0", "children": []}}}
+    zp = tmp_path / "export.zip"
+    with zipfile.ZipFile(zp, "w") as z:
+        z.writestr("conversations.json", json.dumps([conv]))
+    page.goto(server + "#memimport")
+    page.set_input_files("#mif", str(zp))
+    page.click("#miup")
+    page.wait_for_selector("[data-mc=decisions]", timeout=15000)
+    page.click("[data-mc=decisions]")
+    page.wait_for_selector("#miall:not([disabled])")
+    page.click("#miall")
+    page.wait_for_selector("#mimsg2 .ok")
+    assert any("SQLite" in m["content"] and m["source"] == "import:chatgpt" for m in core.memory.list("decision"))
+    assert not page.errors, page.errors
