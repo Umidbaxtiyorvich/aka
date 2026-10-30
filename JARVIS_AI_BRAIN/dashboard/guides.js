@@ -3,6 +3,16 @@
 const SETTINGS_FILE = "JARVIS papkasi\\data\\settings.json";
 
 const GUIDES = {
+  mission: {
+    title: "Missiya qanday ishlaydi?",
+    steps: [
+      "Maqsadni yozing. Bosqichlarni \"keyin\" (ketma-ket) va \"hamda\" (parallel) bilan ajratish mumkin.",
+      "JARVIS reja tuzadi va har bosqich xavfini ko'rsatadi: LOW — avtomatik, MEDIUM/HIGH/CRITICAL — tasdiq bilan.",
+      "Bajarish davomida har tugagan bosqich saqlanadi (checkpoint). Kompyuter o'chsa ham keyin shu joydan davom etadi.",
+      "Oxirida hisobot: nima bajarildi, nima bajarilmadi, qaysi model ishlatildi, xarajat. Xulosalarni tasdiqlasangiz — JARVIS eslab qoladi.",
+    ],
+    note: "Maxsus agenti yo'q bosqichlar (masalan, sayt dizayni) hozircha faqat AI maslahati sifatida bajariladi — hisobotda shunday yoziladi.",
+  },
   aihub: {
     title: "AI provayder qanday ulanadi?",
     steps: [

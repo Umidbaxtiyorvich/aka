@@ -337,3 +337,22 @@ def test_ai_provider_center_router_and_memory_import(server, page, core, tmp_pat
     page.wait_for_selector("#mimsg2 .ok")
     assert any("SQLite" in m["content"] and m["source"] == "import:chatgpt" for m in core.memory.list("decision"))
     assert not page.errors, page.errors
+
+
+def test_mission_control_end_to_end(server, page, core):
+    page.goto(server + "#mission")
+    page.fill("#mgoal", "fayllarni ko'rsat keyin test")
+    page.click("#mgo")
+    page.wait_for_selector("#mdet .pill.ok:has-text('Bajarildi')", timeout=30000)
+    m = core.missions.list()[0]
+    assert m["status"] == "completed" and m["progress"] == 100
+    page.wait_for_selector("#mdet:has-text('Hisobot')")
+    page.fill("#mgoal", "papkada bajar `mkdir hisobot`")
+    page.click("#mgo")
+    page.wait_for_selector("#mdet [data-ma=start]")
+    page.click("#mdet [data-ma=start]")
+    page.wait_for_selector("#mdet:has-text('Tasdiq kutmoqda')", timeout=30000)
+    assert core.approvals.list("pending")
+    page.goto(server + "#agentcmd")
+    page.wait_for_selector("td:has-text('computer')")
+    assert not page.errors, page.errors

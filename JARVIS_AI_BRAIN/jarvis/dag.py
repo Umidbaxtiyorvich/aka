@@ -10,6 +10,9 @@
 * Xato: unga bog'liq vazifalar 'blocked' bo'ladi, mustaqil tarmoqlar davom etadi.
 * Bekor qilish: yangi vazifalar boshlanmaydi; ishlayotganlar tugaydi, lekin ularga bog'liqlar boshlanmaydi.
 * Tasdiq kutayotgan vazifa: bog'liqlari kutadi; tasdiq bajarilgach run davom ettiriladi.
+* Ishonchlilik (Mission Engine uchun): natija tekshiruvi (verifier), qayta urinish (faqat idempotent agentlar —
+  tashqi ta'sirli amal ikki marta bajarilmaydi), urinishlar tugasa — dead-letter; pauza; har tugagan vazifa —
+  checkpoint (bazada). Qayta ishga tushganda: 'running' qolgan idempotent vazifalar qaytadan, qolganlari dead-letter.
 """
 from __future__ import annotations
 
@@ -71,10 +74,17 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+NODE_COLUMNS = {"attempts": "INTEGER NOT NULL DEFAULT 0", "max_attempts": "INTEGER NOT NULL DEFAULT 2", "verified": "INTEGER",
+                "verify_note": "TEXT", "dead_letter": "INTEGER NOT NULL DEFAULT 0"}
+
+
 class TaskGraph:
     def __init__(self, core):
         self.core = core
         core.db.conn.executescript(SCHEMA)
+        core.db.ensure_columns("dag_nodes", NODE_COLUMNS)
+        core.db.ensure_columns("dag_runs", {"stop_reason": "TEXT"})
+        self.verifier = None          # callable(node, task) -> (ok: bool, note: str); Mission Engine o'rnatadi
 
     # --- yaratish ---
     def create(self, goal: str, nodes: list[dict]) -> dict:
@@ -147,6 +157,38 @@ class TaskGraph:
         self.core.audit.log("user", f"Vazifalar grafi bekor qilindi: dag#{rid}", target=f"dag#{rid}", risk="B", approval_status="user_action")
         return self.get(rid)
 
+    def pause(self, rid: int, reason: str = "foydalanuvchi to'xtatdi") -> dict:
+        self.get(rid)
+        self.core.db.execute("UPDATE dag_runs SET status='paused', stop_reason=? WHERE id=? AND status IN ('pending','running')", (reason, rid))
+        return self.get(rid)
+
+    def retry_node(self, rid: int, key: str) -> dict:
+        """Dead-letter yoki xato vazifani foydalanuvchi qo'lda qayta navbatga qo'yadi (bog'liqlari ham qayta ochiladi)."""
+        n = self.core.db.one("SELECT * FROM dag_nodes WHERE run_id=? AND key=?", (rid, key))
+        if not n or n["status"] not in ("failed", "blocked", "cancelled"):
+            raise DagError("Faqat bajarilmagan vazifani qayta urinish mumkin")
+        self._set(n["id"], status="pending", error=None, dead_letter=0, attempts=0, finished_at=None)
+        self.core.db.execute("UPDATE dag_nodes SET status='pending', error=NULL WHERE run_id=? AND status IN ('blocked','cancelled')", (rid,))
+        self.core.db.execute("UPDATE dag_runs SET status='pending', stop_reason=NULL, finished_at=NULL WHERE id=?", (rid,))
+        self.core.audit.log("user", f"Vazifa qayta navbatga: dag#{rid}/{key}", target=f"dag#{rid}", risk="B", approval_status="user_action")
+        return self.get(rid)
+
+    def recover(self) -> list[int]:
+        """Qayta ishga tushgandan keyin: uzilib qolgan run'lar 'paused', vazifalar xavfsiz holatga qaytariladi."""
+        out = []
+        for r in self.core.db.query("SELECT id FROM dag_runs WHERE status='running'"):
+            for n in self.nodes(r["id"]):
+                if n["status"] != "running":
+                    continue
+                if n["agent"] in IDEMPOTENT:
+                    self._set(n["id"], status="pending", error="qayta ishga tushirishda uzilgan — qayta bajariladi")
+                else:
+                    self._set(n["id"], status="failed", dead_letter=1, finished_at=_now(),
+                              error="Uzilib qoldi. Tashqi ta'sir ikki marta bo'lmasligi uchun avtomatik takrorlanmadi — tekshirib, qo'lda qayta urining.")
+            self.core.db.execute("UPDATE dag_runs SET status='paused', stop_reason='JARVIS qayta ishga tushdi' WHERE id=?", (r["id"],))
+            out.append(r["id"])
+        return out
+
     def safe_parallel(self, requested: int | None = None) -> int:
         try:
             import psutil
@@ -189,17 +231,24 @@ class TaskGraph:
             self.core.kgraph.link(("dag", n["run_id"], None), "has_task", ("task", t["id"], t["title"]))
         return t
 
-    def run(self, rid: int, max_parallel: int | None = None) -> dict:
+    def run(self, rid: int, max_parallel: int | None = None, stop_check=None) -> dict:
+        """stop_check() -> sabab | None: masalan vaqt yoki xarajat limiti (Mission Engine) — run pauzaga o'tadi."""
         run = self.get(rid)
         if run["status"] == "cancelled":
             raise DagError("Graf bekor qilingan")
         par = self.safe_parallel(max_parallel)
-        self.core.db.execute("UPDATE dag_runs SET status='running', max_parallel=? WHERE id=?", (par, rid))
+        self.core.db.execute("UPDATE dag_runs SET status='running', max_parallel=?, stop_reason=NULL WHERE id=?", (par, rid))
         self._refresh_waiting(rid)
         running: dict = {}
         with ThreadPoolExecutor(max_workers=par) as pool:
             while True:
-                cancelled = self.core.db.one("SELECT status FROM dag_runs WHERE id=?", (rid,))["status"] == "cancelled"
+                rstat = self.core.db.one("SELECT status FROM dag_runs WHERE id=?", (rid,))["status"]
+                if rstat == "running" and stop_check:
+                    why = stop_check()
+                    if why:
+                        self.core.db.execute("UPDATE dag_runs SET status='paused', stop_reason=? WHERE id=?", (why, rid))
+                        rstat = "paused"
+                cancelled = rstat in ("cancelled", "paused")      # pauza: yangi vazifa boshlanmaydi, ishlayotganlari tugaydi
                 nodes = self.nodes(rid)
                 by_key = {n["key"]: n for n in nodes}
                 started = False
@@ -237,10 +286,27 @@ class TaskGraph:
                 done, _ = wait(list(running), return_when=FIRST_COMPLETED)
                 for f in done:
                     n = running.pop(f)
+                    attempts = (n.get("attempts") or 0) + 1
                     try:
                         t = f.result()
                     except Exception as e:
-                        self._set(n["id"], status="failed", error=str(e)[:500], finished_at=_now())
+                        t = {"id": None, "status": "failed", "result": None, "error": f"{type(e).__name__}: {e}"[:500]}
+                    if t["status"] == "done" and self.verifier:
+                        try:
+                            ok, note = self.verifier(n, t)
+                        except Exception as e:
+                            ok, note = False, f"tekshiruv xatosi: {e}"
+                        self._set(n["id"], verified=int(ok), verify_note=note[:300])
+                        if not ok:
+                            t = t | {"status": "failed", "error": f"Natija tekshiruvdan o'tmadi: {note}"}
+                    if t["status"] == "failed":
+                        can_retry = attempts < (n.get("max_attempts") or 1) and n["agent"] in IDEMPOTENT
+                        if can_retry:
+                            self._set(n["id"], status="pending", attempts=attempts, error=f"{attempts}-urinish: {(t.get('error') or '')[:300]} — qayta urinilmoqda",
+                                      task_id=t["id"])
+                            continue
+                        self._set(n["id"], status="failed", attempts=attempts, dead_letter=1, result=t.get("result"), error=(t.get("error") or "xato")[:500],
+                                  task_id=t["id"], finished_at=_now())
                         continue
                     approval_id = None
                     if t["status"] == "waiting_approval":
@@ -249,12 +315,15 @@ class TaskGraph:
                         except (TypeError, ValueError, AttributeError):
                             approval_id = None
                     self._set(n["id"], status={"done": "done", "failed": "failed", "waiting_approval": "waiting_approval"}.get(t["status"], "failed"),
-                              result=t["result"], error=t["error"], task_id=t["id"], approval_id=approval_id,
+                              result=t["result"], error=t["error"], task_id=t["id"], approval_id=approval_id, attempts=attempts,
                               finished_at=_now() if t["status"] != "waiting_approval" else None)
         nodes = self.nodes(rid)
         sts = {n["status"] for n in nodes}
-        if self.core.db.one("SELECT status FROM dag_runs WHERE id=?", (rid,))["status"] == "cancelled":
+        rstat = self.core.db.one("SELECT status FROM dag_runs WHERE id=?", (rid,))["status"]
+        if rstat == "cancelled":
             final = "cancelled"
+        elif rstat == "paused" and "pending" in sts:
+            final = "paused"
         elif sts <= DONE:
             final = "done"
         elif "waiting_approval" in sts:
@@ -264,7 +333,7 @@ class TaskGraph:
         else:
             final = "failed"
         self.core.db.execute("UPDATE dag_runs SET status=?, finished_at=? WHERE id=?",
-                             (final, _now() if final != "waiting_approval" else None, rid))
+                             (final, _now() if final not in ("waiting_approval", "paused") else None, rid))
         if final in ("failed", "partial"):
             self.core.notifier.notify(f"Vazifalar grafi #{rid}: {final}", run["goal"][:150], severity="warning", category="task")
         return self.get(rid)

@@ -31,6 +31,7 @@ from .instagram_mcp import MCPError
 from .integrations import IntegrationError
 from .integrations.vault import VaultError
 from .ai_hub import HubError
+from .mission import MissionError
 from .memory_import import MAX_UPLOAD as MI_MAX, ImportError_ as MIError
 from .voice_pro import VoiceProError
 from .kgraph import KGError
@@ -48,11 +49,11 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError)
+               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError, MissionError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
-            "ai_providers", "ai_task_routes", "paid_ai_allowed", "ai_strategy", "ai_allowed_providers", "ai_confirm_paid", "ai_max_request_cost",
+            "ai_providers", "ai_task_routes", "paid_ai_allowed", "ai_strategy", "ai_allowed_providers", "ai_confirm_paid", "ai_max_request_cost", "mission_auto_resume",
             "ai_custom_catalog", "voice_tts_engine", "voice_stt_engine", "voice_gender", "voice_rate",
             "voice_volume", "voice_stt_language", "voice_silence_ms", "voice_mic_sensitivity", "azure_speech_region", "currency", "daily_cost_limit", "monthly_cost_limit", "daily_request_limit",
             "cost_warn_percent", "medium_auto_actions", "sandbox_backend", "sandbox_timeout_sec", "sandbox_memory_mb",
@@ -155,6 +156,7 @@ class SettingsIn(BaseModel):
     ai_allowed_providers: list[str] | None = None
     ai_confirm_paid: bool | None = None
     ai_max_request_cost: float | None = None
+    mission_auto_resume: bool | None = None
     ai_custom_catalog: dict | None = None
     voice_tts_engine: str | None = None
     voice_stt_engine: str | None = None
@@ -381,6 +383,19 @@ class ImportDecideIn(BaseModel):
 class ImportEditIn(BaseModel):
     content: str | None = None
     category: str | None = None
+
+
+class MissionIn(BaseModel):
+    goal: str
+    use_ai: bool | None = None
+    max_minutes: int = 60
+    max_cost: float = 0.0
+    max_attempts: int = 2
+    auto_start: bool = False
+
+
+class MissionAnswerIn(BaseModel):
+    text: str = ""
 
 
 class AskIn(BaseModel):
@@ -1102,6 +1117,41 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def mi_delete(iid: int, purge: bool = False):
         return guard(C().memory_import.delete, iid, purge)
 
+    # Mission Engine (markaziy avtonom miya) va Permission Manager
+    @app.post("/api/missions")
+    def mission_create(body: MissionIn):
+        return guard(C().missions.create, body.goal, use_ai=body.use_ai, max_minutes=body.max_minutes, max_cost=body.max_cost,
+                     max_attempts=body.max_attempts, auto_start=body.auto_start)
+
+    @app.get("/api/missions")
+    def mission_list():
+        return C().missions.list()
+
+    @app.get("/api/missions/lessons")
+    def mission_lessons(status: str = "pending"):
+        return C().missions.lessons(status)
+
+    @app.post("/api/missions/lessons/{lid}")
+    def mission_lesson_decide(lid: int, accept: bool):
+        return guard(C().missions.decide_lesson, lid, accept)
+
+    @app.get("/api/missions/{mid}")
+    def mission_get(mid: int):
+        return guard(C().missions.get, mid)
+
+    @app.post("/api/missions/{mid}/{action}")
+    def mission_action(mid: int, action: str, key: str = "", body: MissionAnswerIn | None = None):
+        m = C().missions
+        acts = {"start": lambda: m.start(mid), "pause": lambda: m.pause(mid), "cancel": lambda: m.cancel(mid),
+                "retry": lambda: m.retry_step(mid, key), "answer": lambda: m.answer(mid, body.text if body else "")}
+        if action not in acts:
+            raise HTTPException(404, "Noma'lum amal")
+        return guard(acts[action])
+
+    @app.get("/api/permissions/agents")
+    def perm_agents():
+        return C().permissions.profiles()
+
     @app.get("/api/ai/presets")
     def ai_presets():
         from .router import PROVIDER_PRESETS, TASK_TYPES
@@ -1809,6 +1859,7 @@ def main():
     app.state.core.backup.start_auto()        # jadval bo'yicha avtomatik zaxira (backup_interval_hours)
     app.state.core.start_scheduler()          # rejalashtirilgan Instagram postlari → tasdiq so'rovi
     app.state.core.pos_sync.start()           # POS hisobotlarini jadval bo'yicha o'qish (yoqilgan bo'lsa)
+    app.state.core.missions.recover(resume=app.state.core.settings.mission_auto_resume)   # uzilgan missiyalar — checkpointdan
     core = app.state.core
     if core.settings.telegram_autostart and core.telegram.token():
         try:

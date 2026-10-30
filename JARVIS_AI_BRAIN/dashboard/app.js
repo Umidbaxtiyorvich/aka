@@ -56,6 +56,8 @@ const SECTIONS = [
   ["neural", "Neural Activity", renderNeural],
   ["agentmap", "Agent Connections", (v) => renderBrainHub(v, "graph", ["agents", "tasks", "skills", "apis"])],
   ["projmap", "Projects Map", (v) => renderBrainHub(v, "graph", ["projects", "memories", "files", "decisions", "tasks"])],
+  ["mission", "🎯 Mission Control", renderMissionControl],
+  ["agentcmd", "🤝 Agent Command", renderAgentCommand],
   ["superbrain", "⚡ Super Brain Control", renderSuperBrain],
   ["aihub", "🤖 AI Provider Center", renderProviderCenter],
   ["smartrouter", "🚦 Smart AI Router", renderSmartRouter],

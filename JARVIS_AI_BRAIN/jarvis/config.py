@@ -81,6 +81,7 @@ class Settings:
     ai_strategy: str = "balanced"                            # balanced | cheapest | quality | speed | free_only
     ai_allowed_providers: list[str] = field(default_factory=list)   # bo'sh = hammasi
     ai_confirm_paid: bool = False                            # pullik modeldan oldin foydalanuvchi tasdig'i
+    mission_auto_resume: bool = True                         # qayta ishga tushganda uzilgan missiyalarni checkpointdan davom ettirish
     ai_max_request_cost: float = 0.0                         # bir so'rov uchun maksimal xarajat (0 = cheklanmagan, kunlik/oylik limit baribir)
     # Resource & Cost Guard (pullik AI standart holatda o'chiq)
     paid_ai_allowed: bool = False

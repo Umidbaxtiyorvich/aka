@@ -14,12 +14,13 @@ from .db import Database
 from .security import contains_secret
 
 KINDS = {"short_term", "long_term", "working", "episodic", "semantic", "project", "technical", "knowledge", "task",
-         "preference", "decision", "conversation"}
+         "preference", "decision", "conversation", "procedural"}
 # Memory Explorer toifalari (preference = foydalanuvchi o'zi kiritgan/tasdiqlagan afzalliklar)
 CATEGORY_LABELS = {"short_term": "Short-term Memory", "long_term": "Long-term Memory", "working": "Working Memory",
                    "episodic": "Episodic Memory", "semantic": "Semantic Memory", "project": "Project Memory",
                    "technical": "Technical Memory", "preference": "User-approved Preferences", "knowledge": "Knowledge",
-                   "task": "Task Memory", "decision": "Decision Memory", "conversation": "Conversation Memory"}
+                   "task": "Task Memory", "decision": "Decision Memory", "conversation": "Conversation Memory",
+                   "procedural": "Procedural Memory (tajriba va usullar)"}
 INFO_TYPES = {"fact": "Fakt", "assumption": "Taxmin", "model_inference": "Model xulosasi", "user_given": "Foydalanuvchi ma'lumoti"}
 STALE_DAYS = {"fact": 365, "model_inference": 90, "assumption": 30}
 PROVENANCE_COLUMNS = {"info_type": "TEXT NOT NULL DEFAULT 'user_given'", "verified": "INTEGER NOT NULL DEFAULT 0",

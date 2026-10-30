@@ -143,7 +143,7 @@ async function renderSmartRouter(v) {
         <div class="kv"><span>Fallback</span><b>${last.fallbacks.length ? esc(last.fallbacks.map((f) => f.provider).join(" → ")) : "yo'q"}</b></div><div class="kv"><span>Vaqt</span><b>${last.duration_ms} ms</b></div>`
       : '<p class="muted">Hali AI so\'rovi bo\'lmagan.</p>';
   };
-  drawLive(); timer = setInterval(drawLive, 1500);
+  drawLive(); clearInterval(timer); timer = setInterval(drawLive, 1500);
   $("#srsave").onclick = async () => {
     try { await post("/api/settings", { ai_strategy: $("#srs").value, paid_ai_allowed: $("#srpaid").checked, ai_confirm_paid: $("#srconf").checked,
       daily_cost_limit: +$("#srday").value || 0, monthly_cost_limit: +$("#srmon").value || 0, ai_max_request_cost: +$("#srreq").value || 0,

@@ -123,6 +123,10 @@ class JarvisCore:
         self.brain_core = BrainCore(self)
         from .memory_import import MemoryImporter
         self.memory_import = MemoryImporter(self)
+        from .mission import MissionEngine
+        from .permissions import PermissionManager
+        self.permissions = PermissionManager(self)
+        self.missions = MissionEngine(self)
         self.approvals.on_pending = self.telegram.on_approval_pending
         self.approvals.events = self.events
         self._health_state: dict = {}
@@ -258,6 +262,19 @@ class JarvisCore:
             intent, conf = intent_mod.detect(text)
         norm = intent_mod.normalize(text)
         out = {"intent": intent, "confidence": conf}
+        mm = re.match(r"(?is)^\s*(?:jarvis[,\s]+)?(?:missiya|mission)\s*[:\-]\s*(.+)$", text)
+        if mm:                                           # Mission Engine: reja → (xavfsiz bo'lsa) avtomatik boshlash
+            m = self.missions.create(mm.group(1), auto_start=True)
+            risky = [r for r in m["risks"] or [] if r.get("risk") != "LOW"]
+            lines = [f"Missiya #{m['id']} yaratildi — {len(m['graph']['nodes'])} bosqich ({m['plan_note']})."]
+            lines += [f"  {n['key']}: {n['title']} → {n['agent']}" for n in m["graph"]["nodes"]]
+            if m["questions"]:
+                lines.append("Savollar: " + " ".join(m["questions"]))
+            elif risky:
+                lines.append(f"{len(risky)} ta bosqich tasdiq talab qiladi — Mission Control'da rejani ko'rib «Boshlash»ni bosing.")
+            else:
+                lines.append("Barcha bosqichlar xavfsiz (LOW) — avtomatik boshlandi. Holat: Mission Control.")
+            return out | {"text": "\n".join(lines), "mission_id": m["id"], "intent": "mission"}
         if intent not in ("memory_save", "memory_query"):
             brain = self.brain_core.think(text)          # POS / biznes / ulanishlar savollari — Brain Core (manba bilan)
             if brain:
