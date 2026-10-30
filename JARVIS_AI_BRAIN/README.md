@@ -92,7 +92,7 @@ irm https://raw.githubusercontent.com/Umidbaxtiyorvich/aka/ccr-f1c0e6d1-uu59k9/J
 ```
 
 O'rnatuvchi Python, JARVIS, brauzer agenti, FFmpeg, o'zbekcha ovoz va Ollama + AI modellarini o'rnatadi (har biridan oldin so'raydi),
-ish stolida **JARVIS** yorlig'ini yaratadi va dasturni ochadi. Qayta ishga tushirsangiz — yangilanadi, xotira saqlanadi.
+ish stolida **JARVIS** belgisini (`JARVIS.exe`) yaratadi va dasturni ochadi. Keyin terminal kerak emas: belgini bossangiz, JARVIS (va Ollama) o'zi yonadi va alohida oynada ochiladi. Qayta ishga tushirsangiz — yangilanadi, xotira saqlanadi.
 
 ## Windows 11'da qo'lda ishga tushirish
 

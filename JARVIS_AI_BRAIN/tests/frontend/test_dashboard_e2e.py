@@ -120,3 +120,38 @@ def test_login_flow(server, page, core):
     page.wait_for_selector("#login", state="detached")
     errs = [e for e in page.errors if "401" not in e]      # kirishdan oldingi 401 javoblar kutilgan
     assert not errs, errs
+
+
+def test_real_keyboard_typing_works_everywhere(server, page):
+    """fill() klaviatura hodisalarini chetlab o'tadi — bu test haqiqiy tugma bosishlari bilan yozadi."""
+    page.goto(server + "#chat")
+    page.wait_for_selector("#msg")
+    page.click("#msg")
+    page.keyboard.type("salom JARVIS")
+    assert page.input_value("#msg") == "salom JARVIS"
+    page.keyboard.press("Enter")
+    page.wait_for_selector(".msg.user >> text=salom JARVIS")
+    # Har bir bo'limdagi birinchi matn maydoniga yozib ko'rish
+    ids = page.evaluate("SECTIONS.map(s => s[0])")
+    blocked = []
+    for sid in ids:
+        page.goto(server + "#" + sid)
+        page.wait_for_timeout(250)
+        inp = page.locator("#view input[type=text]:visible, #view input:not([type]):visible, #view textarea:visible").first
+        if inp.count() == 0:
+            continue
+        inp.click()
+        inp.press("Control+End")
+        before = inp.input_value()
+        page.keyboard.type("ab")
+        if inp.input_value() != before + "ab":
+            blocked.append(sid)
+    assert not blocked, f"Yozib bo'lmaydigan bo'limlar: {blocked}"
+
+
+def test_guides_and_secret_form(server, page):
+    page.goto(server + "#telegram")
+    page.wait_for_selector(".guide[open] .gsec input[type=password]")
+    assert "BotFather" in page.text_content(".guide")
+    page.goto(server + "#pos")
+    page.wait_for_selector(".guide >> text=YesPOS")

@@ -1,50 +1,118 @@
-:root{--bg:#060b14;--panel:#0c1526;--line:#16304f;--text:#d7e7ff;--muted:#7d93b5;--neon:#00b7ff;--neon2:#3cf2ff;--ok:#2fe39a;--warn:#ffc35a;--bad:#ff5b7a}
+/* JARVIS — och (oq) zamonaviy mavzu. Ranglar faqat shu o'zgaruvchilardan olinadi. */
+:root{
+  --bg:#f5f7fb;--panel:#ffffff;--panel2:#f8fafd;--line:#e6eaf2;--line2:#d9dfea;
+  --text:#0f172a;--muted:#64748b;--soft:#94a3b8;
+  --acc:#4f46e5;--acc2:#0ea5e9;--acc-soft:#eef2ff;--acc-ring:#c7d2fe;
+  --ok:#059669;--ok-soft:#ecfdf5;--warn:#b45309;--warn-soft:#fffbeb;--bad:#dc2626;--bad-soft:#fef2f2;
+  --r:14px;--r-sm:10px;
+  --sh:0 1px 2px rgba(15,23,42,.04),0 4px 16px rgba(15,23,42,.06);
+  --sh-lg:0 10px 40px rgba(15,23,42,.12);
+  --neon:var(--acc);--neon2:var(--acc)
+}
 *{box-sizing:border-box}
-body{margin:0;display:flex;min-height:100vh;background:radial-gradient(circle at 70% -10%,#0a2647 0,var(--bg) 55%);color:var(--text);font:14px/1.5 "Segoe UI",system-ui,sans-serif}
-aside{width:230px;background:#050a13cc;border-right:1px solid var(--line);padding:16px 10px;position:sticky;top:0;height:100vh;overflow:auto}
-.brand{font-weight:700;letter-spacing:3px;color:var(--neon2);text-shadow:0 0 12px var(--neon);padding:4px 10px 16px;font-size:18px}
-.brand small{display:block;font-size:10px;letter-spacing:5px;color:var(--muted)}
-nav a{display:flex;justify-content:space-between;padding:7px 10px;border-radius:8px;color:var(--muted);text-decoration:none;cursor:pointer}
-nav a:hover,nav a.active{background:#0b2240;color:var(--text);box-shadow:inset 3px 0 0 var(--neon)}
-nav a .tag{font-size:10px;color:#4d6584}
-main{flex:1;padding:20px 26px;min-width:0}
-header{display:flex;align-items:center;justify-content:space-between}
-h1{margin:0 0 16px;font-weight:600;color:#fff}
-h3{margin:0 0 10px;color:var(--neon2);font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:1px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
-.card{background:linear-gradient(180deg,#0e1a30,#0a1322);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 0 0 1px #00b7ff08,0 8px 24px #0006}
-.big{font-size:26px;font-weight:700;color:#fff}
+html{scroll-behavior:smooth}
+body{margin:0;display:flex;min-height:100vh;background:var(--bg);color:var(--text);
+  font:14px/1.55 "Segoe UI Variable Text","Segoe UI",Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+::selection{background:var(--acc-ring)}
+
+/* --- yon menyu --- */
+aside{width:248px;flex:none;background:rgba(255,255,255,.85);backdrop-filter:blur(12px);border-right:1px solid var(--line);
+  padding:18px 12px;position:sticky;top:0;height:100vh;overflow:auto}
+aside::-webkit-scrollbar{width:6px}aside::-webkit-scrollbar-thumb{background:var(--line2);border-radius:9px}
+.brand{display:flex;flex-direction:column;font-weight:800;letter-spacing:2px;font-size:17px;padding:4px 12px 18px;
+  background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.brand small{font-size:10px;letter-spacing:4px;font-weight:600;color:var(--soft);-webkit-text-fill-color:var(--soft)}
+nav a{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:8px 12px;margin:1px 0;border-radius:var(--r-sm);
+  color:#334155;text-decoration:none;cursor:pointer;font-weight:500;transition:background .15s,color .15s}
+nav a:hover{background:var(--panel2);color:var(--text)}
+nav a.active{background:var(--acc-soft);color:var(--acc);font-weight:600}
+nav a .tag{font-size:10px;color:var(--soft);font-weight:500}
+
+/* --- asosiy qism --- */
+main{flex:1;padding:26px 32px 40px;min-width:0;max-width:1400px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+h1{margin:0;font-size:24px;font-weight:700;letter-spacing:-.02em;color:var(--text)}
+h3{margin:0 0 12px;color:var(--text);font-weight:650;font-size:15px;letter-spacing:-.01em}
+h4{margin:12px 0 6px;font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;box-shadow:var(--sh);transition:box-shadow .2s}
+.card:hover{box-shadow:0 1px 2px rgba(15,23,42,.05),0 8px 24px rgba(15,23,42,.08)}
+.big{font-size:28px;font-weight:750;letter-spacing:-.02em;color:var(--text)}
 .muted{color:var(--muted)}
-.pill{display:inline-block;padding:2px 10px;border-radius:99px;border:1px solid var(--line);font-size:12px}
+code{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:12.5px}
+
+/* --- holat belgilari --- */
+.pill{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:99px;border:1px solid var(--line);
+  background:var(--panel2);font-size:12px;font-weight:600;color:var(--muted)}
 .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
-.pill.ok{border-color:#1f6b52} .pill.warn{border-color:#6b5520} .pill.bad{border-color:#6b2030}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{text-align:left;padding:7px 8px;border-bottom:1px solid #12263f;vertical-align:top}
-th{color:var(--muted);font-weight:500}
-input,textarea,select{background:#081120;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px;font:inherit;width:100%}
-textarea{min-height:80px}
-button{background:#0b2a4d;color:#e6f6ff;border:1px solid var(--neon);border-radius:8px;padding:7px 14px;cursor:pointer;font:inherit}
-button:hover{box-shadow:0 0 12px #00b7ff66}
-button.danger{border-color:var(--bad);background:#3a0f1b}
-button.ghost{border-color:var(--line);background:transparent}
-.row{display:flex;gap:8px;align-items:center;margin-bottom:10px}
-.chat{height:58vh;overflow:auto;padding:10px;background:#050c18;border:1px solid var(--line);border-radius:12px;margin-bottom:10px}
-.msg{max-width:78%;padding:8px 12px;border-radius:12px;margin:6px 0;white-space:pre-wrap}
-.msg.user{margin-left:auto;background:#0b2f57}
-.msg.assistant{background:#101d33;border:1px solid var(--line)}
-pre{background:#050c18;border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto;max-height:340px;white-space:pre-wrap}
-.office{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
-.room{border:1px solid var(--line);border-radius:12px;padding:12px;background:#08121f;position:relative}
-.room .dot{width:9px;height:9px;border-radius:50%;position:absolute;top:14px;right:14px;background:#3b4b63}
-.room.idle .dot{background:var(--ok);box-shadow:0 0 8px var(--ok)}
-.room.running .dot{background:var(--neon);box-shadow:0 0 10px var(--neon);animation:p 1s infinite}
-.room.error .dot{background:var(--bad)}
-.room.planned{opacity:.5}
-@keyframes p{50%{opacity:.3}}
-.warnbox{border:1px solid #6b5520;background:#2a2008;padding:10px;border-radius:8px;margin-bottom:10px}
-@media (max-width:760px){body{flex-direction:column}aside{width:100%;height:auto;position:static}main{padding:14px 16px}}
-a{color:var(--neon2)}
-label{display:block;margin-top:6px}
+.pill.ok{background:var(--ok-soft);border-color:#a7f3d0}
+.pill.warn{background:var(--warn-soft);border-color:#fde68a}
+.pill.bad{background:var(--bad-soft);border-color:#fecaca}
+
+/* --- jadval --- */
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px;margin-top:6px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em;background:var(--panel2)}
+th:first-child{border-top-left-radius:var(--r-sm)} th:last-child{border-top-right-radius:var(--r-sm)}
+tr:hover td{background:#fafbff}
+
+/* --- forma elementlari --- */
+input,textarea,select{background:var(--panel);border:1px solid var(--line2);color:var(--text);border-radius:var(--r-sm);
+  padding:9px 12px;font:inherit;width:100%;transition:border-color .15s,box-shadow .15s;outline:none}
+input:focus,textarea:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 4px var(--acc-soft)}
+input::placeholder,textarea::placeholder{color:var(--soft)}
+input[type=checkbox],input[type=radio]{width:auto;accent-color:var(--acc)}
+textarea{min-height:80px;resize:vertical}
+button{background:linear-gradient(180deg,#5b54ea,var(--acc));color:#fff;border:1px solid var(--acc);border-radius:var(--r-sm);
+  padding:8px 16px;cursor:pointer;font:inherit;font-weight:600;white-space:nowrap;transition:transform .05s,box-shadow .15s,filter .15s;
+  box-shadow:0 1px 2px rgba(79,70,229,.25)}
+button:hover{filter:brightness(1.06);box-shadow:0 4px 14px rgba(79,70,229,.3)}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.55;cursor:not-allowed}
+button.danger{background:var(--panel);color:var(--bad);border-color:#fecaca;box-shadow:none}
+button.danger:hover{background:var(--bad-soft)}
+button.ghost{background:var(--panel);color:#334155;border-color:var(--line2);box-shadow:none}
+button.ghost:hover{background:var(--panel2)}
+.row{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.row > input,.row > select,.row > textarea{flex:1;min-width:160px;width:auto}
+label{display:block;margin-top:8px;font-weight:500;color:#334155}
 .row label{margin-top:0}
+details summary{cursor:pointer;user-select:none}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+
+/* --- chat --- */
+.chat{height:60vh;overflow:auto;padding:16px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);margin-bottom:12px}
+.msg{max-width:78%;padding:10px 14px;border-radius:16px;margin:8px 0;white-space:pre-wrap;line-height:1.5}
+.msg.user{margin-left:auto;background:linear-gradient(135deg,var(--acc),#6366f1);color:#fff;border-bottom-right-radius:6px}
+.msg.assistant{background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:6px;box-shadow:var(--sh)}
+pre{background:#0f172a;color:#e2e8f0;border-radius:var(--r-sm);padding:12px 14px;overflow:auto;max-height:360px;white-space:pre-wrap;font-size:12.5px}
+
+/* --- virtual ofis --- */
+.office{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.room{border:1px solid var(--line);border-radius:var(--r);padding:14px;background:var(--panel);position:relative;box-shadow:var(--sh)}
+.room .dot{width:10px;height:10px;border-radius:50%;position:absolute;top:16px;right:16px;background:var(--line2)}
+.room.idle .dot{background:var(--ok);box-shadow:0 0 0 4px var(--ok-soft)}
+.room.running .dot{background:var(--acc);box-shadow:0 0 0 4px var(--acc-soft);animation:p 1s infinite}
+.room.error .dot{background:var(--bad);box-shadow:0 0 0 4px var(--bad-soft)}
+.room.planned{opacity:.55}
+@keyframes p{50%{opacity:.35}}
+.warnbox{border:1px solid #fde68a;background:var(--warn-soft);color:#78350f;padding:12px 14px;border-radius:var(--r-sm);margin-bottom:12px}
+
+/* --- ulanish yo'riqnomalari --- */
+.guide{border:1px solid var(--acc-ring);background:linear-gradient(180deg,#f8f9ff,#fff);border-radius:var(--r);padding:14px 16px;margin:10px 0 14px}
+.guide > summary{font-weight:650;color:var(--acc);list-style:none;display:flex;align-items:center;gap:8px}
+.guide > summary::before{content:"?";display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#fff;font-size:12px}
+.guide ol{margin:10px 0 4px;padding-left:20px}.guide li{margin:5px 0}
+.guide .note{font-size:12.5px;color:var(--muted);margin-top:6px}
+
+/* --- kirish oynasi --- */
 #mode:empty{display:none}
-#login{position:fixed;inset:0;background:#060b14f2;display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}
+#login{position:fixed;inset:0;background:radial-gradient(circle at 20% 10%,#e0e7ff 0,transparent 45%),radial-gradient(circle at 90% 90%,#e0f2fe 0,transparent 40%),var(--bg);
+  display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}
+#login .card{box-shadow:var(--sh-lg);padding:28px}
+#login input{margin-top:6px;font-size:16px;padding:11px 14px}
+
+/* SVG graflar */
+svg text{font-family:inherit}
+
+@media (max-width:760px){body{flex-direction:column}aside{width:100%;height:auto;position:static}main{padding:16px}}

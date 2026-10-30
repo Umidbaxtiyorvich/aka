@@ -128,3 +128,16 @@ jobs:
           $r = Invoke-RestMethod http://127.0.0.1:8765/api/auth/status
           "pythonw server OK: $($r | ConvertTo-Json -Compress)"
           Get-Process pythonw -ErrorAction SilentlyContinue | Stop-Process -Force
+      - name: JARVIS.exe is built and starts the server
+        shell: powershell
+        run: |
+          $d = "$env:RUNNER_TEMP\jarvis"
+          if (-not (Test-Path "$d\JARVIS.exe")) { throw "JARVIS.exe yaratilmadi" }
+          $p = Start-Process "$d\JARVIS.exe" -ArgumentList "--no-browser" -PassThru -Wait
+          if ($p.ExitCode -ne 0) { Get-Content "$d\data\logs\server.log" -ErrorAction SilentlyContinue; throw "JARVIS.exe kodi $($p.ExitCode)" }
+          $r = Invoke-RestMethod http://127.0.0.1:8765/api/auth/status
+          "JARVIS.exe OK: $($r | ConvertTo-Json -Compress)"
+          # Ikkinchi bosish: server ishlayapti — darhol qaytadi
+          $p2 = Start-Process "$d\JARVIS.exe" -ArgumentList "--no-browser" -PassThru -Wait
+          if ($p2.ExitCode -ne 0) { throw "ikkinchi ishga tushirish xato" }
+          Get-Process pythonw -ErrorAction SilentlyContinue | Stop-Process -Force

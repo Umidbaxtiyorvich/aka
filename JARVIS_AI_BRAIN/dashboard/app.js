@@ -102,7 +102,7 @@ async function show() {
   const sec = SECTIONS.find((s) => s[0] === id) || SECTIONS[0];
   document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.id === sec[0]));
   $("#title").textContent = sec[1];
-  try { await sec[2]($("#view")); } catch (e) { $("#view").innerHTML = `<div class="card bad">Xato: ${esc(e.message)}</div>`; }
+  try { await sec[2]($("#view")); attachGuide($("#view"), sec[0]); } catch (e) { $("#view").innerHTML = `<div class="card bad">Xato: ${esc(e.message)}</div>`; }
 }
 
 function planned(title, text) {
@@ -163,7 +163,7 @@ async function renderChat(v) {
     catch (e) { add("assistant", "Xato: " + e.message); }
   };
   $("#send").onclick = send;
-  $("#msg").onkeydown = (e) => e.key === "Enter" && send();
+  $("#msg").onkeydown = (e) => { if (e.key === "Enter") send(); };   // false qaytarmaslik kerak — aks holda yozib bo'lmaydi
 }
 
 async function renderMemory(v) {
@@ -375,7 +375,7 @@ async function renderSettings(v) {
       <label>POS sayti manzili</label><input id="pos" value="${esc(s.pos_site)}" placeholder="https://...">
       <label>POS konnektori</label><select id="posc"><option value="file_export">file_export (lokal fayl, tayyor)</option><option value="api">api (REST — pastda sozlang)</option><option value="browser">browser (sozlanmagan)</option></select>
       <label>Kam qolgan mahsulot chegarasi (min_stock bo'lmasa)</label><input id="low" type="number" value="${s.low_stock_threshold}">
-      <label>POS REST API sozlamasi (JSON, tokensiz — token: set_secret.py pos_api_token)</label><textarea id="posapi" style="min-height:70px">${esc(JSON.stringify(s.pos_api || {}, null, 1))}</textarea>
+      <label>POS REST API sozlamasi (JSON, tokensiz — token: POS ulanishi bo'limidagi yo'riqnomada kiritiladi)</label><textarea id="posapi" style="min-height:70px">${esc(JSON.stringify(s.pos_api || {}, null, 1))}</textarea>
       <label>Rasm generatori (Stable Diffusion WebUI --api)</label><input id="sdurl" value="${esc(s.image_gen_url || "")}" placeholder="http://127.0.0.1:7860">
       <label>Vision modeli (Ollama)</label><input id="vism" value="${esc(s.vision_model || "")}" placeholder="moondream">
       <label><input type="checkbox" id="pai" style="width:auto" ${s.planner_use_ai ? "checked" : ""}> Planner AI bilan bosqichlarga ajratsin (AI mavjud bo'lsa)</label>

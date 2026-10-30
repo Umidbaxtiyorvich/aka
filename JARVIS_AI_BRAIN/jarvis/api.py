@@ -48,7 +48,8 @@ EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "br
             "ai_providers", "paid_ai_allowed", "currency", "daily_cost_limit", "monthly_cost_limit", "daily_request_limit",
             "cost_warn_percent", "medium_auto_actions", "sandbox_backend", "sandbox_timeout_sec", "sandbox_memory_mb",
             "sandbox_max_retries", "backup_interval_hours", "backup_keep", "backup_max_total_mb", "backup_include_workspace",
-            "image_gen_url", "vision_model", "planner_use_ai", "session_hours", "pos_api", "pos_sync"}
+            "image_gen_url", "vision_model", "planner_use_ai", "session_hours", "pos_api", "pos_sync",
+            "instagram_accounts", "telephony_provider", "telephony_from", "telephony_account_sid", "telephony_cost_per_min"}
 PROVIDER_KINDS = {"ollama", "openai_compatible", "anthropic", "offline"}
 
 DASHBOARD = PROJECT_ROOT / "dashboard"
@@ -141,6 +142,11 @@ class SettingsIn(BaseModel):
     vision_model: str | None = None
     planner_use_ai: bool | None = None
     session_hours: float | None = None
+    instagram_accounts: list[dict] | None = None
+    telephony_provider: str | None = None
+    telephony_from: str | None = None
+    telephony_account_sid: str | None = None
+    telephony_cost_per_min: float | None = None
     pos_api: dict | None = None
     pos_sync: dict | None = None
 
@@ -239,6 +245,11 @@ class AppIn(BaseModel):
     name: str
     file: str | None = None
     reason: str = ""
+
+class SecretIn(BaseModel):
+    name: str
+    value: str = ""
+
 
 class FeatureIn(BaseModel):
     description: str
@@ -555,6 +566,14 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
                     raise HTTPException(400, "kind: auto, products, movements yoki payments")
             if float(ps.get("interval_hours", 6)) < 0.5:
                 raise HTTPException(400, "Oraliq kamida 0.5 soat")
+        if "instagram_accounts" in data:
+            import re as _re
+            for acc in data["instagram_accounts"]:
+                if not _re.fullmatch(r"[a-z0-9_]{1,40}", str(acc.get("name", ""))) or not _re.fullmatch(r"\d{5,25}", str(acc.get("ig_user_id", ""))):
+                    raise HTTPException(400, "Instagram akkaunti: name (kichik lotin harflar, raqam, _) va ig_user_id (faqat raqam) kerak")
+            data["instagram_accounts"] = [{"name": a["name"], "ig_user_id": str(a["ig_user_id"])} for a in data["instagram_accounts"]]
+        if data.get("telephony_provider") not in (None, "", "twilio"):
+            raise HTTPException(400, "telephony_provider: bo'sh yoki twilio")
         if "sandbox_backend" in data and data["sandbox_backend"] not in ("process", "docker"):
             raise HTTPException(400, "sandbox_backend: process yoki docker")
         if "ai_provider" in data and data["ai_provider"] not in ("offline", "ollama"):
@@ -1065,6 +1084,30 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
         C().notifier.mark_read()
         return {"ok": True}
 
+    # Maxfiy kalitlar: faqat yozish/o'chirish; qiymat hech qachon qaytarilmaydi va logga tushmaydi
+    @app.get("/api/secrets")
+    def secrets_status():
+        from .secrets import has_secret
+        c = C()
+        names = ["telegram_bot_token", "pos_api_token", "twilio_auth_token"]
+        names += [f"instagram_token_{a['name']}" for a in c.settings.instagram_accounts if a.get("name")]
+        names += [f"ai_key_{p['id']}" for p in c.settings.ai_providers if p.get("kind") not in ("ollama", None)]
+        return [{"name": n, "set": has_secret(n)} for n in names]
+
+    @app.post("/api/secrets")
+    def secrets_set(body: SecretIn):
+        from .secrets import set_secret
+        guard(set_secret, body.name, body.value)
+        C().audit.log("secrets", f"Maxfiy kalit kiritildi: {body.name}", target=body.name, risk="C", approval_status="user_action")
+        return {"ok": True, "name": body.name}
+
+    @app.post("/api/secrets/delete")
+    def secrets_delete(body: SecretIn):
+        from .secrets import delete_secret
+        guard(delete_secret, body.name)
+        C().audit.log("secrets", f"Maxfiy kalit o'chirildi: {body.name}", target=body.name, risk="C", approval_status="user_action")
+        return {"ok": True}
+
     @app.get("/api/telephony/status")
     def tel_status():
         return C().telephony.status()
@@ -1133,7 +1176,8 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.get("/favicon.ico", include_in_schema=False)
     def favicon():
         from fastapi.responses import Response
-        return Response(status_code=204)
+        ico = DASHBOARD / "jarvis.ico"
+        return FileResponse(ico, media_type="image/x-icon") if ico.exists() else Response(status_code=204)
 
     @app.get("/")
     def index():

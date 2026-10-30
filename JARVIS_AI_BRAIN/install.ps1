@@ -133,6 +133,10 @@ Remove-Item -Recurse -Force $tmp
 Say "Kod: $InstallDir" "Green"
 
 # --- 3. Virtual muhit va kutubxonalar ---
+# Ishlab turgan eski JARVIS serveri to'xtatiladi: aks holda yangi kod ishlamaydi va .venv band bo'ladi
+Get-CimInstance Win32_Process -Filter "Name like 'python%'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -match "jarvis\.api" -and $_.ExecutablePath -like "$InstallDir*" } |
+    ForEach-Object { Say "Ishlab turgan JARVIS to'xtatilmoqda (PID $($_.ProcessId))..." "Yellow"; Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Set-Location $InstallDir
 $parts = $Py.Split(" ")
 # Uzilib qolgan o'rnatishdan qolgan buzuq .venv'ni aniqlash va qayta yaratish
@@ -210,12 +214,28 @@ exit /b 1
 :open
 start "" http://127.0.0.1:8765
 "@ | Set-Content -Path $launcher -Encoding ASCII
+# JARVIS.exe: Windows'dagi .NET Framework kompilyatori bilan shu yerda yig'iladi (tayyor exe internetdan yuklanmaydi)
+$icon = Join-Path $InstallDir "dashboard\jarvis.ico"
+& $VPy scripts\make_icon.py $icon 2>$null
+$global:LASTEXITCODE = 0
+$csc = @("Microsoft.NET\Framework64\v4.0.30319\csc.exe", "Microsoft.NET\Framework\v4.0.30319\csc.exe") |
+    ForEach-Object { Join-Path $env:WINDIR $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
+$exe = Join-Path $InstallDir "JARVIS.exe"
+if ($csc) {
+    $iconArg = @()
+    if (Test-Path $icon) { $iconArg = @("/win32icon:$icon") }
+    & $csc /nologo /optimize /target:winexe "/out:$exe" @iconArg /r:System.Windows.Forms.dll /r:System.Drawing.dll (Join-Path $InstallDir "scripts\launcher\JarvisLauncher.cs") | Out-Host
+    if ($LASTEXITCODE -eq 0 -and (Test-Path $exe)) { $launcher = $exe; Say "JARVIS.exe yaratildi: $exe" "Green" }
+    else { Say "JARVIS.exe yig'ilmadi - JARVIS.cmd ishlatiladi." "Yellow" }
+    $global:LASTEXITCODE = 0
+} else { Say ".NET kompilyatori topilmadi - JARVIS.cmd ishlatiladi." "Yellow" }
 try {
     $desk = [Environment]::GetFolderPath("Desktop")
     $sh = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $desk "JARVIS.lnk"))
     $sh.TargetPath = $launcher
     $sh.WorkingDirectory = $InstallDir
     $sh.WindowStyle = 7
+    if (Test-Path $icon) { $sh.IconLocation = "$icon,0" }
     $sh.Description = "JARVIS AI BRAIN"
     $sh.Save()
     Say "Ish stolida 'JARVIS' yorlig'i yaratildi." "Green"
@@ -227,7 +247,7 @@ if (Ask "Windows'ga kirganda JARVIS avtomatik ishga tushsinmi?") {
 
 Say ""
 Say "=== Tayyor ===" "Green"
-Say "Ochish: ish stolidagi 'JARVIS' yorlig'i yoki http://127.0.0.1:8765"
+Say "Ochish: ish stolidagi 'JARVIS' belgisi (yoki $launcher). Terminal kerak emas."
 Say "Birinchi kirishda PIN o'rnatasiz. YesPOS: POS ulanishi -> 'YesPOS sozlamasi' -> 'POS'ga kirish'."
 Say "Yangilash: shu buyruqni qayta ishga tushiring (xotira saqlanadi)."
 if (-not $NoLaunch) { Start-Process $launcher }

@@ -11,3 +11,5 @@ config/settings.json
 .env
 release-report.json
 JARVIS.cmd
+JARVIS.exe
+dashboard/jarvis.ico

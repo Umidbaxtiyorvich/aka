@@ -82,7 +82,7 @@ class Diagnostics:
 
     def frontend(self) -> list[dict]:
         d = PROJECT_ROOT / "dashboard"
-        files = ["index.html", "app.js", "modules.js", "advanced.js", "style.css"]
+        files = ["index.html", "app.js", "modules.js", "advanced.js", "guides.js", "style.css"]
         missing = [f for f in files if not (d / f).exists() or (d / f).stat().st_size == 0]
         out = [_c("frontend_files", "error" if missing else "ok", f"yo'q yoki bo'sh: {missing}" if missing else f"{len(files)} ta fayl mavjud")]
         node = shutil.which("node")
@@ -90,11 +90,11 @@ class Diagnostics:
             out.append(_c("frontend_js_syntax", "unknown", "tekshirib bo'lmadi: Node.js o'rnatilmagan"))
         else:
             bad = []
-            for f in ("app.js", "modules.js", "advanced.js"):
+            for f in ("app.js", "modules.js", "advanced.js", "guides.js"):
                 p = subprocess.run([node, "--check", str(d / f)], capture_output=True, text=True, timeout=20)
                 if p.returncode != 0:
                     bad.append(f"{f}: {p.stderr.strip().splitlines()[0] if p.stderr else 'xato'}")
-            out.append(_c("frontend_js_syntax", "error" if bad else "ok", "; ".join(bad) or "app.js, modules.js, advanced.js sintaksisi to'g'ri"))
+            out.append(_c("frontend_js_syntax", "error" if bad else "ok", "; ".join(bad) or "app.js, modules.js, advanced.js, guides.js sintaksisi to'g'ri"))
         return out
 
     def database(self) -> dict:

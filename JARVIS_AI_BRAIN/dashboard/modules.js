@@ -147,7 +147,7 @@ async function renderInstagram(v) {
   v.innerHTML = `<div class="warnbox">Faqat Meta rasmiy Graph API (Business/Creator akkaunt + Facebook sahifa + Meta App). Nashr uchun media ommaviy https:// URL bo'lishi kerak.
     Reels/video Meta tomonidan qayta ishlanmaguncha nashr qilinmaydi. Javob kelmasa — qayta yuborilmaydi, akkauntda tekshiriladi. Har bir nashr, izoh va Direct javobi alohida tasdiqlanadi.</div>
     <div class="card"><h3>Akkauntlar</h3>${accs.length ? table(accs, ["name", "connected", "username", "followers_count", "media_count", "note"]) :
-      '<span class="muted">Akkaunt yo\'q. data/settings.json → instagram_accounts: [{"name":"shop","ig_user_id":"..."}], token: python scripts/set_secret.py instagram_token_shop</span>'}</div>
+      '<span class="muted">Akkaunt yo\'q — yuqoridagi yo\'riqnomada akkaunt qo\'shing va tokenini kiriting.</span>'}</div>
     <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:12px"><div class="card"><h3>Yangi post loyihasi</h3>
       <div class="row"><select id="acc">${accs.map((a) => `<option>${esc(a.name)}</option>`).join("")}</select><select id="kind"><option value="post">Post</option><option value="reel">Reels</option><option value="story">Stories</option></select></div>
       <textarea id="cap" placeholder="Caption"></textarea><div class="row" style="margin-top:6px"><button class="ghost" id="tags">Hashtag taklifi</button><span id="tg" class="muted"></span></div>
@@ -192,11 +192,8 @@ async function renderTelegram(v) {
     <div>Token: ${st.token_set ? '<span class="ok">kiritilgan</span>' : '<span class="warn">yo\'q</span>'}</div><div>Ruxsat berilgan IDlar: ${st.allowed_ids}</div>
     <div>Bot: ${st.running ? '<span class="ok">ishlayapti</span>' : "to'xtagan"}</div>${st.last_error ? `<div class="bad">${esc(st.last_error)}</div>` : ""}
     <div class="row" style="margin-top:10px"><button id="start" ${st.configured ? "" : "disabled"}>Ishga tushirish</button><button class="ghost" id="stop">To'xtatish</button><button class="ghost" id="test" ${st.configured ? "" : "disabled"}>Test xabar</button></div><pre id="o" hidden></pre></div>
-    <div class="card"><h3>Sozlash (bir marta)</h3><ol>
-      <li>Telegram'da @BotFather → /newbot → token oling.</li><li>Terminalda: <code>python scripts/set_secret.py telegram_bot_token</code> (token ko'rinmaydi, Git'ga tushmaydi).</li>
-      <li>O'z ID'ingizni @userinfobot dan oling va <code>data/settings.json</code> → <code>"telegram_allowed_ids": [123456789]</code> ga yozing (xavfsizlik uchun faqat qo'lda).</li>
-      <li>JARVIS'ni qayta ishga tushiring va "Ishga tushirish"ni bosing.</li></ol>
-      <p class="muted">Buyruqlar: /holat /agentlar /vazifalar /tasdiqlar /xatolar /xotira. Tasdiqlash faqat dashboardda. Telegram xabari telefon qo'ng'irog'i emas.</p></div></div>`;
+    <div class="card"><h3>Bot buyruqlari</h3><p>/holat /agentlar /vazifalar /tasdiqlar /xatolar /xotira</p>
+      <p class="muted">Ulash tartibi — yuqoridagi "Telegram botni qanday ulash mumkin?" yo'riqnomasida. Tasdiqlash faqat dashboardda. Telegram xabari telefon qo'ng'irog'i emas.</p></div></div>`;
   const act = async (path) => { try { out($("#o"), await post(path)); } catch (e) { fail($("#o"), e); } };
   $("#start").onclick = () => act("/api/telegram/start"); $("#stop").onclick = () => act("/api/telegram/stop"); $("#test").onclick = () => act("/api/telegram/test");
 }

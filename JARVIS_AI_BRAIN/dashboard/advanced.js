@@ -37,7 +37,7 @@ async function renderRouter(v) {
       <div class="row" style="margin-top:10px;flex-wrap:wrap"><input id="pid" placeholder="id" style="width:110px"><select id="pkind" style="width:170px"><option>ollama</option><option>openai_compatible</option><option>anthropic</option></select>
       <input id="pmodel" placeholder="model" style="width:160px"><input id="purl" placeholder="base_url (tashqi uchun https://)" style="width:240px"><select id="ptier" style="width:100px"><option>light</option><option>strong</option></select>
       <input id="pin" type="number" step="0.0001" placeholder="narx kirish/1k" style="width:130px"><input id="pout" type="number" step="0.0001" placeholder="narx chiqish/1k" style="width:130px"><button id="padd">Qo'shish</button></div>
-      <div class="muted">Tashqi kalit: <code>python scripts/set_secret.py ai_key_&lt;id&gt;</code>. Narxlarni o'zingiz kiritasiz — xarajat shu narx bo'yicha hisoblanadi.</div><div id="pm"></div></div>
+      <div class="muted">Tashqi kalit: yuqoridagi yo'riqnomadagi <code>ai_key_&lt;id&gt;</code> maydoniga kiriting. Narxlarni o'zingiz kiritasiz — xarajat shu narx bo'yicha hisoblanadi.</div><div id="pm"></div></div>
     <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:12px"><div class="card"><h3>Xarajat limitlari</h3>
       <label><input type="checkbox" id="paid" style="width:auto" ${s.paid_ai_allowed ? "checked" : ""}> Pullik AI'ga ruxsat (limit doirasida)</label>
       <label>Kunlik limit</label><input id="dl" type="number" step="0.01" value="${s.daily_cost_limit}"><label>Oylik limit</label><input id="ml" type="number" step="0.01" value="${s.monthly_cost_limit}">
@@ -132,13 +132,13 @@ function dagSvg(g) {
   const cols = Object.keys(levels).map(Number).sort((a, b) => a - b);
   const maxRows = Math.max(...cols.map((c) => levels[c].length));
   cols.forEach((c) => levels[c].forEach((n, i) => { pos[n.key] = { x: 10 + c * (W + GX), y: 10 + i * (H + GY) }; }));
-  const color = (s) => ({ done: "#2fe39a", reused: "#2fe39a", running: "#00b7ff", failed: "#ff5b7a", blocked: "#ff5b7a", waiting_approval: "#ffc35a", cancelled: "#4d6584" }[s] || "#3b5677");
+  const color = (s) => ({ done: "#059669", reused: "#059669", running: "#4f46e5", failed: "#dc2626", blocked: "#dc2626", waiting_approval: "#d97706", cancelled: "#94a3b8" }[s] || "#94a3b8");
   const width = 20 + cols.length * (W + GX), height = 20 + maxRows * (H + GY);
   return `<svg viewBox="0 0 ${width} ${height}" style="width:100%;max-width:${width}px;height:auto" role="img" aria-label="vazifalar grafi">
-    <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#4d6584"/></marker></defs>
-    ${g.edges.map((e) => { const a = pos[e.from], b = pos[e.to]; return `<path d="M${a.x + W},${a.y + H / 2} C${a.x + W + GX / 2},${a.y + H / 2} ${b.x - GX / 2},${b.y + H / 2} ${b.x},${b.y + H / 2}" fill="none" stroke="#4d6584" stroke-width="1.5" marker-end="url(#ar)"/>`; }).join("")}
-    ${g.nodes.map((n) => { const p = pos[n.key]; return `<g><rect x="${p.x}" y="${p.y}" width="${W}" height="${H}" rx="9" fill="#0c1526" stroke="${color(n.status)}" stroke-width="2"/>
-      <text x="${p.x + 10}" y="${p.y + 20}" fill="#d7e7ff" font-size="12">${esc(n.title.slice(0, 26))}</text>
+    <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker></defs>
+    ${g.edges.map((e) => { const a = pos[e.from], b = pos[e.to]; return `<path d="M${a.x + W},${a.y + H / 2} C${a.x + W + GX / 2},${a.y + H / 2} ${b.x - GX / 2},${b.y + H / 2} ${b.x},${b.y + H / 2}" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ar)"/>`; }).join("")}
+    ${g.nodes.map((n) => { const p = pos[n.key]; return `<g><rect x="${p.x}" y="${p.y}" width="${W}" height="${H}" rx="9" fill="#ffffff" stroke="${color(n.status)}" stroke-width="2"/>
+      <text x="${p.x + 10}" y="${p.y + 20}" fill="#0f172a" font-size="12">${esc(n.title.slice(0, 26))}</text>
       <text x="${p.x + 10}" y="${p.y + 40}" fill="${color(n.status)}" font-size="11">${esc(n.agent)} · ${esc(n.status)}</text><title>${esc(n.error || n.title)}</title></g>`; }).join("")}</svg>`;
 }
 
@@ -162,11 +162,11 @@ function kgSvg(data) {
   const W = 760, H = 460, cx = W / 2, cy = H / 2, others = data.nodes.filter((n) => n.id !== data.center), pos = {};
   pos[data.center] = { x: cx, y: cy };
   others.forEach((n, i) => { const a = (2 * Math.PI * i) / Math.max(1, others.length), r = 170 + (i % 2) * 30; pos[n.id] = { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }; });
-  const col = { project: "#3cf2ff", task: "#00b7ff", agent: "#2fe39a", memory: "#c7a6ff", decision: "#ffc35a", file: "#ff9f5a", source: "#7d93b5", error: "#ff5b7a", proposal: "#9ae66e" };
+  const col = { project: "#0ea5e9", task: "#4f46e5", agent: "#059669", memory: "#8b5cf6", decision: "#d97706", file: "#ea580c", source: "#64748b", error: "#dc2626", proposal: "#16a34a" };
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="bilimlar grafi">
-    ${data.edges.filter((e) => pos[e.src] && pos[e.dst]).map((e) => { const a = pos[e.src], b = pos[e.dst]; return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#2a4466"/><text x="${(a.x + b.x) / 2}" y="${(a.y + b.y) / 2}" fill="#7d93b5" font-size="10" text-anchor="middle">${esc(e.rel_uz)}</text>`; }).join("")}
-    ${data.nodes.map((n) => { const p = pos[n.id]; if (!p) return ""; return `<g data-kg="${n.id}" style="cursor:pointer"><circle cx="${p.x}" cy="${p.y}" r="${n.id === data.center ? 11 : 7}" fill="${col[n.type] || "#d7e7ff"}"/>
-      <text x="${p.x}" y="${p.y - 13}" fill="#d7e7ff" font-size="11" text-anchor="middle">${esc(n.type)}: ${esc(n.label.slice(0, 28))}</text></g>`; }).join("")}</svg>`;
+    ${data.edges.filter((e) => pos[e.src] && pos[e.dst]).map((e) => { const a = pos[e.src], b = pos[e.dst]; return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#cbd5e1"/><text x="${(a.x + b.x) / 2}" y="${(a.y + b.y) / 2}" fill="#64748b" font-size="10" text-anchor="middle">${esc(e.rel_uz)}</text>`; }).join("")}
+    ${data.nodes.map((n) => { const p = pos[n.id]; if (!p) return ""; return `<g data-kg="${n.id}" style="cursor:pointer"><circle cx="${p.x}" cy="${p.y}" r="${n.id === data.center ? 11 : 7}" fill="${col[n.type] || "#475569"}"/>
+      <text x="${p.x}" y="${p.y - 13}" fill="#0f172a" font-size="11" text-anchor="middle">${esc(n.type)}: ${esc(n.label.slice(0, 28))}</text></g>`; }).join("")}</svg>`;
 }
 
 async function renderKG(v) {
