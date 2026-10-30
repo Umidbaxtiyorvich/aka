@@ -21,6 +21,15 @@ from jarvis.config import Settings  # noqa: E402
 SIZE = {m["name"]: m["disk_gb"] for m in MODEL_CATALOG}
 
 
+def installed_models() -> set[str]:
+    """`ollama list` bo'yicha kompyuterda bor modellar (masalan, qo'lda ko'chirilganlari)."""
+    try:
+        p = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return set()
+    return {ln.split()[0] for ln in p.stdout.splitlines()[1:] if ln.strip()}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true")
@@ -64,7 +73,11 @@ def main() -> int:
             return 0
         print("Eslatma: internet uzilsa foiz orqaga ketishi mumkin — Ollama uzilgan qismni qayta yuklaydi, "
               "tayyor qismlar saqlanadi. Xato bo'lsa, avtomatik qayta uriniladi.")
+        have = installed_models()
         for m in models:
+            if m in have or (":" not in m and f"{m}:latest" in have):
+                print(f"\n=== {m}: allaqachon bor — yuklash o'tkazib yuborildi ===")
+                continue
             for attempt in range(1, 6):
                 print(f"\n=== ollama pull {m} ({attempt}/5) ===")
                 if subprocess.run(["ollama", "pull", m]).returncode == 0:
