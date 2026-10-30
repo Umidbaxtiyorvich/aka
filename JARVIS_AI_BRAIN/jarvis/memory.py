@@ -13,12 +13,18 @@ from .audit import Audit
 from .db import Database
 from .security import contains_secret
 
-KINDS = {"short_term", "long_term", "project", "knowledge", "task", "preference", "decision", "conversation"}
+KINDS = {"short_term", "long_term", "working", "episodic", "semantic", "project", "technical", "knowledge", "task",
+         "preference", "decision", "conversation"}
+# Memory Explorer toifalari (preference = foydalanuvchi o'zi kiritgan/tasdiqlagan afzalliklar)
+CATEGORY_LABELS = {"short_term": "Short-term Memory", "long_term": "Long-term Memory", "working": "Working Memory",
+                   "episodic": "Episodic Memory", "semantic": "Semantic Memory", "project": "Project Memory",
+                   "technical": "Technical Memory", "preference": "User-approved Preferences", "knowledge": "Knowledge",
+                   "task": "Task Memory", "decision": "Decision Memory", "conversation": "Conversation Memory"}
 INFO_TYPES = {"fact": "Fakt", "assumption": "Taxmin", "model_inference": "Model xulosasi", "user_given": "Foydalanuvchi ma'lumoti"}
 STALE_DAYS = {"fact": 365, "model_inference": 90, "assumption": 30}
 PROVENANCE_COLUMNS = {"info_type": "TEXT NOT NULL DEFAULT 'user_given'", "verified": "INTEGER NOT NULL DEFAULT 0",
                       "reference": "TEXT", "observed_at": "TEXT", "verified_at": "TEXT", "verified_note": "TEXT",
-                      "stale_after_days": "INTEGER"}
+                      "stale_after_days": "INTEGER", "title": "TEXT"}
 NEGATIONS = ("emas", "yo'q", "yoq", "not", "never", "hech qachon")
 
 
@@ -55,12 +61,16 @@ class Memory:
         self.db, self.audit = db, audit
         db.ensure_columns("memories", PROVENANCE_COLUMNS)
         self.on_add = None      # Knowledge Graph ilgagi
+        self.events = None      # hodisalar oqimi (3D Brain): qidiruv va qo'shish
 
     def add(self, content: str, kind: str = "long_term", *, project: str | None = None,
             source: str = "user", confidence: float = 1.0, info_type: str | None = None, reference: str = "",
-            observed_at: str | None = None, verified: bool = False, stale_after_days: int | None = None) -> dict:
+            observed_at: str | None = None, verified: bool = False, stale_after_days: int | None = None,
+            title: str | None = None) -> dict:
         if kind not in KINDS:
             raise MemoryError_(f"Noma'lum xotira turi: {kind}")
+        if kind == "preference" and str(source).startswith(("ai", "model", "router", "plugin:", "http")):
+            raise MemoryError_("Afzalliklar faqat foydalanuvchi tomonidan kiritiladi (User-approved Preferences).")
         if contains_secret(content):
             raise MemoryError_("Maxfiy ma'lumot (parol/token/kalit) oddiy xotirada saqlanmaydi.")
         info_type = info_type or default_info_type(source)
@@ -74,9 +84,9 @@ class Memory:
         status = "conflict" if conflicts else "active"
         cur = self.db.execute(
             "INSERT INTO memories(kind, project, content, source, confidence, status, info_type, reference, observed_at,"
-            " verified, verified_at, stale_after_days) VALUES (?,?,?,?,?,?,?,?,?,?,CASE WHEN ? THEN datetime('now') END,?)",
+            " verified, verified_at, stale_after_days, title) VALUES (?,?,?,?,?,?,?,?,?,?,CASE WHEN ? THEN datetime('now') END,?,?)",
             (kind, project, content.strip(), source, max(0.0, min(1.0, confidence)), status, info_type, reference or None,
-             observed_at, int(verified), int(verified), stale_after_days))
+             observed_at, int(verified), int(verified), stale_after_days, (title or "").strip()[:120] or None))
         self.audit.log("memory", f"Xotiraga qo'shildi ({kind})", target=f"memory#{cur.lastrowid}", risk="B")
         row = self.get(cur.lastrowid)
         if self.on_add:
@@ -85,6 +95,8 @@ class Memory:
             except Exception as e:  # graf xatosi xotirani buzmasin
                 self.audit.error("kgraph", str(e))
         row["conflicts_with"] = [c["id"] for c in conflicts]
+        if self.events:
+            self.events.publish("memory.add", id=row["id"], kind=kind, conflict=bool(conflicts))
         return row
 
     def find_conflicts(self, content: str) -> list[dict]:
@@ -126,14 +138,23 @@ class Memory:
         if not terms:
             return []
         fts = " OR ".join(f'"{t}"*' for t in terms)
-        return self.db.query(
+        rows = self.db.query(
             "SELECT m.* FROM memories_fts f JOIN memories m ON m.id=f.rowid WHERE memories_fts MATCH ?"
             " ORDER BY rank LIMIT ?", (fts, limit))
+        if self.events:
+            self.events.publish("memory.search", hits=[r["id"] for r in rows[:20]], n=len(rows))
+        return rows
 
-    def update(self, mid: int, content: str) -> dict:
+    def update(self, mid: int, content: str, *, title: str | None = None, kind: str | None = None) -> dict:
         if contains_secret(content):
             raise MemoryError_("Maxfiy ma'lumot saqlanmaydi.")
         self.get(mid)
+        if kind is not None:
+            if kind not in KINDS:
+                raise MemoryError_(f"Noma'lum xotira turi: {kind}")
+            self.db.execute("UPDATE memories SET kind=? WHERE id=?", (kind, mid))
+        if title is not None:
+            self.db.execute("UPDATE memories SET title=? WHERE id=?", (title.strip()[:120] or None, mid))
         # Mazmun o'zgarsa, oldingi tekshiruv endi amal qilmaydi
         self.db.execute("UPDATE memories SET content=?, status='active', verified=0, verified_at=NULL,"
                         " updated_at=datetime('now') WHERE id=?", (content, mid))

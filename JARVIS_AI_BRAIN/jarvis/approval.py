@@ -84,6 +84,9 @@ class ApprovalEngine:
         )
         self.audit.log(requested_by, f"Tasdiq so'raldi: {summary}", target=target, risk=level, approval_status=status)
         row = self.get(cur.lastrowid)
+        ev = getattr(self, "events", None)
+        if status == "pending" and ev:
+            ev.publish("approval", id=row["id"], level=level, target=target)
         if status == "pending" and self.on_pending:
             try:
                 self.on_pending(row)

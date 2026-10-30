@@ -170,6 +170,19 @@ class Router:
         return {"complexity": complexity, "private": priv, "candidates": cands, "skipped": skipped}
 
     def route(self, messages: list[dict], purpose: str = "", private: bool | None = None) -> dict:
+        ev = getattr(self.core, "events", None)
+        if ev:
+            ev.publish("ai.start", purpose=purpose or "chat")
+        ok, provider = False, None
+        try:
+            res = self._route(messages, purpose, private)
+            ok, provider = True, res["route"]["provider"]
+            return res
+        finally:
+            if ev:
+                ev.publish("ai.end", ok=ok, provider=provider)
+
+    def _route(self, messages: list[dict], purpose: str = "", private: bool | None = None) -> dict:
         plan = self.plan(messages, purpose, private)
         guard = self.core.guard
         attempts, est_in = [], estimate_tokens(" ".join(m["content"] for m in messages))

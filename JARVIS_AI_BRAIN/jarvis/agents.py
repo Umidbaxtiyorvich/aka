@@ -102,6 +102,9 @@ class AgentManager:
         self.core.db.execute("UPDATE tasks SET status='running', started_at=? WHERE id=?",
                              (datetime.now(timezone.utc).isoformat(), tid))
         tg = getattr(self.core, "telegram", None)
+        ev = getattr(self.core, "events", None)
+        if ev:
+            ev.publish("task.start", id=tid, agent=t["agent"], title=t["title"][:80])
         if tg:
             tg.event("task", f"Vazifa boshlandi: #{tid} {t['title'][:80]}", f"Agent: {agent.title}")
         try:
@@ -127,6 +130,9 @@ class AgentManager:
             self.core.audit.error(agent.key, msg)
         finally:
             agent.current_task = None
+            if ev:
+                row = self.core.db.one("SELECT status FROM tasks WHERE id=?", (tid,))
+                ev.publish("task.end", id=tid, agent=t["agent"], status=row["status"] if row else "unknown")
             if hasattr(self.core, "kgraph"):
                 try:
                     self.core.kgraph.on_task(t)

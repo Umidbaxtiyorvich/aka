@@ -49,7 +49,13 @@ async function logout() {
 }
 
 const SECTIONS = [
-  ["dashboard", "Dashboard", renderDashboard],
+  ["dashboard", "Brain Dashboard", renderDashboard],
+  ["brain", "🧠 3D Brain Mode", (v) => renderBrainHub(v, "brain")],
+  ["graph", "🌐 Graph Explorer Mode", (v) => renderBrainHub(v, "graph")],
+  ["memx", "Memory Explorer", renderMemoryExplorer],
+  ["neural", "Neural Activity", renderNeural],
+  ["agentmap", "Agent Connections", (v) => renderBrainHub(v, "graph", ["agents", "tasks", "skills", "apis"])],
+  ["projmap", "Projects Map", (v) => renderBrainHub(v, "graph", ["projects", "memories", "files", "decisions", "tasks"])],
   ["chat", "AI Chat", renderChat],
   ["voice", "Voice", renderVoice],
   ["memory", "Memory", renderMemory],
@@ -75,7 +81,7 @@ const SECTIONS = [
   ["audit", "Audit jurnali", renderAudit],
   ["errors", "Xatolar", renderErrors],
   ["tests", "Testlar va yaxshilash", renderTests],
-  ["diagnostics", "Diagnostika", renderDiagnostics],
+  ["diagnostics", "System Health (Diagnostika)", renderDiagnostics],
   ["sandbox", "Sandbox", renderSandbox],
   ["plugins", "Kengaytmalar", renderPlugins],
   ["backups", "Zaxira nusxalar", renderBackups],
@@ -88,7 +94,12 @@ const PLANNED = new Set();
 function buildMenu() {
   $("#menu").innerHTML = SECTIONS.map(([id, name]) =>
     `<a data-id="${id}">${name}${PLANNED.has(id) ? '<span class="tag">tez orada</span>' : ""}</a>`).join("");
-  $("#menu").onclick = (e) => { const a = e.target.closest("a"); if (a) location.hash = a.dataset.id; };
+  $("#menu").onclick = (e) => { const a = e.target.closest("a"); if (a && a.dataset.id) location.hash = a.dataset.id; };
+  const theme = () => { try { return localStorage.getItem("theme") || "light"; } catch (er) { return "light"; } };
+  const paint = () => { document.documentElement.dataset.theme = theme(); const t = document.getElementById("themetg"); if (t) t.textContent = theme() === "dark" ? "☀️ Och mavzu" : "🌙 Futuristik (qorong'i) mavzu"; };
+  $("#menu").insertAdjacentHTML("beforeend", '<a id="themetg" style="margin-top:12px"></a>');
+  document.getElementById("themetg").onclick = (e) => { e.stopPropagation(); try { localStorage.setItem("theme", theme() === "dark" ? "light" : "dark"); } catch (er) { /* */ } paint(); };
+  paint();
   fetch("/api/auth/status").then((r) => r.json()).then((st) => {
     if (st.enabled && st.authenticated) $("#menu").insertAdjacentHTML("beforeend", '<a id="logout" style="margin-top:12px">⏻ Chiqish</a>');
     const lo = document.getElementById("logout"); if (lo) lo.onclick = (e) => { e.stopPropagation(); logout(); };
@@ -98,6 +109,7 @@ function buildMenu() {
 let timer = null;
 async function show() {
   clearInterval(timer);
+  if (window.JARVIS_VIZ) window.JARVIS_VIZ.cleanup();      // 3D sahnalar va oqim tinglovchilarini bo'shatish
   const id = location.hash.slice(1) || "dashboard";
   const sec = SECTIONS.find((s) => s[0] === id) || SECTIONS[0];
   document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.id === sec[0]));
@@ -112,8 +124,13 @@ function planned(title, text) {
 
 const statusPill = (ok, yes, no) => `<span class="pill ${ok ? "ok" : "warn"}">${ok ? yes : no}</span>`;
 
-async function renderDashboard(v) {
+async function renderDashboard(root) {
+  root.innerHTML = '<div id="dashbrain"></div><div id="dashmain"></div>';
+  const v = $("#dashmain");
+  brainCompact($("#dashbrain"));
+  let tick = 0;
   const draw = async () => {
+    if (++tick % 3 === 0) brainCompact($("#dashbrain"));
     const s = await api("/api/status");
     const sys = s.system, active = s.agents.filter((a) => a.implemented);
     $("#mode").innerHTML = (s.unread_notifications ? `<a href="#notifications" class="pill warn" style="margin-right:6px">🔔 ${s.unread_notifications}</a>` : "") + (s.settings.read_only_mode ? statusPill(true, "Faqat o'qish rejimi") : statusPill(false, "", "O'zgartirish rejimi"));

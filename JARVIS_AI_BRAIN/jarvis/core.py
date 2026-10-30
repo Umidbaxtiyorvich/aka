@@ -40,6 +40,9 @@ from .studio import Studio
 from .telegram_bot import TelegramAssistant
 from .instagram_mcp import InstagramMCP
 from .selfheal import SelfHealer
+from .brain import Brain
+from .events import EventBus
+from .memory_connect import MemoryConnector
 from .telephony import Telephony
 from .voice import Voice
 from .security import contains_secret, redact
@@ -63,10 +66,12 @@ class JarvisCore:
     def __init__(self, db_path: Path | None = None, settings: Settings | None = None):
         self.settings = settings or Settings.load()
         self.db = Database(db_path)
+        self.events = EventBus()
         self.audit = Audit(self.db)
         self.kgraph = KnowledgeGraph(self)
         self.memory = Memory(self.db, self.audit)
         self.memory.on_add = self.kgraph.on_memory
+        self.memory.events = self.events
         self.policy = PolicyEngine(self.settings)
         self.approvals = ApprovalEngine(self.db, self.audit, self.policy)
         self.files = FileIntelligence(self.settings)
@@ -78,7 +83,10 @@ class JarvisCore:
         self.notifier = Notifier(self.db, self.settings)
         self.telegram = TelegramAssistant(self)
         self.notifier.telegram = self.telegram
-        self.audit.on_error = lambda m, msg: self.notifier.notify(f"Xato: {m}", msg, severity="warning", category="error")
+        def _on_error(m, msg):
+            self.events.publish("error", module=m)
+            self.notifier.notify(f"Xato: {m}", msg, severity="warning", category="error")
+        self.audit.on_error = _on_error
         self.research = Research(self)
         self.studio = Studio(self)
         self.imagegen = ImageGen(self)
@@ -101,7 +109,10 @@ class JarvisCore:
         self.improver = Improver(self)
         self.agents = AgentManager(self)
         self.selfheal = SelfHealer(self)
+        self.brain = Brain(self)
+        self.connector = MemoryConnector(self)
         self.approvals.on_pending = self.telegram.on_approval_pending
+        self.approvals.events = self.events
         self._health_state: dict = {}
         self.automation_paused = False
 

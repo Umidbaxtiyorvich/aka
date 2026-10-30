@@ -41,7 +41,9 @@ def page():
     exe = os.environ.get("JARVIS_CHROMIUM_PATH") or ("/opt/pw-browsers/chromium" if os.path.exists("/opt/pw-browsers/chromium") else None)
     with pw.sync_playwright() as p:
         try:
-            b = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch()
+            # Dasturiy WebGL (SwiftShader): GPU'siz CI'da ham 3D Brain / Graph Explorer sinaladi
+            gl = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"]
+            b = p.chromium.launch(executable_path=exe, args=gl) if exe else p.chromium.launch(args=gl)
         except pw.Error as e:
             pytest.skip(f"Chromium ishga tushmadi: {str(e).splitlines()[0]}")
         pg = b.new_page(viewport={"width": 1400, "height": 1000})
@@ -155,3 +157,94 @@ def test_guides_and_secret_form(server, page):
     assert "BotFather" in page.text_content(".guide")
     page.goto(server + "#pos")
     page.wait_for_selector(".guide >> text=YesPOS")
+
+
+# ---------------- 3D Brain / Graph Explorer / Memory Explorer ----------------
+def _seed(core):
+    for i, t in enumerate(["Mango Market narxlari dushanba yangilanadi", "YesPOS hisoboti har kuni soat 9 da",
+                           "Instagram Reels rejasi: chegirma haftaligi", "Python API xatosi: timeout 30 s"]):
+        core.connector.ingest(t, project="mango" if i < 2 else None)
+    core.audit.error("pos", "timeout")
+    core.kgraph.rebuild()
+
+
+def test_brain_mode_live_and_regions(server, page, core):
+    _seed(core)
+    page.goto(server + "#brain")
+    page.wait_for_selector("#stage canvas", timeout=20000)
+    page.wait_for_selector(".reg[data-reg=memory]")
+    assert page.text_content(".live-badge").strip() in ("● LIVE", "● ulanmoqda…")
+    page.wait_for_function("document.querySelector('.live-badge').textContent.includes('LIVE')", timeout=10000)
+    # Hududni bosish — haqiqiy modul ma'lumoti
+    page.click(".reg[data-reg=memory]")
+    page.wait_for_selector("#ingraph")
+    assert "Memory Center" in page.text_content("#side") and "xotiralar" in page.text_content("#side")
+    # Haqiqiy backend hodisasi Neural Activity jurnaliga yetib boradi
+    core.memory.add("E2E jonli hodisa sinovi xotirasi", "long_term")
+    page.goto(server + "#neural")
+    page.wait_for_selector("#nlog")
+    page.wait_for_function("document.querySelector('#nlog').textContent.includes('Yangi xotira saqlandi')", timeout=10000)
+    assert not page.errors, page.errors
+
+
+def test_graph_mode_switch_keeps_selection(server, page, core):
+    _seed(core)
+    page.goto(server + "#graph")
+    page.wait_for_function("document.querySelector('#gcount') && document.querySelector('#gcount').textContent.includes(\"Ko'rsatilmoqda\")", timeout=20000)
+    total = int(page.evaluate("document.querySelector('#gcount b').textContent"))
+    assert total >= 4
+    # Tugunni dasturiy tanlash (WebGL'da sichqoncha nuqtasini taxmin qilmaslik uchun) — batafsil panel ochiladi
+    nid = page.evaluate("[...window.JARVIS_VIZ.items].find(v => v.select && v.nodes && v.nodes.length).nodes.find(n => n.type==='memory').id")
+    page.evaluate(f"[...window.JARVIS_VIZ.items].find(v => v.select && v.nodes).select({nid})")
+    page.wait_for_selector("#gdetail .detail")
+    assert "Aloqalar" in page.text_content("#gdetail")
+    # 3D rejimga o'tish va qaytish — tanlangan tugun saqlanadi
+    page.click("#to3d")
+    page.wait_for_selector("#ingraph", timeout=20000)                      # 3D'da tegishli hudud (Memory Center) ochildi
+    assert "Memory Center" in page.text_content("#side")
+    page.click("[data-mode=graph]")
+    page.wait_for_selector("#gdetail .detail", timeout=20000)
+    assert page.evaluate("BrainState.selected.id") == nid
+    # Filtr: faqat projects
+    page.evaluate("document.querySelectorAll('[data-cat]').forEach(x => x.checked = x.dataset.cat === 'projects')")
+    page.click("#gapply")
+    page.wait_for_function("document.querySelector('#gcount').textContent.includes(\"Ko'rsatilmoqda\")")
+    cats = page.evaluate("[...new Set([...window.JARVIS_VIZ.items].find(v => v.nodes).nodes.map(n => n.cat))]")
+    assert cats == ["projects"]
+    svg = page.evaluate("[...window.JARVIS_VIZ.items].find(v => v.exportSVG).exportSVG()")
+    assert svg.startswith("<svg") and "<circle" in svg
+    assert not page.errors, page.errors
+
+
+def test_offline_badge_and_low_quality(server, page, core):
+    page.route("**/api/events/stream**", lambda r: r.abort())
+    page.goto(server + "#brain")
+    page.wait_for_function("document.querySelector('.live-badge').textContent.includes('OFFLINE')", timeout=15000)
+    assert "OFFLINE" in page.text_content("#foot")
+    page.select_option("#qual", "low")
+    page.wait_for_selector("#stage canvas", timeout=20000)
+    assert page.evaluate("BrainState.quality") == "low"
+    page.errors[:] = [e for e in page.errors if "events/stream" not in e and "ERR_FAILED" not in e]
+    assert not page.errors, page.errors
+
+
+def test_memory_explorer_edit_and_ingest(server, page, core):
+    m = core.memory.add("Ish vaqti 9:00-18:00", "working", title="Ish vaqti")
+    page.goto(server + "#memx")
+    page.wait_for_selector("[data-k=working]")
+    page.click("[data-k=working]")
+    page.wait_for_selector(f"tr[data-m='{m['id']}']")
+    page.click(f"tr[data-m='{m['id']}']")
+    page.wait_for_selector("#ec")
+    page.fill("#et", "Yangi ish vaqti")
+    page.click("#esv")
+    page.wait_for_selector("#emsg .ok")
+    assert core.memory.get(m["id"])["title"] == "Yangi ish vaqti"
+    page.click("summary:has-text('Yangi ma')")
+    page.fill("#nc", "Ish vaqti 9:00-18:00")
+    page.click("#nan")
+    page.wait_for_selector("#nres .small")
+    page.fill("#nc", "Ombor har shanba soat 10 da ochiladi")
+    page.click("#nsv")
+    page.wait_for_selector("#nres .ok")
+    assert not page.errors, page.errors

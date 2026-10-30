@@ -116,3 +116,76 @@ pre{background:#0f172a;color:#e2e8f0;border-radius:var(--r-sm);padding:12px 14px
 svg text{font-family:inherit}
 
 @media (max-width:760px){body{flex-direction:column}aside{width:100%;height:auto;position:static}main{padding:16px}}
+
+/* ================= 3D Brain / Graph Explorer — qorong'i futuristik ish maydoni ================= */
+.neo{--n-bg:#030712;--n-panel:rgba(15,23,42,.72);--n-line:rgba(56,189,248,.18);--n-text:#e2e8f0;--n-muted:#94a3b8;--n-blue:#3b82f6;--n-cyan:#22d3ee;--n-purple:#a855f7;--n-gold:#f5c451;
+  background:radial-gradient(1200px 600px at 60% 20%,rgba(59,130,246,.14),transparent 60%),radial-gradient(800px 500px at 10% 90%,rgba(168,85,247,.12),transparent 60%),var(--n-bg);
+  color:var(--n-text);border-radius:18px;padding:14px;border:1px solid var(--n-line);box-shadow:0 20px 60px rgba(2,6,23,.45)}
+.neo:fullscreen{border-radius:0;padding:16px}
+.neo .muted{color:var(--n-muted)} .neo .small,.small{font-size:12px}
+.neo h3{color:var(--n-text)} .neo h4{color:var(--n-cyan);margin:12px 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.06em}
+.neo-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.seg{display:flex;background:rgba(15,23,42,.8);border:1px solid var(--n-line);border-radius:14px;padding:4px;gap:4px}
+.seg button{background:transparent;border:0;color:var(--n-muted);box-shadow:none;padding:10px 18px;font-weight:700;letter-spacing:.04em;border-radius:10px}
+.seg button.on{background:linear-gradient(135deg,rgba(59,130,246,.9),rgba(168,85,247,.85));color:#fff;box-shadow:0 0 24px rgba(99,102,241,.5)}
+.neo-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.neo-tools select{width:auto;background:rgba(15,23,42,.8);color:var(--n-text);border-color:var(--n-line)}
+.neo button.ghost{background:rgba(15,23,42,.6);color:var(--n-text);border-color:var(--n-line)}
+.neo button.ghost:hover{background:rgba(30,41,59,.9)}
+.neo-body{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:12px}
+.neo:fullscreen .neo-body{height:calc(100vh - 110px)}
+.neo-stage{position:relative;height:calc(100vh - 230px);min-height:460px;border-radius:14px;overflow:hidden;border:1px solid var(--n-line);background:rgba(2,6,23,.55)}
+.neo:fullscreen .neo-stage{height:100%}
+.neo-stage canvas{display:block;width:100%;height:100%;cursor:grab}
+.neo-msg{position:absolute;inset:0;display:grid;place-items:center;color:var(--n-muted);font-size:14px;pointer-events:none;text-align:center;padding:20px}
+.neo-side{background:var(--n-panel);backdrop-filter:blur(10px);border:1px solid var(--n-line);border-radius:14px;padding:14px;overflow:auto;max-height:calc(100vh - 230px);min-height:460px}
+.neo:fullscreen .neo-side{max-height:100%}
+.neo-side input,.neo-side select,.neo-side textarea{background:rgba(2,6,23,.6);color:var(--n-text);border-color:var(--n-line)}
+.neo-side label{color:var(--n-muted);margin-top:6px}
+.neo-foot{margin-top:8px;min-height:18px}
+.reg{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;cursor:pointer;border:1px solid transparent}
+.reg:hover{background:rgba(59,130,246,.12);border-color:var(--n-line)}
+.reg i,.dot{width:10px;height:10px;border-radius:50%;display:inline-block;box-shadow:0 0 10px currentColor}
+.reg b{flex:1;font-weight:600}
+.st{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:rgba(148,163,184,.15);color:#cbd5e1}
+.st.active{background:rgba(34,211,238,.18);color:#67e8f9} .st.error{background:rgba(239,68,68,.2);color:#fca5a5} .st.idle{background:rgba(16,185,129,.15);color:#6ee7b7} .st.warn{background:rgba(245,196,81,.18);color:#fde68a}
+.kv{display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px dashed rgba(148,163,184,.15);font-size:13px}
+.cats{display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;margin:8px 0}
+.cat{display:flex;align-items:center;gap:5px;font-size:12px;margin:0;color:var(--n-text)!important;cursor:pointer}
+.cat i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.detail{margin-top:12px;padding:12px;border-radius:12px;background:rgba(2,6,23,.55);border:1px solid var(--n-line)}
+.detail h4{text-transform:none;letter-spacing:0;font-size:15px}
+.rels{display:flex;flex-direction:column;gap:3px;max-height:260px;overflow:auto}
+.rel{display:block;font-size:12px;color:var(--n-text,#334155);cursor:pointer;padding:3px 6px;border-radius:6px;text-decoration:none}
+.rel:hover{background:rgba(59,130,246,.15);text-decoration:none}
+.kg-labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.kg-l{position:absolute;transform:translate(-50%,-140%);font-size:11px;white-space:nowrap;text-shadow:0 0 6px #000,0 0 2px #000;opacity:.9}
+.kg-l.hov{font-size:13px;font-weight:700;opacity:1}
+.live-badge{font-size:11px;font-weight:800;letter-spacing:.06em;padding:4px 10px;border-radius:99px;border:1px solid}
+.live-badge.on{color:#34d399;border-color:rgba(52,211,153,.5);background:rgba(16,185,129,.12)}
+.live-badge.off{color:#f87171;border-color:rgba(248,113,113,.5);background:rgba(239,68,68,.12)}
+.live-badge.wait{color:#fbbf24;border-color:rgba(251,191,36,.5);background:rgba(245,158,11,.1)}
+.fps{font:600 11px ui-monospace,Consolas,monospace;padding:4px 8px;border-radius:8px;background:rgba(15,23,42,.7);border:1px solid var(--n-line,#e6eaf2)}
+.fps.ok{color:#34d399} .fps.warn{color:#fbbf24} .fps.bad{color:#f87171}
+.neo-mini{background:radial-gradient(500px 200px at 80% 0,rgba(59,130,246,.25),transparent),#0b1224;color:#e2e8f0;border-radius:16px;padding:14px 16px;margin-bottom:16px;border:1px solid rgba(56,189,248,.2)}
+.mini-regs{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:12px;color:#cbd5e1}
+.mini-regs i{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;box-shadow:0 0 8px currentColor}
+/* Memory Explorer */
+.mx{display:grid;grid-template-columns:220px minmax(0,1fr) 340px;gap:14px;align-items:start}
+.mx-cats a{display:flex;justify-content:space-between;padding:7px 10px;border-radius:8px;color:#334155;cursor:pointer;text-decoration:none}
+.mx-cats a:hover{background:var(--panel2)} .mx-cats a.on{background:var(--acc-soft);color:var(--acc);font-weight:600}
+.mx-cats a span{color:var(--soft);font-size:12px}
+.mx-detail{position:sticky;top:16px;max-height:calc(100vh - 40px);overflow:auto}
+@media (max-width:1100px){.neo-body{grid-template-columns:1fr}.neo-side{max-height:none;min-height:0}.mx{grid-template-columns:1fr}.mx-detail{position:static}}
+
+/* ================= Qorong'i mavzu (ixtiyoriy, sozlamada yoqiladi) ================= */
+:root[data-theme="dark"]{--bg:#060b16;--panel:#0d1526;--panel2:#111c33;--line:#1e2b45;--line2:#273556;--text:#e2e8f0;--muted:#94a3b8;--soft:#64748b;
+  --acc:#60a5fa;--acc2:#22d3ee;--acc-soft:rgba(59,130,246,.15);--acc-ring:rgba(96,165,250,.4);--ok-soft:rgba(16,185,129,.12);--warn-soft:rgba(245,158,11,.12);--bad-soft:rgba(239,68,68,.12);
+  --sh:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.35)}
+:root[data-theme="dark"] body{background:radial-gradient(1000px 500px at 80% -10%,rgba(59,130,246,.15),transparent),var(--bg)}
+:root[data-theme="dark"] aside{background:rgba(6,11,22,.85)}
+:root[data-theme="dark"] nav a{color:#cbd5e1} :root[data-theme="dark"] label{color:#cbd5e1}
+:root[data-theme="dark"] tr:hover td{background:rgba(59,130,246,.06)}
+:root[data-theme="dark"] .guide{background:linear-gradient(180deg,#0f1a33,#0d1526)}
+:root[data-theme="dark"] .mx-cats a{color:#cbd5e1}
+.neo-msg[hidden]{display:none}

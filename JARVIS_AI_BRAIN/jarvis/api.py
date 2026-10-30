@@ -101,6 +101,21 @@ class DecisionReviseIn(BaseModel):
 
 class MemoryUpdate(BaseModel):
     content: str
+    title: str | None = None
+    kind: str | None = None
+
+
+class IngestIn(BaseModel):
+    text: str
+    kind: str | None = None
+    project: str | None = None
+    title: str | None = None
+    source: str = "user"
+    allow_duplicate: bool = False
+
+
+class SuggestDecideIn(BaseModel):
+    accept: bool
 
 class DecideIn(BaseModel):
     approve: bool
@@ -440,7 +455,102 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
 
     @app.put("/api/memory/{mid}")
     def mem_update(mid: int, body: MemoryUpdate):
-        return guard(C().memory.update, mid, body.content)
+        return guard(C().memory.update, mid, body.content, title=body.title, kind=body.kind)
+
+    # Memory Explorer + Memory Connection Engine
+    @app.get("/api/memory/categories")
+    def mem_categories():
+        from .memory import CATEGORY_LABELS
+        counts = {r["kind"]: r["n"] for r in C().db.query("SELECT kind, COUNT(*) n FROM memories GROUP BY kind")}
+        return [{"kind": k, "label": v, "count": counts.get(k, 0)} for k, v in CATEGORY_LABELS.items()]
+
+    @app.get("/api/memory/explore")
+    def mem_explore(kind: str = "", q: str = "", status: str = "", limit: int = 200):
+        c = C()
+        rows = c.memory.search(q, limit=min(limit, 500)) if q else c.memory.list(kind or None, limit=min(limit, 1000))
+        if kind and q:
+            rows = [r for r in rows if r["kind"] == kind]
+        if status:
+            rows = [r for r in rows if r["status"] == status]
+        from .memory import CATEGORY_LABELS, label as info_label
+        return [r | {"category": CATEGORY_LABELS.get(r["kind"], r["kind"]), "reliability": info_label(r),
+                     "name": r.get("title") or r["content"].split("\n")[0][:60]} for r in rows]
+
+    @app.get("/api/memory/{mid}/related")
+    def mem_related(mid: int):
+        return guard(C().connector.related, mid)
+
+    @app.post("/api/memory/analyze")
+    def mem_analyze(body: IngestIn):
+        return C().connector.analyze(body.text, body.project)
+
+    @app.post("/api/memory/ingest")
+    def mem_ingest(body: IngestIn):
+        return guard(C().connector.ingest, body.text, kind=body.kind, project=body.project, source=body.source,
+                     allow_duplicate=body.allow_duplicate, title=body.title)
+
+    @app.get("/api/memory/suggestions")
+    def mem_suggestions(status: str = "pending"):
+        return C().connector.suggestions(status)
+
+    @app.post("/api/memory/suggestions/{sid}")
+    def mem_suggestion_decide(sid: int, body: SuggestDecideIn):
+        return guard(C().connector.decide, sid, body.accept)
+
+    @app.get("/api/memory/duplicates")
+    def mem_duplicates():
+        return C().connector.duplicates()
+
+    # 3D Brain + jonli hodisalar (Server-Sent Events)
+    @app.get("/api/brain/state")
+    def brain_state():
+        return C().brain.state()
+
+    @app.get("/api/brain/region/{rid}")
+    def brain_region(rid: str):
+        return guard(C().brain.region_state, rid)
+
+    @app.get("/api/events/recent")
+    def events_recent(since: int = 0):
+        c = C()
+        return {"events": c.events.since(since), **c.events.snapshot()}
+
+    @app.get("/api/events/stream")
+    async def events_stream(request: Request, since: int = -1, once: bool = False):
+        import asyncio
+        import json as _json
+        from fastapi.responses import StreamingResponse
+        bus = C().events
+        start = bus.seq if since < 0 else since
+
+        async def gen():
+            seq = start
+            yield f"event: hello\ndata: {_json.dumps(bus.snapshot())}\n\n"
+            idle = 0.0
+            while True:
+                evs = bus.since(seq)
+                for e in evs:
+                    seq = e["seq"]
+                    yield f"id: {e['seq']}\nevent: jarvis\ndata: {_json.dumps(e, ensure_ascii=False, default=str)}\n\n"
+                if once:
+                    return
+                if evs:
+                    idle = 0.0
+                if await request.is_disconnected():
+                    return
+                await asyncio.sleep(0.4)
+                idle += 0.4
+                if idle >= 15:
+                    idle = 0.0
+                    yield f"event: ping\ndata: {_json.dumps(bus.snapshot())}\n\n"
+        return StreamingResponse(gen(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    @app.get("/api/kg/graph")
+    def kg_graph(categories: str = "", since: str = "", until: str = "", source: str = "", q: str = "",
+                 limit: int = 3000, offset: int = 0):
+        cats = [x for x in categories.split(",") if x]
+        return C().kgraph.graph(categories=cats, since=since, until=until, source=source, q=q, limit=limit, offset=offset)
 
     @app.delete("/api/memory/{mid}")
     def mem_delete(mid: int):
@@ -730,6 +840,10 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.get("/api/kg/node/{nid}")
     def kg_node(nid: int, depth: int = 1):
         return C().kgraph.neighbors(nid, depth)
+
+    @app.get("/api/kg/find")
+    def kg_find(type: str, ref: str):
+        return guard(C().kgraph.find, type, ref)
 
     @app.get("/api/kg/path")
     def kg_path(a: int, b: int):
