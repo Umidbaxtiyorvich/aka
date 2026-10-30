@@ -99,3 +99,22 @@ def post_multipart(url: str, fields: dict, files: dict[str, tuple[str, bytes, st
     h = {"User-Agent": USER_AGENT, "Content-Type": f"multipart/form-data; boundary={boundary}"}
     status, body = TRANSPORT("POST", url, b"".join(parts), h, timeout)
     return _parse(status, body)
+
+
+def _default_raw_transport(method: str, url: str, data: bytes | None, headers: dict, timeout: float) -> tuple[int, bytes, dict]:
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, r.read(), {k.lower(): v for k, v in r.headers.items()}
+    except urllib.error.HTTPError as e:
+        return e.code, e.read(), {k.lower(): v for k, v in (e.headers or {}).items()}
+    except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as e:
+        raise NetError(f"Tarmoq xatosi: {e}") from e
+
+
+RAW_TRANSPORT = _default_raw_transport
+
+
+def post_raw(url: str, data: bytes, headers: dict, timeout: float = 60) -> tuple[int, bytes, dict]:
+    """Ikkilik javob (masalan, TTS audio) uchun POST."""
+    return RAW_TRANSPORT("POST", url, data, {"User-Agent": USER_AGENT, **headers}, timeout)

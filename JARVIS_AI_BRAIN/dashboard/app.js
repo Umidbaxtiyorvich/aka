@@ -56,6 +56,8 @@ const SECTIONS = [
   ["neural", "Neural Activity", renderNeural],
   ["agentmap", "Agent Connections", (v) => renderBrainHub(v, "graph", ["agents", "tasks", "skills", "apis"])],
   ["projmap", "Projects Map", (v) => renderBrainHub(v, "graph", ["projects", "memories", "files", "decisions", "tasks"])],
+  ["superbrain", "⚡ Super Brain Control", renderSuperBrain],
+  ["connections", "🔌 Universal Connection Center", renderConnections],
   ["chat", "AI Chat", renderChat],
   ["voice", "Voice", renderVoice],
   ["memory", "Memory", renderMemory],

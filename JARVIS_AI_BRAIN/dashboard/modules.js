@@ -8,66 +8,6 @@ const fileLink = (p) => p ? `<a href="/api/studio/file?path=${encodeURIComponent
 
 // ---------------- Voice ----------------
 let recog = null, mediaRec = null, chunks = [];
-async function renderVoice(v) {
-  const st = await api("/api/voice/status");
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const uzVoice = (speechSynthesis.getVoices() || []).find((x) => x.lang && x.lang.toLowerCase().startsWith("uz"));
-  v.innerHTML = `<div class="grid" style="grid-template-columns:1fr 1fr">
-    <div class="card"><h3>Ovozli muloqot</h3>
-      <div class="row"><button id="mic">🎙 Mikrofonni yoqish</button><span id="micst" class="pill">Mikrofon o'chiq</span></div>
-      <div class="row"><label><input type="checkbox" id="speak" checked style="width:auto"> Javobni ovozda aytish</label></div>
-      <div class="row"><label><input type="checkbox" id="rec" style="width:auto" ${st.save_recordings ? "" : "disabled"}> Ovozni yozib saqlash
-        ${st.save_recordings ? "" : '<span class="muted">(Sozlamalarda yoqilmagan)</span>'}</label></div>
-      <div id="heard" class="muted">Gapirganingiz shu yerda ko'rinadi.</div><div id="reply" style="margin-top:8px"></div>
-      <p class="muted" style="margin-top:12px">${SR ? "Brauzer STT: uz-UZ. Ovoz brauzer provayderiga (Google/Microsoft) yuboriladi — internet kerak." : '<span class="warn">Bu brauzer Web Speech API ni qo\'llamaydi. Chrome yoki Edge ishlating.</span>'}<br>
-      TTS: ${uzVoice ? "brauzerda o'zbekcha ovoz: " + esc(uzVoice.name) : st.tts["espeak-ng"].installed ? '<span class="ok">brauzerda o\'zbekcha ovoz yo\'q — mahalliy espeak-ng (uz) ishlatiladi</span>' : '<span class="warn">o\'zbekcha TTS yo\'q — javob matn bilan ko\'rsatiladi. espeak-ng o\'rnating.</span>'}</p>
-      <div class="row" style="margin-top:8px"><input id="ttst" placeholder="Matnni ovozda eshitish (espeak-ng)"><button class="ghost" id="ttsb" ${st.tts["espeak-ng"].installed ? "" : "disabled"}>▶</button></div>
-      <div class="row"><button class="ghost" id="whrec" ${st.engines[1].loaded_model ? "" : "disabled"}>🎙 Mahalliy Whisper bilan yozish (5 s)</button><span id="whst" class="muted">${st.engines[1].loaded_model ? "" : "Whisper modeli yuklanmagan"}</span></div></div>
-    <div class="card"><h3>Dvigatellar</h3>${table(st.engines.map((e) => ({ ...e, models_mb: e.models_mb ? Object.entries(e.models_mb).map(([k, x]) => k + ":" + x + "MB").join(" ") : "" })), ["id", "offline", "uzbek", "installed", "loaded_model", "models_mb"])}
-      <div class="row" style="margin-top:8px"><select id="wm" style="width:140px"><option>tiny</option><option>base</option><option selected>small</option><option>medium</option></select>
-      <button class="ghost" id="wl">Whisper modelini yuklash</button></div><pre id="wo" hidden></pre></div></div>`;
-  $("#wl").onclick = async () => { try { out($("#wo"), await post("/api/voice/whisper/load", { text: $("#wm").value })); } catch (e) { fail($("#wo"), e); } };
-  const setMic = (on) => { $("#micst").textContent = on ? "🔴 MIKROFON YOQILGAN — tinglayapman" : "Mikrofon o'chiq"; $("#micst").className = "pill " + (on ? "bad" : ""); $("#mic").textContent = on ? "⏹ To'xtatish" : "🎙 Mikrofonni yoqish"; };
-  const speakText = async (text) => {
-    if (uzVoice && "speechSynthesis" in window) { const u = new SpeechSynthesisUtterance(text); u.lang = uzVoice.lang; u.voice = uzVoice; speechSynthesis.speak(u); return; }
-    if (!st.tts["espeak-ng"].installed) return;
-    const res = await fetch("/api/voice/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.slice(0, 1500) }) });
-    if (res.ok) new Audio(URL.createObjectURL(await res.blob())).play();
-  };
-  $("#ttsb").onclick = () => speakText($("#ttst").value);
-  $("#whrec").onclick = async () => {
-    try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); const rec = new MediaRecorder(stream); const parts = [];
-      rec.ondataavailable = (e) => parts.push(e.data);
-      rec.onstop = async () => { stream.getTracks().forEach((t) => t.stop()); $("#whst").textContent = "Tanilmoqda (mahalliy)…";
-        const fd = new FormData(); fd.append("file", new Blob(parts, { type: "audio/webm" }), "yozuv.webm");
-        const r = await fetch("/api/voice/transcribe", { method: "POST", body: fd }); const d = await r.json();
-        if (!r.ok) { $("#whst").innerHTML = `<span class="bad">${esc(d.detail)}</span>`; return; }
-        $("#heard").textContent = d.text; $("#whst").textContent = `Whisper ${d.model}: ishonch ${d.probability}`;
-        const ans = await post("/api/chat", { text: d.text }); $("#reply").textContent = ans.text; if ($("#speak").checked) speakText(ans.text); };
-      rec.start(); $("#whst").innerHTML = '<span class="bad">🔴 MIKROFON YOQILGAN — 5 soniya yozilmoqda</span>'; setTimeout(() => rec.stop(), 5000);
-    } catch (e) { $("#whst").innerHTML = `<span class="bad">Mikrofon: ${esc(e.message)}</span>`; }
-  };
-  $("#mic").onclick = async () => {
-    if (recog) { recog.stop(); return; }
-    if (!SR) return alert("Brauzer ovozni tanishni qo'llamaydi");
-    recog = new SR(); recog.lang = "uz-UZ"; recog.interimResults = true; recog.continuous = false;
-    if ($("#rec").checked) {
-      try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); chunks = []; mediaRec = new MediaRecorder(stream);
-        mediaRec.ondataavailable = (e) => chunks.push(e.data);
-        mediaRec.onstop = async () => { stream.getTracks().forEach((t) => t.stop()); await fetch("/api/voice/recordings", { method: "POST", body: new Blob(chunks) }); };
-        mediaRec.start(); } catch (e) { alert("Mikrofon ruxsati berilmadi: " + e.message); }
-    }
-    recog.onresult = (e) => { $("#heard").textContent = [...e.results].map((r) => r[0].transcript).join(" "); };
-    recog.onerror = (e) => { $("#heard").innerHTML = `<span class="bad">Xato: ${esc(e.error)}</span>`; };
-    recog.onend = async () => {
-      setMic(false); recog = null; if (mediaRec && mediaRec.state !== "inactive") mediaRec.stop();
-      const t = $("#heard").textContent.trim(); if (!t || t.startsWith("Gapirganingiz")) return;
-      const r = await post("/api/chat", { text: t }); $("#reply").textContent = r.text;
-      if ($("#speak").checked) speakText(r.text);
-    };
-    recog.start(); setMic(true);
-  };
-}
 
 // ---------------- Research ----------------
 async function renderResearch(v) {

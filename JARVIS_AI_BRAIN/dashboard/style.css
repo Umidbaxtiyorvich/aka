@@ -189,3 +189,9 @@ svg text{font-family:inherit}
 :root[data-theme="dark"] .guide{background:linear-gradient(180deg,#0f1a33,#0d1526)}
 :root[data-theme="dark"] .mx-cats a{color:#cbd5e1}
 .neo-msg[hidden]{display:none}
+
+.vu{height:6px;border-radius:99px;background:var(--panel2);overflow:hidden;margin:4px 0 10px}
+.vu i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ok),var(--warn),var(--bad));transition:width .05s}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tabs a{padding:5px 12px;border-radius:99px;border:1px solid var(--line);cursor:pointer;font-size:13px;user-select:none}
+.tabs a.active{background:var(--acc);color:#fff;border-color:transparent}

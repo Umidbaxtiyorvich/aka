@@ -212,7 +212,7 @@ def test_voice_command_requires_confirmation(core, tg, monkeypatch):
     class FakeModel:
         pass
     core.voice._model = FakeModel()
-    monkeypatch.setattr(core.voice, "transcribe", lambda path, language="uz": {"text": "/status"})
+    monkeypatch.setattr(core.voice_pro, "transcribe", lambda path: {"text": "/status"})
     assert core.telegram.handle_update(msg(111, voice={"file_id": "F1", "duration": 2})) == "voice_confirm"
     m = tg.sent()[-1]
     assert "Tushundim" in m["text"] and "/status" in m["text"]

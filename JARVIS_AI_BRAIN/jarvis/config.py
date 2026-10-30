@@ -59,6 +59,15 @@ class Settings:
     pos_sync: dict = field(default_factory=dict)  # avtomatik o'qish: {"enabled", "interval_hours", "sources": [...]}
     low_stock_threshold: float = 5
     save_voice_recordings: bool = False
+    voice_tts_engine: str = "auto"        # auto | azure | espeak | browser
+    voice_stt_engine: str = "auto"        # auto | azure | whisper | browser
+    voice_gender: str = "female"          # female (Madina) | male (Sardor) — Azure neyron ovozlari
+    voice_rate: int = 0                   # -50..+50 (%)
+    voice_volume: int = 100               # 0..100
+    voice_stt_language: str = "uz"        # uz | auto (o'zbek/rus/ingliz aralash) | ru-RU | en-US
+    voice_silence_ms: int = 900           # gap tugadi deb hisoblash uchun sukunat
+    voice_mic_sensitivity: int = 50       # 0..100 (yuqori — sezgirroq)
+    azure_speech_region: str = ""         # masalan: westeurope (kalit: azure_speech_key)
     telephony_provider: str = ""          # bo'sh = o'chirilgan
     telephony_cost_per_min: float = 0.0
     telephony_from: str = ""

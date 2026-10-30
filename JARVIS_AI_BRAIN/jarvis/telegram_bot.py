@@ -261,19 +261,22 @@ class TelegramAssistant:
         chat_id = chat_id or (o["chat_id"] if o and o["active"] else None)
         if not chat_id:
             raise TelegramError("Telegram egasi ulanmagan")
-        wav = Path(self.core.voice.synthesize(text[:1500])["output"])
+        from .voice_pro import normalize_for_speech
+        audio, amime, _eng = self.core.voice_pro.synth(normalize_for_speech(text, numbers_to_words=self.core.voice_pro.tts_engine() != "azure")[:1500])
+        tmpd = Path(tempfile.mkdtemp(prefix="jarvis_tg_tts_"))
+        src = tmpd / ("in.mp3" if amime == "audio/mpeg" else "in.wav")
+        src.write_bytes(audio)
         ffmpeg = shutil.which("ffmpeg")
         try:
             if ffmpeg:
-                ogg = wav.with_suffix(".ogg")
-                subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", str(wav), "-c:a", "libopus", "-b:a", "32k", str(ogg)],
+                ogg = tmpd / "out.ogg"
+                subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", str(src), "-c:a", "libopus", "-b:a", "32k", str(ogg)],
                                capture_output=True, timeout=120, check=True)
                 method, field, name, mime, data = "sendVoice", "voice", "jarvis.ogg", "audio/ogg", ogg.read_bytes()
-                ogg.unlink(missing_ok=True)
             else:
-                method, field, name, mime, data = "sendAudio", "audio", "jarvis.wav", "audio/wav", wav.read_bytes()
+                method, field, name, mime, data = "sendAudio", "audio", src.name, amime, audio
         finally:
-            wav.unlink(missing_ok=True)
+            shutil.rmtree(tmpd, ignore_errors=True)
         try:
             res = net.post_multipart(f"{API}/bot{self.token()}/{method}", {"chat_id": chat_id}, {field: (name, data, mime)}, timeout=120)
         except net.NetError as e:
@@ -480,8 +483,8 @@ class TelegramAssistant:
 
     # ---------------- ovozli buyruqlar ----------------
     def _handle_voice(self, chat_id: int, voice: dict) -> str:
-        if getattr(self.core.voice, "_model", None) is None:
-            self.send(chat_id, "Ovozni matnga aylantirish yoqilmagan. Dashboard → Voice bo'limida Whisper modelini yuklang.")
+        if self.core.voice_pro.stt_engine() not in ("azure", "whisper"):
+            self.send(chat_id, "Ovozni matnga aylantirish yoqilmagan. Dashboard → Voice: Whisper modelini yuklang yoki Azure Speech kalitini kiriting.")
             return "stt_unavailable"
         try:
             f = self._call("getFile", file_id=voice["file_id"])["result"]
@@ -492,7 +495,7 @@ class TelegramAssistant:
         tmp = Path(tempfile.mkdtemp(prefix="jarvis_tg_voice_")) / "voice.ogg"
         tmp.write_bytes(data)
         try:
-            text = self.core.voice.transcribe(str(tmp))["text"].strip()
+            text = self.core.voice_pro.transcribe(str(tmp))["text"].strip()
         except Exception as e:
             self.send(chat_id, f"Ovozni tanib bo'lmadi: {e}")
             return "stt_failed"

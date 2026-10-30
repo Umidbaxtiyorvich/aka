@@ -3,6 +3,28 @@
 const SETTINGS_FILE = "JARVIS papkasi\\data\\settings.json";
 
 const GUIDES = {
+  connections: {
+    title: "POS, ERP, sayt yoki API qanday ulanadi?",
+    steps: [
+      "<b>+ Yangi ulanish</b> → andozani tanlang (YesPOS, BITO, 1C, Info-Enterprise, CloudShop yoki umumiy REST/sayt/baza/fayl/MCP).",
+      "Manzil va login/token maydonlarini shu sahifada to'ldiring — ular shifrlangan vault'ga yoziladi. Chatga yoki Telegram'ga yozmang.",
+      "<b>Tekshirish</b> — haqiqiy ulanishni sinaydi. Faqat muvaffaqiyatli bo'lsa \"ulangan\" deb ko'rsatiladi.",
+      "<b>O'rganish</b> — tizimdagi obyektlar (mahsulot, chek, mijoz...) va maydonlarni topadi. Mosliklarni tekshirib <b>Tasdiqlash</b>ni bosing.",
+      "<b>Sinxronlash</b> — ma'lumotni o'qib JARVIS bazasiga nusxalaydi. Keyin AI Chat'da \"Bugungi savdo qancha?\" deb so'rang.",
+      "CAPTCHA yoki SMS-kod chiqsa — <b>Brauzerda kirish</b> tugmasi bilan o'zingiz kiring; JARVIS ularni chetlab o'tmaydi.",
+    ],
+    note: "API bo'lmasa eng oddiy yo'l — POS'dan Excel/CSV eksport qilib \"Fayllar\" ulanishi orqali o'qitish. Tashqi tizimga yozish faqat sizning tasdig'ingiz bilan.",
+  },
+  superbrain: {
+    title: "Kuchli AI modellar qanday ulanadi?",
+    steps: [
+      "Mahalliy Ollama modeli doim bepul ishlaydi. Claude, Groq yoki Gemini qo'shish uchun <b>Model qo'shish</b>dan tanlang va API kalitini kiriting.",
+      "Kalitlar: console.anthropic.com (Claude), console.groq.com (Groq), aistudio.google.com (Gemini).",
+      "Bulut modellar pullik hisoblanadi: ular faqat <a href=\"#settings\">Sozlamalar</a>da \"Pullik AI'ga ruxsat\"ni o'zingiz yoqsangiz ishlaydi.",
+      "<b>Vazifa → model</b> jadvalida qaysi ish uchun qaysi model ishlatilishini tanlang.",
+    ],
+    note: "Parol, karta yoki shaxsiy ma'lumotli savollar baribir faqat mahalliy modelga yuboriladi.",
+  },
   chat: {
     title: "AI qanday ulanadi?",
     steps: [

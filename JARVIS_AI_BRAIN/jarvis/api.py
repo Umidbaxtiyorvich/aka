@@ -30,6 +30,7 @@ from .instagram import InstagramError, suggest_hashtags
 from .instagram_mcp import MCPError
 from .integrations import IntegrationError
 from .integrations.vault import VaultError
+from .voice_pro import VoiceProError
 from .kgraph import KGError
 from .memory import MemoryError_
 from .planner import PlannerError
@@ -45,11 +46,12 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError)
+               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
-            "ai_providers", "ai_task_routes", "paid_ai_allowed", "currency", "daily_cost_limit", "monthly_cost_limit", "daily_request_limit",
+            "ai_providers", "ai_task_routes", "paid_ai_allowed", "voice_tts_engine", "voice_stt_engine", "voice_gender", "voice_rate",
+            "voice_volume", "voice_stt_language", "voice_silence_ms", "voice_mic_sensitivity", "azure_speech_region", "currency", "daily_cost_limit", "monthly_cost_limit", "daily_request_limit",
             "cost_warn_percent", "medium_auto_actions", "sandbox_backend", "sandbox_timeout_sec", "sandbox_memory_mb",
             "sandbox_max_retries", "backup_interval_hours", "backup_keep", "backup_max_total_mb", "backup_include_workspace",
             "image_gen_url", "vision_model", "planner_use_ai", "session_hours", "pos_api", "pos_sync",
@@ -145,6 +147,15 @@ class SettingsIn(BaseModel):
     save_voice_recordings: bool | None = None
     ai_providers: list[dict] | None = None
     ai_task_routes: dict | None = None
+    voice_tts_engine: str | None = None
+    voice_stt_engine: str | None = None
+    voice_gender: str | None = None
+    voice_rate: int | None = None
+    voice_volume: int | None = None
+    voice_stt_language: str | None = None
+    voice_silence_ms: int | None = None
+    voice_mic_sensitivity: int | None = None
+    azure_speech_region: str | None = None
     paid_ai_allowed: bool | None = None
     currency: str | None = None
     daily_cost_limit: float | None = None
@@ -894,6 +905,16 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
             raise HTTPException(400, "Meta App ID faqat raqamlardan iborat")
         if "telegram_owner_phone" in data and data["telegram_owner_phone"] and len(re.sub(r"\D", "", data["telegram_owner_phone"])) < 9:
             raise HTTPException(400, "Telefon raqami to'liq emas")
+        vchk = {"voice_tts_engine": ("auto", "azure", "espeak", "browser"), "voice_stt_engine": ("auto", "azure", "whisper", "browser"),
+                "voice_gender": ("female", "male"), "voice_stt_language": ("uz", "auto", "ru-RU", "en-US")}
+        for k, ok in vchk.items():
+            if k in data and data[k] not in ok:
+                raise HTTPException(400, f"{k}: {', '.join(ok)}")
+        for k, lo, hi in (("voice_rate", -50, 50), ("voice_volume", 0, 100), ("voice_silence_ms", 300, 3000), ("voice_mic_sensitivity", 0, 100)):
+            if k in data and not lo <= int(data[k]) <= hi:
+                raise HTTPException(400, f"{k}: {lo}..{hi}")
+        if data.get("azure_speech_region") and not re.fullmatch(r"[a-z0-9]{3,30}", data["azure_speech_region"]):
+            raise HTTPException(400, "Azure mintaqasi, masalan: westeurope")
         if data.get("telephony_provider") not in (None, "", "twilio"):
             raise HTTPException(400, "telephony_provider: bo'sh yoki twilio")
         if "sandbox_backend" in data and data["sandbox_backend"] not in ("process", "docker"):
@@ -1453,8 +1474,17 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
 
     @app.post("/api/voice/tts")
     def v_tts(body: TextIn):
-        r = guard(C().voice.synthesize, body.text)
-        return FileResponse(r["output"], media_type="audio/wav", headers={"X-TTS-Engine": r["engine"].encode("ascii", "ignore").decode()})
+        from fastapi.responses import Response
+        data, mime, engine = guard(C().voice_pro.synth, body.text)
+        return Response(data, media_type=mime, headers={"X-TTS-Engine": engine.encode("ascii", "ignore").decode(), "Cache-Control": "no-store"})
+
+    @app.post("/api/voice/prepare")
+    def v_prepare(body: TextIn):
+        return C().voice_pro.prepare(body.text)
+
+    @app.get("/api/voice/pro")
+    def v_pro():
+        return C().voice_pro.status()
 
     @app.post("/api/voice/transcribe")
     async def v_transcribe(file: UploadFile):
@@ -1464,7 +1494,7 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
         tmp = d / f"_stt_{int(time.time() * 1000)}{Path(file.filename or 'a.webm').suffix or '.webm'}"
         tmp.write_bytes(await file.read())
         try:
-            return guard(c.voice.transcribe, str(tmp))
+            return guard(c.voice_pro.transcribe, str(tmp))
         finally:
             if not c.settings.save_voice_recordings:
                 tmp.unlink(missing_ok=True)
@@ -1491,7 +1521,7 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def secrets_status():
         from .secrets import has_secret
         c = C()
-        names = ["telegram_bot_token", "pos_api_token", "twilio_auth_token", "meta_app_secret", "instagram_mcp_token"]
+        names = ["telegram_bot_token", "pos_api_token", "twilio_auth_token", "meta_app_secret", "instagram_mcp_token", "azure_speech_key"]
         names += [f"instagram_token_{a['name']}" for a in c.settings.instagram_accounts if a.get("name")]
         names += [f"ai_key_{p['id']}" for p in c.settings.ai_providers if p.get("kind") not in ("ollama", None)]
         return [{"name": n, "set": has_secret(n)} for n in names]

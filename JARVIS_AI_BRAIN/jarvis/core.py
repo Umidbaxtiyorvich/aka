@@ -46,6 +46,7 @@ from .memory_connect import MemoryConnector
 from .integrations import IntegrationHub
 from .integrations.analyst import Analyst
 from .brain_core import BrainCore
+from .voice_pro import VoicePro
 from .telephony import Telephony
 from .voice import Voice
 from .security import contains_secret, redact
@@ -96,6 +97,7 @@ class JarvisCore:
         self.instagram = InstagramManager(self)
         self.instagram_mcp = InstagramMCP(self)
         self.voice = Voice(self)
+        self.voice_pro = VoicePro(self)
         self.browser = BrowserAgent(self)
         self.session_browser = SessionBrowser(self)
         self.pos_sync = POSSync(self)

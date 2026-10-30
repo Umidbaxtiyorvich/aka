@@ -248,3 +248,48 @@ def test_memory_explorer_edit_and_ingest(server, page, core):
     page.click("#nsv")
     page.wait_for_selector("#nres .ok")
     assert not page.errors, page.errors
+
+
+def test_connection_center_and_super_brain(server, page, core, tmp_path):
+    ws = tmp_path / "pos_export"
+    ws.mkdir()
+    core.settings.allowed_read_dirs = [str(ws)]
+    import datetime
+    today = datetime.date.today().isoformat()
+    (ws / "savdo.csv").write_text(f"Sana;Mahsulot;Soni;Summa;Do'kon\n{today};Non;2;6000;Chilonzor\n", encoding="utf-8")
+    page.goto(server + "#connections")
+    page.click(".tabs a[data-t=add]")
+    page.wait_for_selector("#preset")
+    page.select_option("#preset", "files")
+    page.fill("#cname", "POS eksport")
+    page.fill("#f_path", str(ws))
+    page.click("#csave")
+    page.wait_for_selector("#cmsg .pill.ok")
+    conn = core.integrations.list()[0]
+    assert conn["status"] == "connected" and conn["adapter"] == "files"
+    page.wait_for_selector(f"button[data-a=discover][data-id='{conn['id']}']")
+    page.click(f"button[data-a=discover][data-id='{conn['id']}']")
+    page.wait_for_timeout(600)
+    page.click(f"button[data-a=sync][data-id='{conn['id']}']")
+    page.wait_for_function(f"document.querySelector('button[data-a=open][data-id=\"{conn['id']}\"]')")
+    page.wait_for_timeout(600)
+    assert core.integrations.get(conn["id"])["records"] == 1
+    page.click(f"button[data-a=open][data-id='{conn['id']}']")
+    page.wait_for_selector("#rgo")
+    page.click("#rgo")
+    page.wait_for_selector("#rres td:has-text('Non')")
+    page.click(".tabs a[data-t=credentials]")
+    page.wait_for_selector("text=Credential Vault")
+    page.click(".tabs a[data-t=history]")
+    page.wait_for_selector("text=Sinxronlash tarixi")
+    page.goto(server + "#superbrain")
+    page.wait_for_selector("#aq")
+    page.fill("#aq", "Bugungi savdo qancha?")
+    page.click("#ago")
+    page.wait_for_selector("#ares:has-text('Manba')")
+    model_id = page.eval_on_selector("[data-tr=pos]", "s => s.options[1].value")
+    page.select_option("[data-tr=pos]", model_id)
+    page.click("#trsave")
+    page.wait_for_selector("#trmsg .ok")
+    assert core.settings.ai_task_routes.get("pos") == model_id
+    assert not page.errors, page.errors
