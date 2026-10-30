@@ -25,6 +25,7 @@ def main() -> int:
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--pull", action="store_true")
     ap.add_argument("--vram", type=float, help="VRAM (GB), agar avtomatik aniqlanmasa")
+    ap.add_argument("--yes", action="store_true", help="yuklashni so'ramasdan tasdiqlash")
     a = ap.parse_args()
     snap = system_info.snapshot(include_gpu=True)
     vram = a.vram if a.vram is not None else system_info.gpu_vram_gb()
@@ -57,7 +58,7 @@ def main() -> int:
         if not shutil.which("ollama"):
             print("Ollama topilmadi: https://ollama.com/download dan o'rnating, so'ng qayta ishga tushiring.")
             return 1
-        if input(f"{', '.join(models)} (~{total:.1f} GB) yuklansinmi? [ha/yo'q]: ").strip().lower() not in ("ha", "h", "y", "yes"):
+        if not a.yes and input(f"{', '.join(models)} (~{total:.1f} GB) yuklansinmi? [ha/yo'q]: ").strip().lower() not in ("ha", "h", "y", "yes"):
             print("Yuklash bekor qilindi.")
             return 0
         for m in models:

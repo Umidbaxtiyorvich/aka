@@ -51,3 +51,46 @@ jobs:
           name: release-report-frontend
           path: JARVIS_AI_BRAIN/release-report.json
           if-no-files-found: ignore
+
+  windows-installer:
+    name: install.ps1 (real Windows)
+    needs: release-gate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse installer
+        shell: pwsh
+        run: |
+          $errs = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$env:GITHUB_WORKSPACE\JARVIS_AI_BRAIN\install.ps1", [ref]$null, [ref]$errs) | Out-Null
+          if ($errs) { $errs; exit 1 }
+      - name: Run installer (minimal, from this branch)
+        shell: powershell
+        run: |
+          powershell -ExecutionPolicy Bypass -File JARVIS_AI_BRAIN\install.ps1 -Minimal -NoLaunch -InstallDir "$env:RUNNER_TEMP\jarvis" -Branch "${{ github.ref_name }}"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Start server and check it answers
+        shell: powershell
+        run: |
+          $d = "$env:RUNNER_TEMP\jarvis"
+          if (-not (Test-Path "$d\JARVIS.cmd")) { throw "launcher yo'q" }
+          $p = Start-Process -FilePath "$d\.venv\Scripts\python.exe" -ArgumentList "-m","jarvis.api","--port","8765" -WorkingDirectory $d -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            Start-Sleep 2
+            try { $r = Invoke-RestMethod http://127.0.0.1:8765/api/auth/status; $ok = $true; break } catch {}
+          }
+          Stop-Process -Id $p.Id -Force
+          if (-not $ok) { throw "server javob bermadi" }
+          if (-not $r.enabled -or $r.pin_set) { throw "kutilmagan auth holati: $($r | ConvertTo-Json)" }
+          "Server OK: $($r | ConvertTo-Json -Compress)"
+      - name: Re-run installer keeps data
+        shell: powershell
+        run: |
+          $d = "$env:RUNNER_TEMP\jarvis"
+          New-Item -ItemType Directory -Force "$d\data" | Out-Null
+          Set-Content "$d\data\marker.txt" "saqlansin"
+          powershell -ExecutionPolicy Bypass -File JARVIS_AI_BRAIN\install.ps1 -Minimal -NoLaunch -InstallDir $d -Branch "${{ github.ref_name }}"
+          if ((Get-Content "$d\data\marker.txt") -ne "saqlansin") { throw "data o'chib ketdi" }
+          if (Test-Path "$d\jarvis\jarvis") { throw "ichma-ich nusxa" }
+          "Qayta o'rnatish OK"

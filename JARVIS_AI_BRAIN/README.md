@@ -83,7 +83,18 @@ Sozlash bo'yicha qo'llanmalar: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 2. **Local AI Runtime** — Windows 11 kompyuteringizda ishga tushirasiz. Xotira (`jarvis.db`) faqat sizning kompyuteringizda bo'ladi.
 3. **Optional Cloud Deployment** — kelajakda, faqat sizning qaroringiz bilan (narx, maxfiylik, autentifikatsiya oldindan muhokama qilinadi). Hozir server faqat `127.0.0.1` da tinglaydi.
 
-## Windows 11'da ishga tushirish
+## Windows 11'ga o'rnatish — bitta buyruq
+
+PowerShell'ni oching (Start → "PowerShell") va qo'ying:
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/Umidbaxtiyorvich/aka/ccr-f1c0e6d1-uu59k9/JARVIS_AI_BRAIN/install.ps1 | iex"
+```
+
+O'rnatuvchi Python, JARVIS, brauzer agenti, FFmpeg, o'zbekcha ovoz va Ollama + AI modellarini o'rnatadi (har biridan oldin so'raydi),
+ish stolida **JARVIS** yorlig'ini yaratadi va dasturni ochadi. Qayta ishga tushirsangiz — yangilanadi, xotira saqlanadi.
+
+## Windows 11'da qo'lda ishga tushirish
 
 > Sizning kompyuteringiz (MSI GF63 Thin, 8 GB RAM) uchun tayyor qo'llanma: [docs/MENING_KOMPYUTERIM.md](docs/MENING_KOMPYUTERIM.md)
 
