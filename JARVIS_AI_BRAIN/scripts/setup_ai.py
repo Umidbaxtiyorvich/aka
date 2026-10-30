@@ -7,6 +7,7 @@
 """
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import time
@@ -30,6 +31,32 @@ def installed_models() -> set[str]:
     return {ln.split()[0] for ln in p.stdout.splitlines()[1:] if ln.strip()}
 
 
+def installed_sizes() -> dict[str, float]:
+    """`ollama list` → {model: hajmi GB}."""
+    try:
+        p = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+    out = {}
+    for ln in p.stdout.splitlines()[1:]:
+        m = re.match(r"(\S+)\s+\S+\s+([\d.]+)\s*(GB|MB)", ln.strip())
+        if m:
+            out[m.group(1)] = float(m.group(2)) / (1 if m.group(3) == "GB" else 1024)
+    return out
+
+
+def pick_installed(sizes: dict[str, float], ram_gb: float, vram_gb: float | None) -> dict | None:
+    """Kompyuterda allaqachon bor modellardan mosini tanlaydi (qayta yuklamaslik uchun).
+    strong: VRAM'ga (yoki RAM'ning ~45% iga) sig'adigan eng kattasi; light: eng kichigi."""
+    limit = min((vram_gb or 0) + 0.6 if vram_gb else ram_gb * 0.45, ram_gb * 0.45)
+    ok = {n: g for n, g in sizes.items() if 0.4 <= g <= limit and not re.search(r"(?i)embed|vision|llava|moondream", n)}
+    if not ok:
+        return None
+    strong = max(ok, key=ok.get)
+    light = min(ok, key=ok.get)
+    return {"light": light, "strong": strong}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true")
@@ -42,6 +69,16 @@ def main() -> int:
     rec = system_info.recommend_setup(snap["ram_total_gb"], vram)
     print(f"RAM: {snap['ram_total_gb']} GB · VRAM: {vram if vram is not None else 'aniqlanmadi'} GB · bo'sh disk: {snap['disk_free_gb']} GB")
     print(f"GPU: {snap['gpu'].get('info') or snap['gpu'].get('how_to_check')}")
+    have = installed_sizes() if shutil.which("ollama") else {}
+    mine = pick_installed(have, snap["ram_total_gb"], vram)
+    if mine:
+        print(f"\nKompyuterda tayyor modellar topildi: {', '.join(f'{n} ({g:.1f} GB)' for n, g in have.items())}")
+        print(f"Mosi ishlatiladi (qayta yuklanmaydi): light={mine['light']}, strong={mine['strong']}")
+        too_big = [n for n, g in have.items() if n not in mine.values() and g > 3.5]
+        if too_big:
+            print(f"  {', '.join(too_big)}: bu kompyuter uchun katta (8 GB RAM / {vram or '?'} GB VRAM) — juda sekin ishlaydi, tanlanmadi.")
+        rec = rec | mine
+        SIZE.update({k: 0 for k in mine.values()})
     models = [m for m in dict.fromkeys([rec["light"], rec["strong"], rec["vision"]]) if m]
     total = sum(SIZE.get(m, 0) for m in models)
     print("\nTavsiya:")

@@ -51,3 +51,10 @@ def test_apply_creates_and_skips_existing(tmp_path, monkeypatch):
     calls.clear()
     import_models.main([str(tmp_path / "m"), "--apply", "--yes"])
     assert not [c for c in calls if c[:2] == ["ollama", "create"]]
+
+
+def test_setup_ai_prefers_installed_models():
+    import setup_ai
+    sizes = {"qwen3:4b-instruct": 2.5, "umid-ai:latest": 4.9, "llama3.2:latest": 2.0, "llama3.1:8b": 4.9, "nomic-embed-text": 0.3}
+    assert setup_ai.pick_installed(sizes, 7.7, 4.0) == {"light": "llama3.2:latest", "strong": "qwen3:4b-instruct"}
+    assert setup_ai.pick_installed({"llama3:latest": 4.7}, 7.7, 4.0) is None      # 8 GB RAM uchun katta
