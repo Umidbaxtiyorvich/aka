@@ -133,3 +133,45 @@ def test_recommend_setup_for_8gb_gtx1650():
     assert "medvram" in r["image_gen"]
     assert "Tavsiya etilmaydi" in recommend_setup(7.8, None)["image_gen"]
     assert recommend_setup(4, None)["light"] == "qwen2.5:0.5b"
+
+
+def test_feedback_and_eval_change_order(core, fake):
+    core.settings.ai_providers.append({"id": "light2", "kind": "ollama", "model": "qwen2.5:7b", "tier": "light"})
+    first = core.ai.plan([{"role": "user", "content": "salom"}])["candidates"][0]["id"]
+    assert first == "light"
+    r = core.ai.route([{"role": "user", "content": "salom"}])
+    uid = r["route"]["usage_id"]
+    assert uid
+    for _ in range(5):                                    # foydalanuvchi 'light' javoblarini yomon deb baholadi
+        core.ai.feedback(uid, False)                      # bir javobga qayta baho — eskisini almashtiradi
+    q = core.ai.quality()["light"]
+    assert q["user_down"] == 1 and q["votes"] == 1 and not q["enough"]
+    for i in range(5):
+        u = core.ai.route([{"role": "user", "content": f"salom {i}"}])["route"]["usage_id"]
+        core.ai.feedback(u, False)
+    assert core.ai.quality()["light"]["enough"] and core.ai.quality()["light"]["score"] < 0.4
+    assert core.ai.plan([{"role": "user", "content": "salom"}])["candidates"][0]["id"] == "light2"
+    r = core.ai.route([{"role": "user", "content": "salom"}])
+    assert r["route"]["provider"] == "light2"
+    # O'rnatilgan testlar: soxta model "lokal:..." qaytaradi → hech biri o'tmaydi, halol yoziladi
+    ev = core.ai.evaluate("light2")
+    assert ev["total"] == 3 and ev["passed"] == 0 and ev["quality"]["eval_fail"] == 3
+    with pytest.raises(AIError):
+        core.ai.feedback(999999, True)
+    with pytest.raises(AIError):
+        core.ai.evaluate("offline")
+
+
+def test_paid_eval_blocked_without_permission(core, fake):
+    core.settings.paid_ai_allowed = False
+    with pytest.raises(AIError, match="bloklandi|mavjud emas"):
+        core.ai.evaluate("cloud")
+
+
+def test_reliability_summary_and_api(client, core, fake):
+    uid = core.ai.route([{"role": "user", "content": "salom"}])["route"]["usage_id"]
+    g = client.get("/api/guard").json()
+    assert g["reliability"]["ai"] and "real vaqt oqimi emas" in g["reliability"]["note"]
+    assert client.post("/api/ai/feedback", json={"usage_id": uid, "good": True}).json()["user_up"] == 1
+    assert client.get("/api/ai/quality").json()["light"]["user_up"] == 1
+    assert client.post("/api/ai/feedback", json={"usage_id": 987654, "good": True}).status_code == 400

@@ -17,6 +17,8 @@ jobs:
         working-directory: JARVIS_AI_BRAIN
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2       # release gate diff ko'rigi uchun oldingi commit kerak
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -38,6 +40,8 @@ jobs:
         working-directory: JARVIS_AI_BRAIN
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2       # release gate diff ko'rigi uchun oldingi commit kerak
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

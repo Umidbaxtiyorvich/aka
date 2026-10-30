@@ -39,6 +39,7 @@ from .sandbox import Sandbox
 from .studio import Studio
 from .telegram_bot import TelegramAssistant
 from .instagram_mcp import InstagramMCP
+from .selfheal import SelfHealer
 from .telephony import Telephony
 from .voice import Voice
 from .security import contains_secret, redact
@@ -99,6 +100,7 @@ class JarvisCore:
         self.auth = AuthManager(self)
         self.improver = Improver(self)
         self.agents = AgentManager(self)
+        self.selfheal = SelfHealer(self)
         self.approvals.on_pending = self.telegram.on_approval_pending
         self._health_state: dict = {}
         self.automation_paused = False
@@ -162,6 +164,10 @@ class JarvisCore:
                                      "instagram", f"Instagram qayta ulandi: @{a['name']}")
             if self.settings.instagram_mcp_url:
                 self.instagram_mcp.check()
+        last_heal = self._health_state.setdefault("heal_at", now)
+        if now - last_heal > 6 * 3600:          # 6 soatda bir yengil tekshiruv: diagnostika + xatolarni guruhlash (test/taklifsiz)
+            self._health_state["heal_at"] = now
+            self.selfheal.run()
         return out
 
     # --- Telegram tasdig'idan keyin bajariladigan amallar (aniq ro'yxat) ---

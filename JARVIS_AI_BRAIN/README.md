@@ -59,6 +59,7 @@ Tafsilotlar: [docs/IMPROVEMENTS_PLAN.md](docs/IMPROVEMENTS_PLAN.md), [docs/RELEA
 | Browser agent | Playwright: ruxsat berilgan saytni faqat o'qish, sayt tuzilishini hujjatlashtirish, skrinshot |
 | Telegram Control Center | Bitta ega (kod + telefon tasdig'i), ✅/❌ tugmali muddatli bir martalik tasdiqlar, hodisa xabarlari, ovozli xabar va ovozli buyruq (tasdiq bilan), /status /tasks /approve ... |
 | Instagram MCP + Graph API | MCP serverga ulanish, vositalarni aniqlash (o'qish darhol, qolgani tasdiq bilan, natija ishonchsiz deb belgilanadi); token muddati/ruxsatlari |
+| Router 2.0 / Self-healing | Model sifati bahosi (👍/👎 + testlar), takrorlanuvchi xatolarni guruhlash, alohida nusxada testlar, kvotali tuzatish takliflari (regressiya testi bilan), release gate'da diff ko'rigi |
 | Self-improvement | Yaxshilash takliflari; "Yangi funksiya so'rash" (o'zbekcha → AI patch); patch → alohida worktree'da test → tasdiq → branch → alohida E-tasdiq bilan qayta testlanib asosiy versiyaga; orqaga qaytarish (git revert) |
 | Bildirishnomalar | Dashboard (+ Telegram sozlangan bo'lsa) |
 

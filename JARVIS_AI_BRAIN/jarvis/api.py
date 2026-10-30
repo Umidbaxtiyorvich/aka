@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import __version__, system_info
-from .ai_engine import MODEL_CATALOG
+from .ai_engine import MODEL_CATALOG, AIError
 from .approval import ApprovalError
 from .config import LOCKED_KEYS, PROJECT_ROOT
 from .core import CAPABILITIES, JarvisCore
@@ -43,7 +43,7 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError)
+               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
@@ -258,6 +258,12 @@ class AppIn(BaseModel):
     name: str
     file: str | None = None
     reason: str = ""
+
+class FeedbackIn(BaseModel):
+    usage_id: int
+    good: bool
+    note: str = ""
+
 
 class MCPCallIn(BaseModel):
     tool: str
@@ -628,6 +634,18 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
         c = C()
         return {"providers": c.ai.status(), "last_route": c.ai.last_route, "metrics": c.guard.providers()}
 
+    @app.get("/api/ai/quality")
+    def ai_quality():
+        return C().ai.quality()
+
+    @app.post("/api/ai/feedback")
+    def ai_feedback(body: FeedbackIn):
+        return guard(C().ai.feedback, body.usage_id, body.good, body.note)
+
+    @app.post("/api/ai/evaluate/{pid}")
+    def ai_evaluate(pid: str):
+        return guard(C().ai.evaluate, pid)
+
     @app.post("/api/ai/route-preview")
     def ai_preview(body: TextIn):
         p = C().ai.plan([{"role": "user", "content": body.text}])
@@ -692,6 +710,15 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
         return guard(C().dag.cancel, rid)
 
     # Knowledge Graph
+    # Self-healing
+    @app.post("/api/selfheal/run")
+    def selfheal_run(tests: bool = False, propose: bool = False):
+        return C().selfheal.run(run_tests=tests, propose=propose)
+
+    @app.get("/api/selfheal/history")
+    def selfheal_history():
+        return C().selfheal.history()
+
     @app.get("/api/kg")
     def kg_stats():
         return C().kgraph.stats()

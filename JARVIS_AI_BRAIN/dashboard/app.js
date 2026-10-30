@@ -154,12 +154,15 @@ async function renderChat(v) {
   v.innerHTML = `<div class="chat" id="log"></div>
     <div class="row"><input id="msg" placeholder="Yozing… (masalan: yordam, eslab qol: ..., xotira: ..., holat)" autofocus><button id="send">Yuborish</button></div>`;
   const log = $("#log");
-  const add = (role, text) => { log.insertAdjacentHTML("beforeend", `<div class="msg ${role}">${esc(text)}</div>`); log.scrollTop = 1e9; };
+  const add = (role, text, usage) => { log.insertAdjacentHTML("beforeend", `<div class="msg ${role}">${esc(text)}${usage ? `<div class="fb" style="margin-top:6px">
+      <button class="ghost" data-fb="${usage}" data-g="1" title="Yaxshi javob">👍</button> <button class="ghost" data-fb="${usage}" data-g="0" title="Yomon javob">👎</button></div>` : ""}</div>`); log.scrollTop = 1e9; };
+  log.onclick = async (e) => { const d = e.target.dataset; if (!d.fb) return;
+    try { await post("/api/ai/feedback", { usage_id: Number(d.fb), good: d.g === "1" }); e.target.parentElement.innerHTML = '<span class="muted">Rahmat — baho saqlandi</span>'; } catch (er) { alert(er.message); } };
   (await api("/api/chat/history?limit=40")).forEach((m) => add(m.role, m.content));
   const send = async () => {
     const t = $("#msg").value.trim(); if (!t) return;
     $("#msg").value = ""; add("user", t);
-    try { add("assistant", (await api("/api/chat", { method: "POST", body: { text: t } })).text); }
+    try { const r = await api("/api/chat", { method: "POST", body: { text: t } }); add("assistant", r.text, r.route && r.route.usage_id); }
     catch (e) { add("assistant", "Xato: " + e.message); }
   };
   $("#send").onclick = send;
@@ -308,8 +311,26 @@ async function renderErrors(v) {
     catch (er) { o.textContent = er.message; } };
 }
 
+async function renderHeal(box) {
+  box.innerHTML = `<div class="card" style="margin-top:12px"><h3>Self-healing — o'zini tekshirish</h3>
+    <p class="muted">Diagnostika → takrorlanuvchi xatolarni guruhlash → (ixtiyoriy) testlar alohida nusxada → (ixtiyoriy) AI tuzatish taklifi regressiya testi bilan.
+    Hech narsa o'zi qo'llanmaydi. Taklif kvotasi: kuniga 3 ta.</p>
+    <div class="row"><button id="hl">Tekshirish</button><button class="ghost" id="ht">Tekshirish + testlar</button><button class="ghost" id="hp">+ tuzatish taklifi (AI)</button></div><div id="ho"></div></div>`;
+  const run = async (q) => { $("#ho").innerHTML = '<span class="muted">Bajarilmoqda…</span>'; try { const r = await post(`/api/selfheal/run?${q}`);
+    $("#ho").innerHTML = `<div style="margin:8px 0">Umumiy holat: <b>${esc(r.overall)}</b> · takrorlanuvchi xatolar: <b>${r.recurring.length}</b> · qolgan taklif kvotasi: ${r.quota_left}</div>
+      ${r.problems.length ? table(r.problems, ["name", "status", "detail"]) : '<div class="ok">Diagnostikada muammo yo\'q</div>'}
+      ${r.error_groups.length ? `<h4>Xatolar (7 kun, imzo bo'yicha)</h4>${table(r.error_groups, ["module", "count", "recurring", "last_seen", "sample"])}` : ""}
+      ${r.tests ? `<h4>Testlar (alohida nusxa)</h4><div>${r.tests.ran ? (r.tests.passed ? '<span class="ok">o\'tdi</span>' : '<span class="bad">yiqildi</span>') + " — " + esc(r.tests.summary) : esc(r.tests.note)}</div>` : ""}
+      ${r.proposal ? `<h4>Tuzatish taklifi</h4><div>${r.proposal.created ? `#${r.proposal.created} ${esc(r.proposal.title)} ${r.proposal.has_regression_test ? '<span class="pill ok">regressiya testi bor</span>' : '<span class="pill warn">regressiya testi yo\'q</span>'}` : ""} <span class="muted">${esc(r.proposal.note)}</span></div>` : ""}
+      <h4>Git holati</h4><pre>${esc(r.git.ok ? `${r.git.branch} @ ${r.git.head}\n${r.git.diff_stat || "saqlanmagan o'zgarish yo'q"}` : r.git.note)}</pre>
+      ${r.rollback_plans.length ? `<h4>Qaytarish rejalari</h4>${table(r.rollback_plans, ["proposal", "title", "plan"])}` : ""}`;
+    if (q.includes("propose")) renderImprove($("#imp")); } catch (e) { fail($("#ho"), e); } };
+  $("#hl").onclick = () => run(""); $("#ht").onclick = () => run("tests=true"); $("#hp").onclick = () => run("tests=true&propose=true");
+}
+
 async function renderTests(v) {
-  v.innerHTML = `<div class="card"><div class="row"><button id="h">Modullarni tekshirish</button><button id="t" class="ghost">pytest testlarini ishga tushirish</button></div><div id="r" class="muted">Natija shu yerda chiqadi.</div></div><div id="rel"></div><div id="imp"></div>`;
+  v.innerHTML = `<div class="card"><div class="row"><button id="h">Modullarni tekshirish</button><button id="t" class="ghost">pytest testlarini ishga tushirish</button></div><div id="r" class="muted">Natija shu yerda chiqadi.</div></div><div id="heal"></div><div id="rel"></div><div id="imp"></div>`;
+  renderHeal($("#heal"));
   renderRelease($("#rel"));
   renderImprove($("#imp"));
   const run = async (full) => {

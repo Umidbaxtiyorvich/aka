@@ -26,7 +26,7 @@ async function renderDiagnostics(v) {
 
 // ---------------- AI Router va xarajat ----------------
 async function renderRouter(v) {
-  const [r, g, s] = await Promise.all([api("/api/ai/router"), api("/api/guard"), api("/api/settings")]);
+  const [r, g, s, q] = await Promise.all([api("/api/ai/router"), api("/api/guard"), api("/api/settings"), api("/api/ai/quality")]);
   const money = (x) => `${x} ${esc(g.limits.currency)}`;
   v.innerHTML = `<div class="grid">
     <div class="card"><h3>Bugun</h3><div class="big">${g.today.requests}</div><div class="muted">so'rov · xato ${g.today.failed} · ${money(g.today.cost)}</div></div>
@@ -38,6 +38,14 @@ async function renderRouter(v) {
       <input id="pmodel" placeholder="model" style="width:160px"><input id="purl" placeholder="base_url (tashqi uchun https://)" style="width:240px"><select id="ptier" style="width:100px"><option>light</option><option>strong</option></select>
       <input id="pin" type="number" step="0.0001" placeholder="narx kirish/1k" style="width:130px"><input id="pout" type="number" step="0.0001" placeholder="narx chiqish/1k" style="width:130px"><button id="padd">Qo'shish</button></div>
       <div class="muted">Tashqi kalit: yuqoridagi yo'riqnomadagi <code>ai_key_&lt;id&gt;</code> maydoniga kiriting. Narxlarni o'zingiz kiritasiz — xarajat shu narx bo'yicha hisoblanadi.</div><div id="pm"></div></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:12px"><div class="card"><h3>Model sifati (fikr + testlar)</h3>
+      ${table(r.providers.filter((p) => p.kind !== "offline").map((p) => { const x = q[p.id] || {}; return { id: p.id, model: p.model, "👍": x.user_up || 0, "👎": x.user_down || 0,
+        "test ✓": x.eval_pass || 0, "test ✗": x.eval_fail || 0, baho: x.votes ? `${Math.round(x.score * 100)}%${x.enough ? "" : " (kam)"}` : "—" }; }), ["id", "model", "👍", "👎", "test ✓", "test ✗", "baho"])}
+      <div class="row" style="margin-top:8px">${r.providers.filter((p) => p.kind !== "offline" && p.available).map((p) => `<button class="ghost" data-ev="${esc(p.id)}">${esc(p.id)}: sinash</button>`).join("") || '<span class="muted">Sinash uchun mavjud model yo\'q</span>'}</div>
+      <div class="muted">Chatdagi har javob ostida 👍/👎 bor. Kamida 5 ta baho to'plangach, bir xil darajadagi modellardan yaxshirog'i birinchi tanlanadi. Pullik model sinovi Cost Guard limitidan o'tadi.</div><pre id="evo" hidden></pre></div>
+      <div class="card"><h3>Qayta urinishlar va xatolar (bugun)</h3>${table(g.reliability.ai, ["provider", "n", "failed", "retries", "fallbacks"])}
+        <div style="margin-top:8px">Vazifalar: ${g.reliability.tasks_today.total} ta, xato ${g.reliability.tasks_today.failed}</div>
+        ${g.reliability.errors_by_module.length ? table(g.reliability.errors_by_module, ["module", "n"]) : '<div class="muted">Bugun xato yo\'q</div>'}<div class="muted">${esc(g.reliability.note)}</div></div></div>
     <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:12px"><div class="card"><h3>Xarajat limitlari</h3>
       <label><input type="checkbox" id="paid" style="width:auto" ${s.paid_ai_allowed ? "checked" : ""}> Pullik AI'ga ruxsat (limit doirasida)</label>
       <label>Kunlik limit</label><input id="dl" type="number" step="0.01" value="${s.daily_cost_limit}"><label>Oylik limit</label><input id="ml" type="number" step="0.01" value="${s.monthly_cost_limit}">
@@ -58,6 +66,8 @@ async function renderRouter(v) {
   $("#lsave").onclick = async () => { try { await post("/api/settings", { paid_ai_allowed: $("#paid").checked, daily_cost_limit: Number($("#dl").value), monthly_cost_limit: Number($("#ml").value),
     daily_request_limit: Number($("#rl").value), cost_warn_percent: Number($("#wp").value), currency: $("#cur").value }); $("#lm").innerHTML = '<span class="ok">Saqlandi</span>'; } catch (e) { fail($("#lm"), e); } };
   $("#rp").onclick = async () => out($("#ro"), await post("/api/ai/route-preview", { text: $("#rt").value }));
+  v.addEventListener("click", async (e) => { const id = e.target.dataset.ev; if (!id) return;
+    out($("#evo"), "Sinalmoqda…"); try { out($("#evo"), await post(`/api/ai/evaluate/${encodeURIComponent(id)}`)); setTimeout(show, 1500); } catch (er) { fail($("#evo"), er); } });
 }
 
 // ---------------- Policy ----------------
@@ -178,7 +188,11 @@ async function renderKG(v) {
   const open = async (id) => { const d = await api(`/api/kg/node/${id}?depth=1`);
     $("#g").innerHTML = kgSvg(d);
     const lab = Object.fromEntries(d.nodes.map((n) => [n.id, `${n.type}: ${n.label}`]));
-    $("#e").innerHTML = table(d.edges.map((x) => ({ dan: lab[x.src], aloqa: x.rel_uz, ga: lab[x.dst] })), ["dan", "aloqa", "ga"]); };
+    const c = d.nodes.find((n) => n.id === d.center) || {};
+    $("#e").innerHTML = `<div class="row" style="margin-top:10px"><b>${esc(c.type)}: ${esc(c.label)}</b>
+      <span class="pill">manba: ${esc(c.source || "—")}</span><span class="pill">olingan: ${esc(c.observed_at || c.created_at || "—")}</span>
+      ${c.verified ? '<span class="pill ok">tekshirilgan</span>' : '<span class="pill warn">tekshirilmagan</span>'}
+      ${c.section ? `<a href="#${esc(c.section)}"><button class="ghost">Tegishli bo'limga o'tish →</button></a>` : ""}</div>` + table(d.edges.map((x) => ({ dan: lab[x.src], aloqa: x.rel_uz, ga: lab[x.dst] })), ["dan", "aloqa", "ga"]); };
   $("#go").onclick = async () => { const r = await api(`/api/kg/search?q=${encodeURIComponent($("#q").value)}&type=${$("#t").value}`);
     $("#res").innerHTML = r.length ? r.map((n) => `<button class="ghost" style="margin:3px" data-kg="${n.id}">${esc(n.type)}: ${esc(n.label.slice(0, 40))}</button>`).join("") : '<span class="muted">Topilmadi</span>'; };
   $("#rb").onclick = async () => { await post("/api/kg/rebuild"); show(); };

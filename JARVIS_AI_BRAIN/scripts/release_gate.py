@@ -4,6 +4,8 @@ Tekshiruvlar:
   1. lint (ruff)                     — majburiy
   2. dashboard JS sintaksisi (node)  — majburiy, agar --require-frontend; aks holda bajarilmasa INCOMPLETE emas
   3. pytest: butun to'plam (regressiya) + toifalar: unit, integration, api, permissions, errors, frontend
+  4. git diff ko'rigi: o'zgargan fayllar; maxfiy fayl yoki qo'shilgan qatorlarda kalit bo'lsa — FAIL;
+     kod o'zgarib, test o'zgarmagan bo'lsa — ogohlantirish (FAIL emas)
 Natija:
   PASS       — hamma majburiy tekshiruv bajarildi va o'tdi
   FAIL       — biror tekshiruv yoki test muvaffaqiyatsiz
@@ -101,6 +103,48 @@ def git_info() -> dict:
     return {"commit": sha, "uncommitted_changes": dirty}
 
 
+# Kodda haqiqiy kalitga xos naqshlar (oddiy "token" so'zi emas)
+SECRET_VALUE = (r"-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(sk-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{30,}"
+                r"|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|xox[abpr]-[A-Za-z0-9-]{20,}|EAA[A-Za-z0-9]{60,}|\d{8,10}:AA[A-Za-z0-9_-]{33})\b"
+                r"|(?i:(password|passwd|secret|api_key|apikey|access_token|auth_token)\s*[:=]\s*[\"'][^\"'\s{}<>]{12,}[\"'])")
+SECRET_FILE = r"(^|/)(\.env(\..*)?|.*\.(pem|key|p12|pfx)|id_rsa.*|credentials.*\.json|data/settings\.json)$"
+
+
+def check_diff() -> dict:
+    """O'zgarishlarni ko'rib chiqish: bazaga nisbatan (CI: GITHUB_BASE_REF yoki oldingi commit) + saqlanmagan o'zgarishlar."""
+    import re
+    if not shutil.which("git") or run(["git", "rev-parse", "HEAD"]).returncode != 0:
+        return {"name": "diff_review", "status": "not_run", "detail": "git yo'q yoki repozitoriy emas"}
+    base = None
+    for cand in ([f"origin/{os.environ['GITHUB_BASE_REF']}"] if os.environ.get("GITHUB_BASE_REF") else []) + ["HEAD~1"]:
+        mb = run(["git", "merge-base", "HEAD", cand]) if cand.startswith("origin/") else run(["git", "rev-parse", "--verify", cand])
+        if mb.returncode == 0 and mb.stdout.strip():
+            base = mb.stdout.strip()
+            break
+    if not base:
+        return {"name": "diff_review", "status": "not_run", "detail": "taqqoslash uchun oldingi commit yo'q (sayoz checkout)"}
+    names = set(run(["git", "diff", "--name-only", base, "--", "."]).stdout.split())
+    names |= set(run(["git", "diff", "--name-only", "--", "."]).stdout.split())
+    top = run(["git", "rev-parse", "--show-toplevel"]).stdout.strip()
+    rel = Path(ROOT).resolve().relative_to(Path(top).resolve()).as_posix() if top else ""
+    names = {n[len(rel) + 1:] if rel and n.startswith(rel + "/") else n for n in names}
+    bad_files = sorted(n for n in names if re.search(SECRET_FILE, n))
+    added = [ln[1:] for ln in run(["git", "diff", base, "--", ".", ":(exclude)tests/**"]).stdout.splitlines()
+             if ln.startswith("+") and not ln.startswith("+++")]
+    secret_lines = sum(1 for ln in added if re.search(SECRET_VALUE, ln))
+    code = sorted(n for n in names if n.startswith(("jarvis/", "dashboard/", "scripts/")))
+    tests_changed = any(n.startswith("tests/") for n in names)
+    warn = []
+    if code and not tests_changed:
+        warn.append("kod o'zgargan, lekin testlar o'zgarmagan — regressiya testi qo'shishni ko'rib chiqing")
+    detail = f"{len(names)} fayl o'zgargan (baza {base[:10]})" + (f"; kod: {', '.join(code[:8])}" if code else "")
+    if bad_files or secret_lines:
+        return {"name": "diff_review", "status": "failed", "files": sorted(names),
+                "detail": detail + (f"; MAXFIY FAYL: {bad_files}" if bad_files else "") + (f"; {secret_lines} ta qatorda kalitga o'xshash qiymat" if secret_lines else "")}
+    return {"name": "diff_review", "status": "passed", "files": sorted(names), "warnings": warn,
+            "detail": detail + ("; ⚠ " + "; ".join(warn) if warn else "")}
+
+
 def evaluate(checks: list[dict], tests: dict, require_frontend: bool) -> tuple[str, list[str]]:
     reasons = []
     for c in checks:
@@ -127,7 +171,7 @@ def main() -> int:
     ap.add_argument("--json-out", help="hisobot fayli (standart: JARVIS_HOME/release/last.json)")
     a = ap.parse_args()
     started = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    checks = [check_lint(), check_js()]
+    checks = [check_lint(), check_js(), check_diff()]
     tests = run_tests()
     verdict, reasons = evaluate(checks, tests, a.require_frontend)
     report = {"verdict": verdict, "reasons": reasons, "started_at": started,

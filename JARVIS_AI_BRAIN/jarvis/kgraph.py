@@ -25,7 +25,11 @@ CREATE INDEX IF NOT EXISTS kg_nodes_label ON kg_nodes(label);
 """
 RELATIONS = {"performed_by": "bajargan agent", "has_task": "vazifasi", "has_memory": "xotirasi", "supports": "qo'llab-quvvatlaydi",
              "affects": "ta'sir qiladi", "based_on": "asoslangan", "supersedes": "o'rnini bosadi", "changes": "o'zgartiradi",
-             "resolved_by": "tuzatilgan", "has_decision": "qarori", "has_goal": "maqsadi", "related_to": "bog'liq"}
+             "resolved_by": "tuzatilgan", "has_decision": "qarori", "has_goal": "maqsadi", "related_to": "bog'liq",
+             "tested_by": "sinalgan", "covers": "tekshiradi"}
+# Tugun turi → dashboard bo'limi (tugundan tegishli joyga o'tish uchun)
+SECTIONS = {"task": "agents", "agent": "agents", "decision": "decisions", "error": "errors", "proposal": "tests", "test_run": "tests",
+            "file": "files", "memory": "memory", "source": "knowledge", "project": "memory", "module": "diagnostics"}
 NodeSpec = tuple  # (type, ref, label|None)
 
 
@@ -37,17 +41,27 @@ class KnowledgeGraph:
     def __init__(self, core):
         self.core = core
         core.db.conn.executescript(SCHEMA)
+        # Provenance: manba, olingan vaqt va tekshirilgan holati har bir tugunda
+        core.db.ensure_columns("kg_nodes", {"source": "TEXT", "observed_at": "TEXT", "verified": "INTEGER NOT NULL DEFAULT 0"})
 
     # --- yozish ---
-    def node(self, type_: str, ref, label: str | None = None, props: dict | None = None) -> int:
+    def node(self, type_: str, ref, label: str | None = None, props: dict | None = None, *, source: str | None = None,
+             observed_at: str | None = None, verified: bool | None = None) -> int:
         ref = str(ref)
         row = self.core.db.one("SELECT id, label FROM kg_nodes WHERE type=? AND ref=?", (type_, ref))
         if row:
             if label and label != row["label"]:
                 self.core.db.execute("UPDATE kg_nodes SET label=? WHERE id=?", (label[:200], row["id"]))
+            if source is not None or observed_at is not None or verified is not None or props:
+                self.core.db.execute("UPDATE kg_nodes SET source=COALESCE(?, source), observed_at=COALESCE(?, observed_at),"
+                                     " verified=COALESCE(?, verified), props=CASE WHEN ? IS NULL THEN props ELSE ? END WHERE id=?",
+                                     (source, observed_at, None if verified is None else int(verified),
+                                      None if not props else 1, json.dumps(props or {}, ensure_ascii=False), row["id"]))
             return row["id"]
-        cur = self.core.db.execute("INSERT INTO kg_nodes(type, ref, label, props) VALUES (?,?,?,?)",
-                                   (type_, ref, (label or f"{type_} {ref}")[:200], json.dumps(props or {}, ensure_ascii=False)))
+        cur = self.core.db.execute("INSERT INTO kg_nodes(type, ref, label, props, source, observed_at, verified) VALUES (?,?,?,?,?,"
+                                   "COALESCE(?, datetime('now')),?)",
+                                   (type_, ref, (label or f"{type_} {ref}")[:200], json.dumps(props or {}, ensure_ascii=False),
+                                    source or "jarvis:auto", observed_at, int(bool(verified))))
         return cur.lastrowid
 
     def link(self, src: NodeSpec, rel: str, dst: NodeSpec) -> dict:
@@ -62,6 +76,8 @@ class KnowledgeGraph:
         self.link(("task", task["id"], task["title"]), "performed_by", ("agent", task["agent"], task["agent"]))
 
     def on_memory(self, m: dict):
+        self.node("memory", m["id"], m["content"][:80], source=m.get("reference") or m.get("source") or "user",
+                  observed_at=m.get("observed_at") or m.get("created_at"), verified=bool(m.get("verified")))
         node = ("memory", m["id"], m["content"][:80])
         if m.get("project"):
             self.link(("project", m["project"], m["project"]), "has_task" if m["kind"] == "task" else "has_memory", node)
@@ -85,6 +101,18 @@ class KnowledgeGraph:
             self.link(node, "changes", ("file", f, f))
         for eid in re.findall(r"error#(\d+)", (p.get("description") or "") + " " + p["title"]):
             self.link(("error", eid, None), "resolved_by", node)
+
+    def on_test_run(self, run_id: str, status: str, *, proposal: dict | None = None, files: set[str] | None = None,
+                    summary: str = "", source: str = "pytest") -> int:
+        """Test natijasi tugun sifatida: taklif → sinalgan → test; test → tekshiradi → fayllar."""
+        nid = self.node("test_run", run_id, f"{status}: {summary[:60]}" if summary else status, {"status": status},
+                        source=source, verified=status in ("passed", "tested_pass"))
+        tn = ("test_run", run_id, None)
+        if proposal:
+            self.link(("proposal", proposal["id"], proposal["title"][:80]), "tested_by", tn)
+        for f in sorted(files or []):
+            self.link(tn, "covers", ("file", f, f))
+        return nid
 
     def rebuild(self, limit: int = 5000) -> dict:
         """Mavjud jadvallardan grafni tiklash (takroriy chaqirish xavfsiz)."""
@@ -111,7 +139,11 @@ class KnowledgeGraph:
         if type_:
             sql += " AND type=?"
             params.append(type_)
-        return self.core.db.query(sql + " ORDER BY id DESC LIMIT ?", (*params, limit))
+        return [n | {"section": SECTIONS.get(n["type"])} for n in self.core.db.query(sql + " ORDER BY id DESC LIMIT ?", (*params, limit))]
+
+    @staticmethod
+    def section_for(type_: str) -> str | None:
+        return SECTIONS.get(type_)
 
     def find(self, type_: str, ref) -> dict:
         r = self.core.db.one("SELECT * FROM kg_nodes WHERE type=? AND ref=?", (type_, str(ref)))
@@ -138,6 +170,7 @@ class KnowledgeGraph:
             frontier = nxt
         marks = ",".join("?" * len(seen))
         nodes = self.core.db.query(f"SELECT * FROM kg_nodes WHERE id IN ({marks})", tuple(seen))
+        nodes = [n | {"section": SECTIONS.get(n["type"])} for n in nodes]
         return {"center": node_id, "nodes": nodes,
                 "edges": [e | {"rel_uz": RELATIONS.get(e["rel"], e["rel"])} for e in edges.values()]}
 

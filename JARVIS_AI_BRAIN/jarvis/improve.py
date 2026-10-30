@@ -131,7 +131,8 @@ class Improver:
         prompt = (f"Sen tajribali Python dasturchisan. Quyidagi muammoni tuzatuvchi MINIMAL o'zgarish yoz.\n{problem}\n\n"
                   f"Fayl: {file}\n```python\n{code}\n```\n"
                   f"Faqat bitta ```diff``` bloki qaytar: unified diff, sarlavhalar '--- a/{file}' va '+++ b/{file}'. "
-                  "Testlarni o'chirma, xavfsizlik tekshiruvlarini olib tashlama.")
+                  "Xato qaytarilmasligi uchun tests/ ichiga REGRESSIYA TESTI qo'sh (yangi fayl: '--- /dev/null', "
+                  "'+++ b/tests/test_regress_<nom>.py'). Testlarni o'chirma, xavfsizlik tekshiruvlarini olib tashlama.")
         r = self.core.ai.route([{"role": "user", "content": prompt}], purpose="code")
         m = re.search(r"```(?:diff|patch)?\s*\n(.*?)```", r["text"], re.S)
         diff = (m.group(1) if m else r["text"]).strip() + "\n"
@@ -204,10 +205,12 @@ class Improver:
         r = self.core.db.one("SELECT * FROM proposals WHERE id=?", (pid,))
         if not r:
             raise ImproveError("Taklif topilmadi")
+        r["has_test"] = any(p.startswith("tests/") for p in diff_paths(r["diff"]))
         return r
 
     def list(self) -> list[dict]:
-        return self.core.db.query("SELECT * FROM proposals ORDER BY id DESC LIMIT 100")
+        rows = self.core.db.query("SELECT * FROM proposals ORDER BY id DESC LIMIT 100")
+        return [r | {"has_test": any(p.startswith("tests/") for p in diff_paths(r["diff"]))} for r in rows]
 
     def _worktree(self) -> tuple[Path, Path, str]:
         top, rel = self._repo()
@@ -235,8 +238,17 @@ class Improver:
             self._git("worktree", "remove", "--force", str(wt), cwd=top, check=False)
         status = "tested_pass" if ok else "tested_fail"
         self.core.db.execute("UPDATE proposals SET status=?, test_output=? WHERE id=?", (status, output, pid))
+        self._kg_test(prop, "passed" if ok else "failed", output)
         self.core.audit.log("self_improve", f"Taklif testi: {status}", target=f"proposal#{pid}", risk="A", result=status)
         return self.get(pid)
+
+    def _kg_test(self, prop: dict, status: str, output: str, kind: str = "test"):
+        if not hasattr(self.core, "kgraph"):
+            return
+        last = (output or "").strip().splitlines()[-1:] or [""]
+        from datetime import datetime, timezone
+        self.core.kgraph.on_test_run(f"proposal{prop['id']}-{kind}-{datetime.now(timezone.utc):%Y%m%d%H%M%S%f}", status, proposal=prop,
+                                     files=diff_paths(prop["diff"]), summary=last[0])
 
     @staticmethod
     def _run_tests(proj: Path, timeout: int = 600) -> tuple[bool, str]:
@@ -332,7 +344,9 @@ class Improver:
         appr = self.core.approvals.request(action_type="code_merge", target="git_main", level="E", payload=payload,
                                            requested_by="self_improve",
                                            summary=f"Asosiy versiyaga o'tkazish: {prop['title']} ({', '.join(payload['files'])}). "
-                                                   "Oldin qayta test qilinadi; keyin 'orqaga qaytarish' mumkin.",
+                                                   "Oldin qayta test qilinadi; keyin 'orqaga qaytarish' mumkin."
+                                                   + ("" if any(f.startswith("tests/") for f in payload["files"])
+                                                      else " ⚠ Regressiya testi yo'q — xato qaytsa, testlar buni ushlamaydi."),
                                            idempotency_key=f"merge-{pid}-{payload['branch_sha'][:12]}-{payload['base_sha'][:12]}")
         self.core.db.execute("UPDATE proposals SET merge_approval_id=? WHERE id=?", (appr["id"], pid))
         return appr
@@ -364,6 +378,7 @@ class Improver:
         finally:
             self._git("worktree", "remove", "--force", str(wt), cwd=top, check=False)
         self.core.db.execute("UPDATE proposals SET test_output=? WHERE id=?", (output, pid))
+        self._kg_test(prop, "passed" if ok else "failed", output, kind="merge")
         if not ok:
             self.core.audit.log("self_improve", "Merge oldidan qayta test o'tmadi", target=f"proposal#{pid}", risk="A", result="tested_fail")
             raise ImproveError("Birlashtirilgan versiya testdan o'tmadi — asosiy versiya o'zgarmadi. Test natijasini ko'ring.")

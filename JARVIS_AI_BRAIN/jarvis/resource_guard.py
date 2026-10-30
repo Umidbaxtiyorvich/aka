@@ -18,6 +18,10 @@ CREATE TABLE IF NOT EXISTS ai_usage (
     cost REAL NOT NULL DEFAULT 0, cost_measured INTEGER NOT NULL DEFAULT 0,
     duration_ms INTEGER, ok INTEGER NOT NULL, retries INTEGER NOT NULL DEFAULT 0, error TEXT, fallback_from TEXT
 );
+CREATE TABLE IF NOT EXISTS model_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (datetime('now')), usage_id INTEGER,
+    provider TEXT NOT NULL, model TEXT, score INTEGER NOT NULL, source TEXT NOT NULL, note TEXT
+);
 CREATE TABLE IF NOT EXISTS guard_alerts (day TEXT NOT NULL, kind TEXT NOT NULL, PRIMARY KEY(day, kind));
 """
 
@@ -46,14 +50,14 @@ class ResourceGuard:
                price_in: float = 0.0, price_out: float = 0.0, duration_ms: int = 0, ok: bool = True,
                retries: int = 0, error: str = "", fallback_from: str = "") -> dict:
         cost = ((tokens_in or 0) * price_in + (tokens_out or 0) * price_out) / 1000 if paid else 0.0
-        self.core.db.execute(
+        cur = self.core.db.execute(
             "INSERT INTO ai_usage(provider, model, tier, purpose, paid, tokens_in, tokens_out, tokens_measured, cost,"
             " cost_measured, duration_ms, ok, retries, error, fallback_from) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (provider, model, tier, purpose, int(paid), tokens_in, tokens_out, int(tokens_measured), round(cost, 6),
              int(tokens_measured and paid), duration_ms, int(ok), retries, error[:300], fallback_from))
         if paid:
             self._check_thresholds()
-        return {"cost": round(cost, 6), "cost_measured": tokens_measured and paid}
+        return {"cost": round(cost, 6), "cost_measured": tokens_measured and paid, "usage_id": cur.lastrowid}
 
     # --- hisob ---
     def _sum(self, where: str, params: tuple = ()) -> dict:
@@ -141,6 +145,16 @@ class ResourceGuard:
             "SELECT agent, COUNT(*) n, ROUND(AVG((julianday(finished_at)-julianday(COALESCE(started_at, created_at)))*86400000)) avg_ms,"
             " SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) failed FROM tasks WHERE finished_at IS NOT NULL GROUP BY agent")
 
+    def reliability(self) -> dict:
+        """Qayta urinishlar va xatolar (bugun): AI chaqiruvlari, fallbacklar, modul xatolari, vazifa xatolari."""
+        db = self.core.db
+        ai = db.query("SELECT provider, SUM(ok=0) failed, SUM(retries) retries, SUM(fallback_from IS NOT NULL AND fallback_from<>'') fallbacks,"
+                      " COUNT(*) n FROM ai_usage WHERE ts >= date('now') GROUP BY provider ORDER BY failed DESC")
+        errs = db.query("SELECT module, COUNT(*) n FROM errors WHERE ts >= date('now') GROUP BY module ORDER BY n DESC LIMIT 10")
+        tasks = db.one("SELECT SUM(status='failed') failed, COUNT(*) n FROM tasks WHERE created_at >= date('now')")
+        return {"ai": ai, "errors_by_module": errs, "tasks_today": {"total": tasks["n"] or 0, "failed": tasks["failed"] or 0},
+                "measured": True, "note": "Bugungi (UTC) yozuvlardan hisoblangan — real vaqt oqimi emas."}
+
     def summary(self) -> dict:
         s = self.s
         return {"today": self.today(), "month": self.month(),
@@ -148,6 +162,6 @@ class ResourceGuard:
                            "monthly_cost_limit": s.monthly_cost_limit, "daily_request_limit": s.daily_request_limit,
                            "warn_percent": s.cost_warn_percent, "currency": s.currency},
                 "providers": self.providers(), "process": self.process_resources(),
-                "task_durations": self.task_durations(),
+                "task_durations": self.task_durations(), "reliability": self.reliability(),
                 "notes": ["Xarajat = token × siz kiritgan narx (provayder hisob-fakturasi emas).",
                           "Token 'estimated' bo'lsa — belgilar/4 taxmini, haqiqiy o'lchov emas."]}

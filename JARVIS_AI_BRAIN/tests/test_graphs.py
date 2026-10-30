@@ -105,3 +105,18 @@ def test_graph_api(client):
     assert client.get(f"/api/kg/node/{hits[0]['id']}").json()["edges"]
     assert client.post("/api/kg/link", json={"src_type": "error", "src_ref": "1", "rel": "nomalum", "dst_type": "x",
                                              "dst_ref": "y"}).status_code == 400
+
+
+def test_kg_provenance_test_runs_and_sections(core, tmp_path):
+    m = core.memory.add("Narxlar har dushanba yangilanadi", kind="knowledge", reference="https://example.com/narx")
+    n = core.kgraph.find("memory", m["id"])
+    assert n["source"] == "https://example.com/narx" and n["observed_at"] and n["verified"] == 0
+    prop = {"id": 7, "title": "add tuzatish"}
+    core.kgraph.on_test_run("p7-1", "passed", proposal=prop, files={"calc.py"}, summary="3 passed")
+    t = core.kgraph.find("test_run", "p7-1")
+    assert t["verified"] == 1 and t["source"] == "pytest"
+    nb = core.kgraph.neighbors(t["id"])
+    rels = {e["rel"] for e in nb["edges"]}
+    assert {"tested_by", "covers"} <= rels
+    assert {x["type"]: x["section"] for x in nb["nodes"]}["proposal"] == "tests"
+    assert core.kgraph.search("tuzatish")[0]["section"] == "tests"

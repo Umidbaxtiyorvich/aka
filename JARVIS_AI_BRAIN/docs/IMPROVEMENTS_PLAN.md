@@ -27,3 +27,24 @@ Halol cheklovlar:
 * Sandbox `process` backend — OS darajasidagi izolyatsiya emas (batafsil: docs/SECURITY.md → Sandbox).
 * Xarajat = token × siz kiritgan narx; provayder hisob-fakturasi emas.
 * Tashqi AI/Telegram/Instagram real xizmat bilan bulut muhitida sinalmagan (tarmoq yopiq) — mock testlar bor.
+
+
+## v0.6 — "Final Advanced Upgrade" auditi
+Promptdagi 12 band mavjud kod bilan solishtirildi. To'liq mavjud bo'lganlar qayta yaratilmadi:
+- sandbox;
+- backup va recovery;
+- task dependency graph (DAG);
+- qarorlar jurnali;
+- kengaytmalar (plugins);
+- Policy Engine;
+- asosiy diagnostika.
+
+Faqat yetishmagan qismlar qo'shildi:
+
+| Band | Nima qo'shildi | Fayllar |
+|---|---|---|
+| 1. Router 2.0 | Foydalanuvchi fikri (chatda 👍/👎) va o'rnatilgan testlar (`evaluate`) asosida model sifati bahosi. Kamida 5 baho bo'lsa, bir xil darajadagi modellardan yaxshirog'i birinchi tanlanadi. Past baho javob izohida ko'rsatiladi. Pullik model testi Cost Guard limitidan o'tadi. | `router.py`, `resource_guard.py` (`model_feedback`), `app.js`, `advanced.js` |
+| 2. Knowledge Graph 2.0 | Har tugunda manba, olingan vaqt va tekshirilganlik holati. Test natijalari tugunlari (`test_run`), `tested_by` va `covers` aloqalari. Tugundan tegishli dashboard bo'limiga o'tish. | `kgraph.py`, `improve.py`, `advanced.js` |
+| 3. Self-healing | Diagnostika va xatolarni imzo bo'yicha guruhlash. Takrorlanuvchi xatolar (≥3) aniqlanadi. Testlar alohida git worktree'da ishga tushadi. AI tuzatish taklifi regressiya testi bilan beriladi; kvota: kuniga 3 ta, bitta xato imzosiga 24 soatda 1 ta. Git holati va qaytarish rejalari ko'rsatiladi. Taklif ichida test yo'q bo'lsa, merge tasdig'ida ogohlantirish chiqadi. Har 6 soatda yengil tekshiruv o'tkaziladi. Hech narsa avtomatik qo'llanmaydi. | `selfheal.py`, `improve.py`, `core.py`, `app.js` |
+| 5. Resource Guard | Qayta urinishlar va xatolar statistikasi (bugun): AI provayderlari, fallbacklar, modul xatolari, vazifa xatolari. Ma'lumot "real vaqt emas" deb belgilangan. | `resource_guard.py` |
+| 12. Release gate | `diff_review` tekshiruvi. Diffda maxfiy fayl (`.env`, `*.pem`, `data/settings.json`) yoki haqiqiy kalit naqshi (sk-, ghp_, AKIA, Telegram bot tokeni, private key va h.k.) bo'lsa — FAIL. Kod o'zgarib, testlar o'zgarmagan bo'lsa — ogohlantirish. CI diff uchun oldingi commitni ham yuklaydi. | `scripts/release_gate.py`, CI |

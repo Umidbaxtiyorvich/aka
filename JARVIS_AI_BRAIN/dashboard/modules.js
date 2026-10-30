@@ -418,7 +418,7 @@ async function renderImprove(el) {
     <div class="card" style="margin-top:12px"><h3>Yaxshilash takliflari (avtomatik tahlil)</h3>${table(sug, ["source", "text"])}</div>
     <div class="card" style="margin-top:12px"><h3>Kod takliflari</h3><p class="muted">Har bir taklif: test (alohida worktree) → tasdiq → branch → asosiy versiyaga o'tkazishdan oldin birlashtirilgan kod yana test qilinadi. "Orqaga qaytarish" o'zgarishni git revert bilan bekor qiladi (tarix saqlanadi).</p>
       <details><summary class="muted">Qo'lda patch kiritish</summary><input id="pt" placeholder="Sarlavha"><textarea id="pd" placeholder="Unified diff (git diff natijasi)" style="margin-top:6px;min-height:120px"></textarea><div class="row" style="margin-top:8px"><button id="pc">Taklif yaratish</button></div></details><pre id="po" hidden></pre>
-      ${props.length ? `<table><tr><th>#</th><th>sarlavha</th><th>holat</th><th>branch</th><th></th></tr>${props.map((p) => `<tr><td>${p.id}</td><td>${esc(p.title)}</td><td>${esc(IMP_STATUS[p.status] || p.status)}</td><td>${esc(p.branch || "")}</td><td>${btns(p)}
+      ${props.length ? `<table><tr><th>#</th><th>sarlavha</th><th>holat</th><th>branch</th><th></th></tr>${props.map((p) => `<tr><td>${p.id}</td><td>${esc(p.title)} ${p.has_test ? '<span class="pill ok">test bor</span>' : '<span class="pill warn">regressiya testi yo\'q</span>'}</td><td>${esc(IMP_STATUS[p.status] || p.status)}</td><td>${esc(p.branch || "")}</td><td>${btns(p)}
         <details><summary class="muted">patch</summary><pre>${esc(p.diff)}</pre></details>
         ${p.test_output ? `<details><summary class="muted">test natijasi</summary><pre>${esc(p.test_output)}</pre></details>` : ""}</td></tr>`).join("")}</table>` : ""}</div>`;
   $("#fb").onclick = async () => {
