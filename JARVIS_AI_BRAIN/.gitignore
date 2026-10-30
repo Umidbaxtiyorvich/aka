@@ -10,3 +10,4 @@ __pycache__/
 config/settings.json
 .env
 release-report.json
+JARVIS.cmd

@@ -314,20 +314,46 @@ async function renderNotifications(v) {
 }
 
 // ---------------- Self-improvement ----------------
+const IMP_STATUS = { proposed: "taklif", tested_pass: "testdan o'tdi", tested_fail: "testdan o'tmadi", applied: "branch'da",
+  rolled_back: "bekor qilingan", merged: "asosiy versiyada", reverted: "qaytarilgan" };
 async function renderImprove(el) {
-  const [sug, props] = await Promise.all([api("/api/improve/suggestions"), api("/api/improve/proposals")]);
-  el.innerHTML = `<div class="card" style="margin-top:12px"><h3>Yaxshilash takliflari (avtomatik tahlil)</h3>${table(sug, ["source", "text"])}</div>
-    <div class="card" style="margin-top:12px"><h3>Kod patch taklifi</h3><p class="muted">Patch alohida git worktree'da testdan o'tkaziladi. Tasdiqdan keyin faqat alohida branch'ga commit qilinadi — asosiy versiyaga birlashtirishni o'zingiz qilasiz. Xavfsizlik fayllarini o'zgartiruvchi patch rad etiladi.</p>
-      <input id="pt" placeholder="Sarlavha"><textarea id="pd" placeholder="Unified diff (git diff natijasi)" style="margin-top:6px;min-height:120px"></textarea><div class="row" style="margin-top:8px"><button id="pc">Taklif yaratish</button></div><pre id="po" hidden></pre>
-      ${props.length ? `<table><tr><th>#</th><th>sarlavha</th><th>holat</th><th>branch</th><th></th></tr>${props.map((p) => `<tr><td>${p.id}</td><td>${esc(p.title)}</td><td>${esc(p.status)}</td><td>${esc(p.branch || "")}</td><td>
-        ${["proposed", "tested_fail"].includes(p.status) ? `<button class="ghost" data-t="${p.id}">test</button>` : ""}${p.status === "tested_pass" && !p.approval_id ? `<button data-r="${p.id}">tasdiqqa</button>` : ""}
-        ${p.status === "tested_pass" && p.approval_id ? `<button data-a="${p.id}">branch yaratish</button>` : ""}${p.status === "applied" ? `<button class="danger" data-rb="${p.id}">bekor qilish</button>` : ""}
+  const [sug, props, git] = await Promise.all([api("/api/improve/suggestions"), api("/api/improve/proposals"), api("/api/improve/git")]);
+  const btns = (p) => [
+    ["proposed", "tested_fail"].includes(p.status) ? `<button class="ghost" data-t="${p.id}">test</button>` : "",
+    p.status === "tested_pass" && !p.approval_id ? `<button data-r="${p.id}">tasdiqqa</button>` : "",
+    p.status === "tested_pass" && p.approval_id ? `<button data-a="${p.id}">branch yaratish</button>` : "",
+    p.status === "applied" && !p.merge_approval_id ? `<button data-rm="${p.id}">asosiy versiyaga (tasdiqqa)</button>` : "",
+    p.status === "applied" && p.merge_approval_id ? `<button data-m="${p.id}">asosiy versiyaga o'tkazish</button>` : "",
+    p.status === "applied" ? `<button class="danger" data-rb="${p.id}">bekor qilish</button>` : "",
+    p.status === "merged" ? `<button class="danger" data-rv="${p.id}">orqaga qaytarish</button>` : "",
+  ].join("");
+  el.innerHTML = `<div class="card" style="margin-top:12px"><h3>Git holati</h3>${git.ok
+      ? `<div><span class="ok">tayyor</span> — branch <b>${esc(git.branch)}</b>, versiya ${esc(git.head)}${git.dirty.length ? ` · <span class="warn">saqlanmagan o'zgarishlar: ${esc(git.dirty.join(", "))}</span>` : ""}</div>`
+      : `<div class="warn">${esc(git.note)}</div>`}</div>
+    <div class="card" style="margin-top:12px"><h3>Yangi funksiya so'rash</h3>
+      <p class="muted">Nima kerakligini o'zbekcha yozing. AI patch yozadi → siz ko'rasiz → alohida nusxada test → tasdiq → alohida branch → alohida tasdiq bilan asosiy versiyaga. Hech narsa o'zi qo'llanmaydi; xavfsizlik fayllari o'zgartirilmaydi.</p>
+      <textarea id="fd" placeholder="Masalan: BI hisobotiga eng ko'p sotilgan 10 ta mahsulot ro'yxatini qo'sh" style="min-height:70px"></textarea>
+      <input id="ff" placeholder="Fayllar (ixtiyoriy, vergul bilan): jarvis/bi.py" style="margin-top:6px">
+      <div class="row" style="margin-top:8px"><button id="fb">AI'dan patch so'rash</button></div><pre id="fo" hidden></pre></div>
+    <div class="card" style="margin-top:12px"><h3>Yaxshilash takliflari (avtomatik tahlil)</h3>${table(sug, ["source", "text"])}</div>
+    <div class="card" style="margin-top:12px"><h3>Kod takliflari</h3><p class="muted">Har bir taklif: test (alohida worktree) → tasdiq → branch → asosiy versiyaga o'tkazishdan oldin birlashtirilgan kod yana test qilinadi. "Orqaga qaytarish" o'zgarishni git revert bilan bekor qiladi (tarix saqlanadi).</p>
+      <details><summary class="muted">Qo'lda patch kiritish</summary><input id="pt" placeholder="Sarlavha"><textarea id="pd" placeholder="Unified diff (git diff natijasi)" style="margin-top:6px;min-height:120px"></textarea><div class="row" style="margin-top:8px"><button id="pc">Taklif yaratish</button></div></details><pre id="po" hidden></pre>
+      ${props.length ? `<table><tr><th>#</th><th>sarlavha</th><th>holat</th><th>branch</th><th></th></tr>${props.map((p) => `<tr><td>${p.id}</td><td>${esc(p.title)}</td><td>${esc(IMP_STATUS[p.status] || p.status)}</td><td>${esc(p.branch || "")}</td><td>${btns(p)}
+        <details><summary class="muted">patch</summary><pre>${esc(p.diff)}</pre></details>
         ${p.test_output ? `<details><summary class="muted">test natijasi</summary><pre>${esc(p.test_output)}</pre></details>` : ""}</td></tr>`).join("")}</table>` : ""}</div>`;
+  $("#fb").onclick = async () => {
+    out($("#fo"), "AI patch yozmoqda (bir necha daqiqa olishi mumkin)…");
+    try { const r = await post("/api/improve/feature", { description: $("#fd").value, files: $("#ff").value.split(",").map((x) => x.trim()).filter(Boolean) });
+      out($("#fo"), `Taklif #${r.id}: ${r.title}\nFayllar: ${r.files.join(", ")}\n${r.next}`); setTimeout(show, 1500);
+    } catch (e) { fail($("#fo"), e); } };
   $("#pc").onclick = async () => { try { await post("/api/improve/proposals", { title: $("#pt").value, diff: $("#pd").value }); show(); } catch (e) { fail($("#po"), e); } };
   el.onclick = async (e) => { const d = e.target.dataset; try {
     if (d.t) { out($("#po"), "Test qilinmoqda…"); out($("#po"), await post(`/api/improve/proposals/${d.t}/test`)); setTimeout(show, 800); }
     if (d.r) { await post(`/api/improve/proposals/${d.r}/request-apply`); location.hash = "approvals"; }
-    if (d.a) { out($("#po"), await post(`/api/improve/proposals/${d.a}/apply`)); }
-    if (d.rb && confirm("Branch o'chiriladi. Davom etasizmi?")) { out($("#po"), await post(`/api/improve/proposals/${d.rb}/rollback`)); }
+    if (d.a) { out($("#po"), await post(`/api/improve/proposals/${d.a}/apply`)); setTimeout(show, 800); }
+    if (d.rm) { await post(`/api/improve/proposals/${d.rm}/request-merge`); location.hash = "approvals"; }
+    if (d.m && confirm("Kod asosiy versiyaga o'tkaziladi (oldin yana test qilinadi). Davom etasizmi?")) { out($("#po"), "Birlashtirilgan versiya test qilinmoqda…"); out($("#po"), await post(`/api/improve/proposals/${d.m}/merge`)); setTimeout(show, 1500); }
+    if (d.rb && confirm("Branch o'chiriladi. Davom etasizmi?")) { out($("#po"), await post(`/api/improve/proposals/${d.rb}/rollback`)); setTimeout(show, 800); }
+    if (d.rv && confirm("O'zgarish asosiy versiyadan qaytariladi. Davom etasizmi?")) { out($("#po"), await post(`/api/improve/proposals/${d.rv}/revert`)); setTimeout(show, 800); }
   } catch (er) { fail($("#po"), er); } };
 }

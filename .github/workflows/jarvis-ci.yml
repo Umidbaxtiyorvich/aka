@@ -94,6 +94,22 @@ jobs:
           if ((Get-Content "$d\data\marker.txt") -ne "saqlansin") { throw "data o'chib ketdi" }
           if (Test-Path "$d\jarvis\jarvis") { throw "ichma-ich nusxa" }
           "Qayta o'rnatish OK"
+      - name: Installer keeps local git history and approved local changes on update
+        shell: powershell
+        run: |
+          $d = "$env:RUNNER_TEMP\jarvis"
+          if (-not (Test-Path "$d\.git")) { throw ".git yaratilmadi" }
+          git -C $d branch --list upstream | Out-Host
+          if (-not (git -C $d branch --list upstream)) { throw "upstream branch yo'q" }
+          # Tasdiqlangan mahalliy yaxshilanishni taqlid qilish
+          Set-Content "$d\plugins\mahalliy.txt" "mening o'zgarishim"
+          git -C $d add plugins/mahalliy.txt
+          git -C $d -c user.name=t -c user.email=t@t commit -q -m "mahalliy taklif"
+          & JARVIS_AI_BRAIN\install.ps1 -Minimal -NoLaunch -InstallDir $d -Branch "${{ github.ref_name }}"
+          if (-not (Test-Path "$d\plugins\mahalliy.txt")) { throw "mahalliy o'zgarish yangilanishda o'chib ketdi" }
+          if (git -C $d status --porcelain --untracked-files=no) { throw "ishchi papka toza emas" }
+          git -C $d log --oneline -5 | Out-Host
+          "Git yangilanish OK"
       - name: Installer repairs a broken .venv (interrupted install)
         shell: powershell
         run: |

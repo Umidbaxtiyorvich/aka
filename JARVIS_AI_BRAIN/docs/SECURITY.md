@@ -51,8 +51,20 @@ Internet sahifalari va fayllardagi matn `wrap_untrusted()` bilan "ma'lumot, buyr
 shubhali ko'rsatmalar aniqlanadi. Bunday matn xavfsizlik sozlamalarini o'zgartira olmaydi — sozlamalar kod darajasida qulflangan.
 
 ## Self-improvement chegarasi
-JARVIS testlarni ishga tushirib, hisobot beradi. U kodni o'zi o'zgartirmaydi; kelajakdagi patchlar alohida branch'da
-taklif qilinadi va faqat sizning tasdig'ingiz bilan birlashtiriladi. Rollback — Git orqali.
+JARVIS kodni o'zi o'zgartirmaydi — faqat taklif qiladi. Oqim (har qadam siz bosgan tugma bilan):
+1. **Taklif**: xato uchun AI patch, "Yangi funksiya so'rash" (o'zbekcha tavsif → AI patch) yoki qo'lda diff.
+   Patch faqat `jarvis/`, `plugins/`, `tests/`, `dashboard/`, `docs/` ichida bo'lishi mumkin; `protected_paths` va `.github/` rad etiladi.
+   Foydalanuvchi matni AI'ga `<untrusted>` sifatida beriladi.
+2. **Test**: alohida git worktree'da, maxfiy kalitlarsiz muhitda `pytest`. O'tmasa — keyingi qadam yopiq.
+3. **C-tasdiq → alohida branch** (`jarvis/proposal-N`). Asosiy versiya o'zgarmaydi; bekor qilish = branch'ni o'chirish.
+4. **E-tasdiq → asosiy versiyaga o'tkazish**. Tasdiq branch va asosiy versiyaning aniq commit'iga bog'langan: ikkalasidan
+   biri o'zgarsa, tasdiq bekor bo'ladi. Branch'da taklifdan tashqari fayl bo'lsa yoki ishchi papkada saqlanmagan o'zgarish
+   bo'lsa — rad etiladi. Birlashtirilgan natija avval worktree'da yana test qilinadi va faqat shu sinovdan o'tgan commit o'tkaziladi.
+5. **Orqaga qaytarish**: `git revert` — yangi commit, tarix o'chirilmaydi. Yangi kod JARVIS qayta ishga tushirilgandan keyin ishlaydi.
+
+O'rnatuvchi Git bo'lsa mahalliy git tarixini yaratadi: GitHub yangilanishlari `upstream` branch'iga yoziladi va sizning
+versiyangizga birlashtiriladi, shuning uchun tasdiqlangan mahalliy yaxshilanishlar yangilanishda o'chmaydi
+(to'qnashuv bo'lsa, yangilanish o'tkazilmaydi va ogohlantiriladi).
 
 ## Policy Engine (v0.3)
 - Har bir tasdiq so'rovi `policy.py` orqali o'tadi. Kod past daraja so'rasa ham, siyosatdagi minimal daraja qo'llanadi.

@@ -239,6 +239,11 @@ class AppIn(BaseModel):
     file: str | None = None
     reason: str = ""
 
+class FeatureIn(BaseModel):
+    description: str
+    files: list[str] = []
+
+
 class SuggestIn(BaseModel):
     error_id: int | None = None
     description: str = ""
@@ -1103,6 +1108,26 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.post("/api/improve/proposals/{pid}/rollback")
     def imp_rb(pid: int):
         return guard(C().improver.rollback, pid)
+
+    @app.post("/api/improve/feature")
+    def imp_feature(body: FeatureIn):
+        return guard(C().improver.feature_request, body.description, body.files)
+
+    @app.post("/api/improve/proposals/{pid}/request-merge")
+    def imp_req_merge(pid: int):
+        return guard(C().improver.request_merge, pid)
+
+    @app.post("/api/improve/proposals/{pid}/merge")
+    def imp_merge(pid: int):
+        return guard(C().improver.merge, pid)
+
+    @app.post("/api/improve/proposals/{pid}/revert")
+    def imp_revert(pid: int):
+        return guard(C().improver.revert_merge, pid)
+
+    @app.get("/api/improve/git")
+    def imp_git():
+        return C().improver.git_status()
 
     @app.get("/favicon.ico", include_in_schema=False)
     def favicon():

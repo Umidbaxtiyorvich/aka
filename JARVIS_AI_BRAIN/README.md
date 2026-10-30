@@ -57,7 +57,7 @@ Tafsilotlar: [docs/IMPROVEMENTS_PLAN.md](docs/IMPROVEMENTS_PLAN.md), [docs/RELEA
 | Video studiya | FFmpeg: kesish, birlashtirish, 9:16, format, subtitr, ovoz, rasmlardan video, sifat tekshiruvi |
 | Rasm studiya | Pillow: tahlil, Instagram/Story presetlari, matn qo'shish, logo/avatar, generator uchun prompt |
 | Browser agent | Playwright: ruxsat berilgan saytni faqat o'qish, sayt tuzilishini hujjatlashtirish, skrinshot |
-| Self-improvement | Yaxshilash takliflari; patch → alohida git worktree'da test → tasdiq → alohida branch; rollback |
+| Self-improvement | Yaxshilash takliflari; "Yangi funksiya so'rash" (o'zbekcha → AI patch); patch → alohida worktree'da test → tasdiq → branch → alohida E-tasdiq bilan qayta testlanib asosiy versiyaga; orqaga qaytarish (git revert) |
 | Bildirishnomalar | Dashboard (+ Telegram sozlangan bo'lsa) |
 
 **⚠️ Kod tayyor, lekin real xizmat bilan sinalmagan** (bulut muhitida bu xizmatlarga tarmoq yopiq; testlar soxta HTTP bilan):

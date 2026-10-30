@@ -5,7 +5,7 @@
 #
 # Nima qiladi (har bir katta yuklashdan oldin so'raydi):
 #   1. Python 3.12 (yo'q bo'lsa, winget orqali, faqat sizning foydalanuvchingiz uchun)
-#   2. JARVIS kodi (GitHub'dan), .venv va kutubxonalar
+#   2. Git (ixtiyoriy, o'zini yaxshilash uchun), JARVIS kodi (GitHub'dan), .venv va kutubxonalar
 #   3. Ixtiyoriy: brauzer agenti (Chromium ~150 MB), FFmpeg, espeak-ng (o'zbekcha ovoz), Ollama + mahalliy AI modellari
 #   4. Ish stolida "JARVIS" yorlig'i, ixtiyoriy avtomatik ishga tushirish
 # Windows sozlamalari o'zgartirilmaydi, administrator huquqi so'ralmaydi. Mavjud data\ papkasi (xotira) saqlanadi.
@@ -84,9 +84,50 @@ Expand-Archive -Path $zip -DestinationPath $tmp -Force
 $src = Get-ChildItem -Path $tmp -Directory | Where-Object { Test-Path (Join-Path $_.FullName "JARVIS_AI_BRAIN") } | Select-Object -First 1
 if (-not $src) { throw "Arxivda JARVIS_AI_BRAIN papkasi topilmadi" }
 $srcDir = Join-Path $src.FullName "JARVIS_AI_BRAIN"
-# Kod yangilanadi; data\ (xotira, sozlamalar) va .venv saqlanadi
-robocopy $srcDir $InstallDir /E /XD data .venv /NFL /NDL /NJH /NJS /NP | Out-Null
-if ($LASTEXITCODE -ge 8) { throw "Fayllarni nusxalashda xato (robocopy $LASTEXITCODE)" }
+# Git: JARVIS'ning o'zini yaxshilash (taklif -> test -> tasdiq -> branch -> merge) uchun kerak
+$UseGit = Have "git"
+if (-not $UseGit -and (Ask "Git o'rnatilsinmi (~60 MB)? U JARVIS'ga sizning tasdig'ingiz bilan o'zini yaxshilash uchun kerak")) {
+    WingetInstall "Git.Git" "Git" | Out-Null
+    $UseGit = Have "git"
+}
+function G { & git -C $InstallDir -c user.name=JARVIS -c user.email=jarvis@localhost @args }
+if ($UseGit -and -not (Test-Path (Join-Path $InstallDir ".git"))) {
+    # Birinchi marta (yoki eski ZIP o'rnatishdan o'tish): kod nusxalanadi va mahalliy git tarixi boshlanadi
+    robocopy $srcDir $InstallDir /E /XD data .venv /NFL /NDL /NJH /NJS /NP | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw "Fayllarni nusxalashda xato (robocopy $LASTEXITCODE)" }
+    G init -q
+    G config core.autocrlf false
+    G checkout -q -b main
+    G add -A
+    G commit -q -m "JARVIS o'rnatildi ($Branch)"
+    G branch upstream
+    Say "Git tarixi yaratildi (o'zini yaxshilash yoqilishi mumkin)." "Green"
+} elseif ($UseGit) {
+    # Yangilash: GitHub nusxasi 'upstream' branch'iga yoziladi, keyin sizning versiyangizga birlashtiriladi.
+    # Siz tasdiqlagan mahalliy yaxshilanishlar shu tufayli o'chib ketmaydi.
+    $wt = Join-Path $env:TEMP ("jarvis_up_" + [guid]::NewGuid().ToString("N"))
+    G worktree prune
+    G worktree add -q $wt upstream
+    robocopy $srcDir $wt /MIR /XD data .venv .git /XF .git /NFL /NDL /NJH /NJS /NP | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw "Fayllarni nusxalashda xato (robocopy $LASTEXITCODE)" }
+    & git -C $wt add -A
+    if (& git -C $wt status --porcelain) { & git -C $wt -c user.name=JARVIS -c user.email=jarvis@localhost commit -q -m "Yangilash ($Branch)" }
+    G worktree remove --force $wt
+    if (G status --porcelain --untracked-files=no) {
+        Say "Kodda saqlanmagan o'zgarishlar bor - yangilanish o'tkazilmadi (eski versiya ishlayveradi)." "Yellow"
+    } else {
+        G merge -q --no-edit upstream
+        if ($LASTEXITCODE -ne 0) {
+            G merge --abort
+            Say "Yangilanish mahalliy o'zgarishlaringiz bilan to'qnashdi - o'tkazilmadi. Eski versiya ishlayveradi." "Yellow"
+        }
+    }
+} else {
+    Say "Git yo'q: kod oddiy nusxalanadi, o'zini yaxshilash (git) o'chiq bo'ladi." "Yellow"
+    # Kod yangilanadi; data\ (xotira, sozlamalar) va .venv saqlanadi
+    robocopy $srcDir $InstallDir /E /XD data .venv /NFL /NDL /NJH /NJS /NP | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw "Fayllarni nusxalashda xato (robocopy $LASTEXITCODE)" }
+}
 $global:LASTEXITCODE = 0
 Remove-Item -Recurse -Force $tmp
 Say "Kod: $InstallDir" "Green"
