@@ -1,7 +1,7 @@
 # JARVIS AI BRAIN - Windows o'rnatuvchisi (bitta buyruq).
 #
-# PowerShell'ni oching va quyidagini qo'ying:
-#   powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/Umidbaxtiyorvich/aka/ccr-f1c0e6d1-uu59k9/JARVIS_AI_BRAIN/install.ps1 | iex"
+# PowerShell'ni oching va quyidagini qo'ying (yangi powershell.exe ochilmaydi):
+#   irm https://raw.githubusercontent.com/Umidbaxtiyorvich/aka/ccr-f1c0e6d1-uu59k9/JARVIS_AI_BRAIN/install.ps1 | iex
 #
 # Nima qiladi (har bir katta yuklashdan oldin so'raydi):
 #   1. Python 3.12 (yo'q bo'lsa, winget orqali, faqat sizning foydalanuvchingiz uchun)
@@ -94,6 +94,18 @@ Say "Kod: $InstallDir" "Green"
 # --- 3. Virtual muhit va kutubxonalar ---
 Set-Location $InstallDir
 $parts = $Py.Split(" ")
+# Uzilib qolgan o'rnatishdan qolgan buzuq .venv'ni aniqlash va qayta yaratish
+if (Test-Path ".venv") {
+    $ok = $false
+    if (Test-Path ".venv\Scripts\python.exe") {
+        try { & ".venv\Scripts\python.exe" -c "import pip" 2>$null; $ok = ($LASTEXITCODE -eq 0) } catch { $ok = $false }
+    }
+    if (-not $ok) {
+        Say "Eski .venv buzilgan (o'rnatish uzilgan bo'lishi mumkin) - qayta yaratiladi..." "Yellow"
+        Remove-Item -Recurse -Force ".venv"
+    }
+    $global:LASTEXITCODE = 0
+}
 if (-not (Test-Path ".venv\Scripts\python.exe")) {
     Say "Virtual muhit yaratilmoqda (.venv)..."
     & $parts[0] $parts[1..9] -m venv .venv
@@ -157,7 +169,8 @@ try {
     Say "Ish stolida 'JARVIS' yorlig'i yaratildi." "Green"
 } catch { Say "Yorliq yaratilmadi: $launcher ni ishga tushiring." "Yellow" }
 if (Ask "Windows'ga kirganda JARVIS avtomatik ishga tushsinmi?") {
-    powershell -ExecutionPolicy Bypass -File (Join-Path $InstallDir "scripts\install_autostart.ps1")
+    # Shu jarayonning o'zida (yangi powershell.exe ochmasdan) ishga tushiriladi
+    & (Join-Path $InstallDir "scripts\install_autostart.ps1")
 }
 
 Say ""

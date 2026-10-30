@@ -88,7 +88,7 @@ Sozlash bo'yicha qo'llanmalar: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 PowerShell'ni oching (Start → "PowerShell") va qo'ying:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/Umidbaxtiyorvich/aka/ccr-f1c0e6d1-uu59k9/JARVIS_AI_BRAIN/install.ps1 | iex"
+irm https://raw.githubusercontent.com/Umidbaxtiyorvich/aka/ccr-f1c0e6d1-uu59k9/JARVIS_AI_BRAIN/install.ps1 | iex
 ```
 
 O'rnatuvchi Python, JARVIS, brauzer agenti, FFmpeg, o'zbekcha ovoz va Ollama + AI modellarini o'rnatadi (har biridan oldin so'raydi),
