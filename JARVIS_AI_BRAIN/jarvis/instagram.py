@@ -115,6 +115,30 @@ class InstagramManager:
         except InstagramError as e:
             return {"name": name, "connected": False, "note": str(e)}
 
+    def token_info(self, name: str) -> dict:
+        """Graph API debug_token: token yaroqliligi, muddati va ruxsatlari. Meta App ID + App Secret kerak."""
+        self._account(name)
+        token = get_secret(f"instagram_token_{name}")
+        app_id, app_secret = self.core.settings.meta_app_id, get_secret("meta_app_secret")
+        if not token:
+            return {"name": name, "checked": False, "note": "Token kiritilmagan"}
+        if not (app_id and app_secret):
+            return {"name": name, "checked": False, "note": "Muddat va ruxsatlarni ko'rish uchun Meta App ID va App Secret kiriting"}
+        try:
+            d = net.get_json("https://graph.facebook.com/debug_token",
+                             params={"input_token": token, "access_token": f"{app_id}|{app_secret}"}).get("data", {})
+        except net.NetError as e:
+            return {"name": name, "checked": False, "note": f"Tekshirib bo'lmadi: HTTP {e.status or '?'}"}
+        exp = d.get("expires_at") or d.get("data_access_expires_at")
+        days = None
+        if exp:
+            days = round((datetime.fromtimestamp(int(exp), timezone.utc) - datetime.now(timezone.utc)).total_seconds() / 86400, 1)
+        need = {"instagram_basic", "instagram_content_publish", "instagram_manage_comments", "instagram_manage_insights"}
+        scopes = d.get("scopes") or []
+        return {"name": name, "checked": True, "valid": bool(d.get("is_valid")), "expires_in_days": days,
+                "expires_at": datetime.fromtimestamp(int(exp), timezone.utc).isoformat() if exp else "muddatsiz",
+                "scopes": scopes, "missing_scopes": sorted(need - set(scopes)), "app_id": d.get("app_id")}
+
     # --- kontent ---
     def draft(self, account: str, kind: str, caption: str, media_url: str = "", scheduled_at: str = "",
               hashtags: list[str] | None = None) -> dict:

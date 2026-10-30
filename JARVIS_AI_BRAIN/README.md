@@ -57,6 +57,8 @@ Tafsilotlar: [docs/IMPROVEMENTS_PLAN.md](docs/IMPROVEMENTS_PLAN.md), [docs/RELEA
 | Video studiya | FFmpeg: kesish, birlashtirish, 9:16, format, subtitr, ovoz, rasmlardan video, sifat tekshiruvi |
 | Rasm studiya | Pillow: tahlil, Instagram/Story presetlari, matn qo'shish, logo/avatar, generator uchun prompt |
 | Browser agent | Playwright: ruxsat berilgan saytni faqat o'qish, sayt tuzilishini hujjatlashtirish, skrinshot |
+| Telegram Control Center | Bitta ega (kod + telefon tasdig'i), ✅/❌ tugmali muddatli bir martalik tasdiqlar, hodisa xabarlari, ovozli xabar va ovozli buyruq (tasdiq bilan), /status /tasks /approve ... |
+| Instagram MCP + Graph API | MCP serverga ulanish, vositalarni aniqlash (o'qish darhol, qolgani tasdiq bilan, natija ishonchsiz deb belgilanadi); token muddati/ruxsatlari |
 | Self-improvement | Yaxshilash takliflari; "Yangi funksiya so'rash" (o'zbekcha → AI patch); patch → alohida worktree'da test → tasdiq → branch → alohida E-tasdiq bilan qayta testlanib asosiy versiyaga; orqaga qaytarish (git revert) |
 | Bildirishnomalar | Dashboard (+ Telegram sozlangan bo'lsa) |
 

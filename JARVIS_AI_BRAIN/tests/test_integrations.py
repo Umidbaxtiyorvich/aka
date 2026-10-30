@@ -21,42 +21,12 @@ class FakeNet:
         return 404, "{}"
 
 
-# ---------- Telegram ----------
-def test_telegram_allowlist_and_commands(core, monkeypatch):
-    monkeypatch.setenv("JARVIS_TELEGRAM_BOT_TOKEN", "123456:" + "T" * 35)
-    core.settings.telegram_allowed_ids = [111]
-    sent = []
-    fake = FakeNet({"/sendMessage": lambda m, u, d: (sent.append(json.loads(d)) or (200, {"ok": True})),
-                    "/getUpdates": (200, {"ok": True, "result": [
-                        {"update_id": 5, "message": {"from": {"id": 999}, "chat": {"id": 999}, "text": "/holat"}},
-                        {"update_id": 6, "message": {"from": {"id": 111}, "chat": {"id": 111}, "text": "/tasdiqlar"}}]})})
-    monkeypatch.setattr(net, "TRANSPORT", fake)
-    core.computer.propose("mkdir x")
-    assert core.telegram.poll_once(timeout=0) == 2
-    assert core.telegram.offset == 7
-    assert {s["chat_id"] for s in sent} == {111}               # begonaga (999) javob yo'q
-    assert "ruxsatsiz" in sent[0]["text"]                      # egasiga xavfsizlik ogohlantirishi
-    assert "dashboardda" in sent[1]["text"] and "mkdir" in sent[1]["text"]
-    assert any(n["category"] == "security" for n in core.notifier.list())
-    assert all("T" * 35 not in r["action"] + (r["target"] or "") for r in core.audit.recent(50))
-
-
+# ---------- Telegram (to'liq testlar: tests/test_telegram.py) ----------
 def test_telegram_not_configured(core):
     assert core.telegram.status()["configured"] is False
     from jarvis.telegram_bot import TelegramError
     with pytest.raises(TelegramError):
         core.telegram.start()
-
-
-def test_notifier_pushes_warnings_to_telegram(core, monkeypatch):
-    monkeypatch.setenv("JARVIS_TELEGRAM_BOT_TOKEN", "123456:" + "T" * 35)
-    core.settings.telegram_allowed_ids = [111]
-    fake = FakeNet({"/sendMessage": (200, {"ok": True})})
-    monkeypatch.setattr(net, "TRANSPORT", fake)
-    core.notifier.notify("oddiy", severity="info")
-    assert fake.calls == []
-    n = core.notifier.notify("POS ishlamayapti", "timeout", severity="critical", category="pos")
-    assert "telegram(1)" in n["delivered"]
 
 
 # ---------- Research ----------

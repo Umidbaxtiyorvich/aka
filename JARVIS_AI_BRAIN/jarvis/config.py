@@ -16,7 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # Foydalanuvchi o'zgartira olmaydigan (va JARVIS o'zi o'zgartira olmaydigan) kalitlar.
 LOCKED_KEYS = {"read_only_mode", "require_approval", "allowed_read_dirs", "allowed_write_dirs",
                "telegram_allowed_ids", "protected_paths", "command_allowlist", "forbidden_actions", "app_allowlist",
-               "auth_enabled", "allowed_hosts"}
+               "auth_enabled", "allowed_hosts", "telegram_approval_max_level"}
 
 
 def jarvis_home() -> Path:
@@ -41,6 +41,17 @@ class Settings:
     browser_allowed_domains: list[str] = field(default_factory=list)
     telegram_allowed_ids: list[int] = field(default_factory=list)   # qulflangan: faqat settings.json orqali
     telegram_notify: bool = True
+    telegram_owner_phone: str = ""        # ixtiyoriy: kontakt orqali tekshiriladigan egasining raqami
+    telegram_events: list[str] = field(default_factory=lambda: ["startup", "error", "api", "instagram", "telegram", "task",
+                                                                "approval", "resources", "backup", "security", "code", "pos"])
+    telegram_voice_alerts: bool = False   # muhim ogohlantirishlarni ovozli xabar sifatida ham yuborish
+    telegram_approvals: bool = True       # tasdiq so'rovlarini tugmalar bilan Telegram'ga yuborish
+    telegram_approval_ttl_min: int = 30   # Telegram tugmasi amal qilish muddati
+    telegram_approval_max_level: str = "D"   # qulflangan: E-darajali amallar faqat dashboardda tasdiqlanadi
+    telegram_autostart: bool = True       # server yonganda bot ham yonsin (sozlangan bo'lsa)
+    telegram_execute_after_approval: bool = True   # Telegram'da tasdiqlangan ma'lum amallarni darhol bajarish
+    instagram_mcp_url: str = ""           # Instagram MCP Connector manzili (token: instagram_mcp_token)
+    meta_app_id: str = ""                 # Meta App ID (App Secret: meta_app_secret, maxfiy)
     instagram_accounts: list[dict] = field(default_factory=list)    # [{"name":..., "ig_user_id":...}] — tokensiz
     pos_site: str = ""                    # POS manzili (keyin beriladi)
     pos_connector: str = "file_export"    # file_export | api | browser

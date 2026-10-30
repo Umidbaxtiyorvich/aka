@@ -60,3 +60,42 @@ def _parse(status: int, body: str) -> dict:
     if status >= 400:
         raise NetError(f"HTTP {status}", status, body[:500])
     return data
+
+
+def _default_bytes_transport(url: str, timeout: float) -> tuple[int, bytes]:
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, b""
+    except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as e:
+        raise NetError(f"Tarmoq xatosi: {e}") from e
+
+
+BYTES_TRANSPORT = _default_bytes_transport
+
+
+def get_bytes(url: str, timeout: float = 60, max_bytes: int = 25 * 2**20) -> bytes:
+    status, data = BYTES_TRANSPORT(url, timeout)
+    if status >= 400:
+        raise NetError(f"HTTP {status}", status)
+    if len(data) > max_bytes:
+        raise NetError("Fayl juda katta")
+    return data
+
+
+def post_multipart(url: str, fields: dict, files: dict[str, tuple[str, bytes, str]], timeout: float = 60) -> dict:
+    """multipart/form-data (masalan, Telegram sendVoice). files: {maydon: (fayl_nomi, baytlar, mime)}."""
+    import uuid
+    boundary = "jarvis" + uuid.uuid4().hex
+    parts = []
+    for k, v in fields.items():
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode())
+    for k, (name, data, mime) in files.items():
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"; filename="{name}"\r\n'
+                     f"Content-Type: {mime}\r\n\r\n".encode() + data + b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode())
+    h = {"User-Agent": USER_AGENT, "Content-Type": f"multipart/form-data; boundary={boundary}"}
+    status, body = TRANSPORT("POST", url, b"".join(parts), h, timeout)
+    return _parse(status, body)

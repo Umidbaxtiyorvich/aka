@@ -142,12 +142,35 @@ async function renderStudio(v) {
 }
 
 // ---------------- Instagram ----------------
+async function renderMCP(box) {
+  const [m, set] = await Promise.all([api("/api/instagram/mcp"), api("/api/settings")]);
+  box.innerHTML = `<h3>Instagram MCP Connector</h3>
+    <p class="muted">Agar sizda Instagram MCP serveri bo'lsa, manzilini kiriting. JARVIS faqat server bergan vositalardan foydalanadi; o'qiydigan vositalar darhol, tashqi ta'sirlilar (joylash, javob, xabar) faqat tasdiq bilan ishlaydi. Serverdan kelgan matn ishonchsiz ma'lumot sifatida belgilanadi.</p>
+    <div class="row"><input id="murl" placeholder="https://.../mcp" value="${esc(set.instagram_mcp_url || "")}"><button class="ghost" id="msave">Saqlash</button><button id="mconn">Ulanishni tekshirish</button></div>
+    <div>Holat: ${m.healthy ? '<span class="pill ok">ulangan</span>' : m.healthy === false ? `<span class="pill bad">uzilgan</span> <span class="bad">${esc(m.last_error || "")}</span>` : '<span class="pill">tekshirilmagan</span>'}
+      · token: ${m.token_set ? '<span class="pill ok">kiritilgan</span>' : '<span class="pill">yo\'q (ixtiyoriy)</span>'} ${m.server && m.server.name ? `· server: <b>${esc(m.server.name)}</b> ${esc(m.server.version || "")}` : ""}
+      ${m.last_check ? `<span class="muted">· oxirgi tekshiruv ${esc(m.last_check)}</span>` : ""}</div>
+    ${m.capabilities.length ? `<div style="margin-top:6px">Imkoniyatlar: ${m.capabilities.map((c) => `<span class="pill">${esc(c)}</span>`).join(" ")}</div>` : ""}
+    ${m.tools.length ? `<table><tr><th>vosita</th><th>turi</th><th>tavsif</th><th></th></tr>${m.tools.map((t) => `<tr><td><code>${esc(t.name)}</code></td>
+      <td>${t.read_only ? '<span class="pill ok">o\'qish</span>' : '<span class="pill warn">tasdiq bilan</span>'} <span class="muted">${esc(t.category)}</span></td><td class="muted">${esc(t.description)}</td>
+      <td><button class="ghost" data-mt="${esc(t.name)}" data-ro="${t.read_only ? 1 : 0}">${t.read_only ? "chaqirish" : "tasdiq so'rash"}</button></td></tr>`).join("")}</table>
+      <label>Argumentlar (JSON)</label><textarea id="margs" style="min-height:60px">{}</textarea>` : ""}<pre id="mout" hidden></pre>`;
+  $("#msave").onclick = async () => { try { await post("/api/settings", { instagram_mcp_url: $("#murl").value.trim() }); renderMCP(box); } catch (e) { fail($("#mout"), e); } };
+  $("#mconn").onclick = async () => { out($("#mout"), "Ulanmoqda…"); try { await post("/api/instagram/mcp/connect"); renderMCP(box); } catch (e) { fail($("#mout"), e); } };
+  box.onclick = async (e) => { const d = e.target.dataset; if (!d.mt) return; try {
+    const body = { tool: d.mt, arguments: JSON.parse($("#margs").value || "{}") };
+    out($("#mout"), d.ro === "1" ? await post("/api/instagram/mcp/call", body) : await post("/api/instagram/mcp/request", body));
+  } catch (er) { fail($("#mout"), er); } };
+}
+
 async function renderInstagram(v) {
   const [accs, posts] = await Promise.all([api("/api/instagram/accounts"), api("/api/instagram/posts")]);
   v.innerHTML = `<div class="warnbox">Faqat Meta rasmiy Graph API (Business/Creator akkaunt + Facebook sahifa + Meta App). Nashr uchun media ommaviy https:// URL bo'lishi kerak.
     Reels/video Meta tomonidan qayta ishlanmaguncha nashr qilinmaydi. Javob kelmasa — qayta yuborilmaydi, akkauntda tekshiriladi. Har bir nashr, izoh va Direct javobi alohida tasdiqlanadi.</div>
-    <div class="card"><h3>Akkauntlar</h3>${accs.length ? table(accs, ["name", "connected", "username", "followers_count", "media_count", "note"]) :
-      '<span class="muted">Akkaunt yo\'q — yuqoridagi yo\'riqnomada akkaunt qo\'shing va tokenini kiriting.</span>'}</div>
+    <div class="card"><h3>Akkauntlar (Graph API)</h3>${accs.length ? table(accs, ["name", "connected", "username", "followers_count", "media_count", "note"]) :
+      '<span class="muted">Akkaunt yo\'q — yuqoridagi yo\'riqnomada akkaunt qo\'shing va tokenini kiriting.</span>'}
+      ${accs.length ? `<div class="row" style="margin-top:8px">${accs.map((a) => `<button class="ghost" data-ti="${esc(a.name)}">@${esc(a.name)}: token muddati va ruxsatlari</button>`).join("")}</div><pre id="tio" hidden></pre>` : ""}</div>
+    <div class="card" style="margin-top:12px" id="mcpcard"><h3>Instagram MCP Connector</h3><div class="muted">Yuklanmoqda…</div></div>
     <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:12px"><div class="card"><h3>Yangi post loyihasi</h3>
       <div class="row"><select id="acc">${accs.map((a) => `<option>${esc(a.name)}</option>`).join("")}</select><select id="kind"><option value="post">Post</option><option value="reel">Reels</option><option value="story">Stories</option></select></div>
       <textarea id="cap" placeholder="Caption"></textarea><div class="row" style="margin-top:6px"><button class="ghost" id="tags">Hashtag taklifi</button><span id="tg" class="muted"></span></div>
@@ -160,6 +183,9 @@ async function renderInstagram(v) {
     <div class="card" style="margin-top:12px"><h3>Direct xabarlar</h3><p class="muted">Instagram Messaging API ruxsati kerak. Javob faqat oxirgi kiruvchi xabardan 24 soat ichida; har bir xabar alohida tasdiqlanadi.</p>
       <div class="row"><select id="dmacc" style="width:200px">${accs.map((a) => `<option>${esc(a.name)}</option>`).join("")}</select><button class="ghost" id="dmload">Suhbatlarni yuklash</button></div>
       <div id="dmlist"></div><div id="dmmsgs"></div><div id="dmdrafts"></div></div>`;
+  renderMCP($("#mcpcard")).catch((e) => fail($("#mcpcard"), e));
+  v.addEventListener("click", async (e) => { const n = e.target.dataset.ti; if (!n) return;
+    try { out($("#tio"), await api(`/api/instagram/token-info/${encodeURIComponent(n)}`)); } catch (er) { fail($("#tio"), er); } });
   const drawDrafts = async () => { const ds = await api("/api/instagram/dm");
     $("#dmdrafts").innerHTML = ds.length ? "<h3 style='margin-top:10px'>Javob loyihalari</h3><table>" + ds.map((d) => `<tr><td>#${d.id}</td><td>${esc(d.account)}</td><td class="muted">${esc(d.last_incoming)}</td><td>${esc(d.reply)}</td>
       <td>${d.within_24h ? '<span class="ok">24 soat ichida</span>' : '<span class="bad">oyna yopilgan</span>'}</td><td>${esc(d.status)}</td>
@@ -187,15 +213,72 @@ async function renderInstagram(v) {
 
 // ---------------- Telegram ----------------
 async function renderTelegram(v) {
-  const st = await api("/api/telegram/status");
-  v.innerHTML = `<div class="grid" style="grid-template-columns:1fr 1fr"><div class="card"><h3>Holat</h3>
-    <div>Token: ${st.token_set ? '<span class="ok">kiritilgan</span>' : '<span class="warn">yo\'q</span>'}</div><div>Ruxsat berilgan IDlar: ${st.allowed_ids}</div>
-    <div>Bot: ${st.running ? '<span class="ok">ishlayapti</span>' : "to'xtagan"}</div>${st.last_error ? `<div class="bad">${esc(st.last_error)}</div>` : ""}
-    <div class="row" style="margin-top:10px"><button id="start" ${st.configured ? "" : "disabled"}>Ishga tushirish</button><button class="ghost" id="stop">To'xtatish</button><button class="ghost" id="test" ${st.configured ? "" : "disabled"}>Test xabar</button></div><pre id="o" hidden></pre></div>
-    <div class="card"><h3>Bot buyruqlari</h3><p>/holat /agentlar /vazifalar /tasdiqlar /xatolar /xotira</p>
-      <p class="muted">Ulash tartibi — yuqoridagi "Telegram botni qanday ulash mumkin?" yo'riqnomasida. Tasdiqlash faqat dashboardda. Telegram xabari telefon qo'ng'irog'i emas.</p></div></div>`;
-  const act = async (path) => { try { out($("#o"), await post(path)); } catch (e) { fail($("#o"), e); } };
-  $("#start").onclick = () => act("/api/telegram/start"); $("#stop").onclick = () => act("/api/telegram/stop"); $("#test").onclick = () => act("/api/telegram/test");
+  const [st, h, set] = await Promise.all([api("/api/telegram/status"), api("/api/telegram/history?limit=50"), api("/api/settings")]);
+  const o = st.owner, yes = (b, t, f) => (b ? `<span class="pill ok">${t}</span>` : `<span class="pill warn">${f}</span>`);
+  const ownerState = !o ? '<span class="pill warn">ulanmagan</span>' : o.active ? '<span class="pill ok">ulangan</span>'
+    : !o.token_matches ? '<span class="pill bad">token almashgan — qayta ulang</span>' : '<span class="pill warn">telefon tasdig\'i kutilmoqda</span>';
+  v.innerHTML = `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+    <div class="card"><h3>Ulanish holati</h3><table>
+      <tr><td>Bot tokeni</td><td>${yes(st.token_set, "kiritilgan", "kiritilmagan")}</td></tr>
+      <tr><td>Bot</td><td>${st.bot ? `<b>@${esc(st.bot.username)}</b> <span class="muted">${esc(st.bot.first_name || "")}</span>` : '<span class="muted">—</span>'}</td></tr>
+      <tr><td>Polling</td><td>${st.running ? '<span class="pill ok">ishlayapti</span>' : '<span class="pill">to\'xtagan</span>'} ${st.connected === false ? '<span class="pill bad">aloqa yo\'q</span>' : ""}</td></tr>
+      <tr><td>Egasi</td><td>${ownerState}</td></tr>
+      <tr><td>Telegram User ID</td><td>${o ? esc(o.user_id) : "—"}</td></tr><tr><td>Chat ID</td><td>${o ? esc(o.chat_id) : "—"}</td></tr>
+      <tr><td>Akkaunt</td><td>${o ? `${esc(o.first_name || "")} @${esc(o.username || "-")}` : "—"}</td></tr>
+      <tr><td>Telefon</td><td>${o && o.phone ? `${esc(o.phone)} ${yes(o.phone_verified, "tasdiqlangan", "tasdiqlanmagan")}` : '<span class="muted">—</span>'}</td></tr>
+      <tr><td>Oxirgi xabar</td><td class="muted">${st.last_sent ? `${esc(st.last_sent.ts)} — ${esc(st.last_sent.text.slice(0, 80))}` : "—"}</td></tr>
+      <tr><td>Oxirgi buyruq</td><td class="muted">${esc(st.last_command || "—")}</td></tr></table>
+      ${st.last_error ? `<div class="bad" style="margin-top:8px">${esc(st.last_error)}</div>` : ""}
+      <div class="row" style="margin-top:12px">${st.running ? '<button class="ghost" id="stop">Botni uzish</button>' : `<button id="start" ${st.token_set ? "" : "disabled"}>Botni ulash</button>`}
+        <button class="ghost" id="test" ${st.configured ? "" : "disabled"}>Test xabari</button><button class="ghost" id="tv" ${st.configured ? "" : "disabled"}>Ovozli test</button>
+        ${o ? '<button class="danger" id="revoke">Ruxsatni bekor qilish</button>' : ""}</div><pre id="o" hidden></pre></div>
+    <div class="card"><h3>Akkauntni ulash (faqat bitta)</h3>
+      <ol><li>Kerak bo'lsa telefon raqamingizni yozing — bot uni kontakt tugmasi bilan tekshiradi.</li>
+        <li><b>Ulash kodini olish</b> ni bosing va havolani oching (yoki botga <code>/start KOD</code> yuboring).</li>
+        <li>Raqam belgilangan bo'lsa, botdagi <b>📱 Raqamni tasdiqlash</b> tugmasini bosing.</li></ol>
+      <label>Ruxsat berilgan telefon raqami (ixtiyoriy)</label><div class="row"><input id="phone" placeholder="+998 90 123 45 67" value="${esc(set.telegram_owner_phone || "")}"><button class="ghost" id="savephone">Saqlash</button></div>
+      <div class="row"><button id="pair" ${st.token_set ? "" : "disabled"}>Ulash kodini olish</button><button class="ghost" id="refresh">Holatni yangilash</button></div>
+      <div id="pairbox"></div>
+      <p class="muted">Kod 10 daqiqa amal qiladi va bir martalik. Boshqa odamlar botga yozsa — javob olmaydi va hech narsa bajarilmaydi. Guruh va kanallar e'tiborsiz qoldiriladi. Token almashtirilsa, ulanish bekor bo'ladi.</p></div>
+    <div class="card"><h3>Xabar yuborish sozlamalari</h3>
+      ${Object.entries(st.events).map(([k, t]) => `<label><input type="checkbox" data-ev="${k}" ${st.enabled_events.includes(k) ? "checked" : ""}> ${esc(t)}</label>`).join("")}
+      <h4>Tasdiqlash</h4>
+      <label><input type="checkbox" id="appr" ${st.approvals ? "checked" : ""}> Tasdiq so'rovlarini ✅/❌ tugmalari bilan yuborish</label>
+      <label><input type="checkbox" id="exec" ${set.telegram_execute_after_approval ? "checked" : ""}> Tasdiqlangan Instagram/MCP amalini darhol bajarish va hisobot yuborish</label>
+      <label>Tugma amal qilish muddati (daqiqa)</label><input id="ttl" type="number" min="1" max="1440" value="${st.approval_ttl_min}">
+      <p class="muted">Telegram orqali ${esc(st.approval_max_level)}-darajagacha tasdiqlanadi; E-darajali amallar (zaxiradan tiklash, kodni asosiy versiyaga o'tkazish) faqat shu dashboardda.</p>
+      <h4>Ovoz</h4>
+      <label><input type="checkbox" id="voice" ${st.voice_alerts ? "checked" : ""}> Muhim (critical) ogohlantirishlarni ovozli xabar qilib ham yuborish</label>
+      <div class="muted">O'zbekcha ovoz: ${st.voice.tts ? "bor" : "yo'q (espeak-ng)"} · OGG formati: ${st.voice.ffmpeg ? "bor" : "yo'q (FFmpeg) — audio fayl sifatida"} · Ovozli buyruqni tanish: ${st.voice.stt_loaded ? "yoqilgan" : "o'chiq (Voice → Whisper)"}</div>
+      <div class="muted" style="margin-top:6px">📞 ${esc(st.calls)}</div>
+      <label><input type="checkbox" id="auto" ${set.telegram_autostart ? "checked" : ""}> JARVIS yonganda bot ham yonsin</label>
+      <div class="row" style="margin-top:10px"><button id="saveev">Saqlash</button><button class="ghost" id="resume">Avtomatikani qayta yoqish</button></div><div id="evm"></div></div>
+  </div>
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(420px,1fr));margin-top:16px">
+    <div class="card"><h3>Tasdiqlashlar tarixi</h3>${h.approvals.length ? table(h.approvals.map((r) => ({ "#": r.approval_id, daraja: r.level, amal: r.summary, natija: r.outcome || (r.used ? "ishlatilgan" : "kutilmoqda"), vaqt: r.decided_at || r.created_at })), ["#", "daraja", "amal", "natija", "vaqt"]) : '<span class="muted">Hali yo\'q</span>'}</div>
+    <div class="card"><h3>Xabarlar tarixi</h3>${h.messages.length ? table(h.messages.map((m) => ({ vaqt: m.ts, yo: m.direction === "in" ? "⬅ kirdi" : "➡ ketdi", tur: m.kind, matn: m.text })), ["vaqt", "yo", "tur", "matn"]) : '<span class="muted">Hali yo\'q</span>'}</div>
+    <div class="card"><h3>Xatolar tarixi</h3>${h.errors.length ? table(h.errors, ["ts", "message"]) : '<span class="muted">Xato yo\'q</span>'}</div>
+    <div class="card"><h3>Bot buyruqlari</h3><pre>/start  /status  /tasks  /agents  /approvals
+/approve ID  /reject ID  /report  /voice  /stop  /help
+
+Matn: «Instagram'ga Reels tayyorla: https://.../video.mp4 mavzu: chegirma»</pre></div></div>`;
+  const act = async (path) => { try { out($("#o"), await post(path)); setTimeout(show, 600); } catch (e) { fail($("#o"), e); } };
+  $("#start").onclick = () => act("/api/telegram/start"); $("#stop").onclick = () => act("/api/telegram/stop");
+  $("#test").onclick = () => act("/api/telegram/test"); $("#tv").onclick = () => act("/api/telegram/test-voice");
+  $("#revoke").onclick = () => confirm("Telegram akkauntining ruxsati bekor qilinsinmi? Qayta ulash uchun yangi kod kerak bo'ladi.") && act("/api/telegram/revoke");
+  $("#refresh").onclick = show;
+  $("#resume").onclick = async () => { await post("/api/automation/resume"); $("#evm").innerHTML = '<span class="ok">Avtomatika yoqildi</span>'; };
+  $("#savephone").onclick = async () => { try { await post("/api/settings", { telegram_owner_phone: $("#phone").value.trim() }); show(); } catch (e) { fail($("#o"), e); } };
+  $("#pair").onclick = async () => { try { const r = await post("/api/telegram/pair");
+    $("#pairbox").innerHTML = `<div class="guide" style="margin-top:8px"><div class="big" style="letter-spacing:6px">${esc(r.code)}</div>
+      ${r.link ? `<p><a href="${esc(r.link)}" target="_blank" rel="noopener">Botni ochish va ulash →</a></p>` : `<p>Botga yuboring: <code>/start ${esc(r.code)}</code></p>`}
+      <div class="muted">Amal qiladi: ${esc(new Date(r.expires_at).toLocaleTimeString())} gacha. Ulangach "Holatni yangilash" ni bosing.</div></div>`;
+    if (!st.running) await post("/api/telegram/start").catch(() => {}); } catch (e) { fail($("#o"), e); } };
+  $("#saveev").onclick = async () => { try {
+    await post("/api/settings", { telegram_events: [...v.querySelectorAll("[data-ev]")].filter((x) => x.checked).map((x) => x.dataset.ev),
+      telegram_approvals: $("#appr").checked, telegram_execute_after_approval: $("#exec").checked, telegram_approval_ttl_min: Number($("#ttl").value),
+      telegram_voice_alerts: $("#voice").checked, telegram_autostart: $("#auto").checked });
+    $("#evm").innerHTML = '<span class="ok">Saqlandi</span>'; } catch (e) { $("#evm").innerHTML = `<span class="bad">${esc(e.message)}</span>`; } };
 }
 
 // ---------------- Business Intelligence ----------------

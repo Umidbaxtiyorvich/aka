@@ -1,4 +1,4 @@
-"""Monitoring va bildirishnomalar: dashboard (har doim) + Telegram (sozlangan bo'lsa, warning va undan yuqori)."""
+"""Monitoring va bildirishnomalar: dashboard (har doim) + Telegram (egasi ulangan va hodisa turi yoqilgan bo'lsa)."""
 from __future__ import annotations
 
 from .db import Database
@@ -26,10 +26,8 @@ class Notifier:
             severity = "info"
         title, body = redact(title)[:200], redact(body)[:2000]
         delivered = "dashboard"
-        if self.telegram and self.settings.telegram_notify and severity != "info" and self.telegram.configured():
-            sent = self.telegram.broadcast(f"{'🔴' if severity == 'critical' else '🟡'} {title}\n{body}")
-            if sent:
-                delivered = f"dashboard+telegram({sent})"
+        if self.telegram and self.telegram.event(category, title, body, severity):
+            delivered = "dashboard+telegram(1)"
         cur = self.db.execute("INSERT INTO notifications(severity, category, title, body, delivered) VALUES (?,?,?,?,?)",
                               (severity, category, title, body, delivered))
         row = self.db.one("SELECT * FROM notifications WHERE id=?", (cur.lastrowid,))

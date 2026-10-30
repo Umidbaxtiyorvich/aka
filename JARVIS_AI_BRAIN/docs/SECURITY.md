@@ -123,3 +123,21 @@ versiyangizga birlashtiriladi, shuning uchun tasdiqlangan mahalliy yaxshilanishl
   - faqat o'qish rejimida yozish bloklanadi.
 - **AI patch taklifi:** faqat taklif. U testdan o'tmaguncha va tasdiqlanmaguncha qo'llanmaydi. Himoyalangan fayllar uchun so'ralmaydi.
 - **Rasm/vision:** faqat mahalliy xizmatlar (SD WebUI, Ollama). Vision uchun rasm tashqariga yuborilmaydi.
+
+## Telegram va Instagram MCP (v0.5)
+- **Telegram'da bitta ega.**
+  - Ega bir martalik kod bilan ulanadi; kod faqat xeshi bilan saqlanadi. Kerak bo'lsa, o'z kontakti bilan telefon raqami ham tekshiriladi.
+  - Token o'zgarsa, egalik bekor bo'ladi.
+  - Begonalarga javob berilmaydi. Guruh va kanallar e'tiborsiz qoldiriladi.
+- **Telegram tasdiqlari.**
+  - Har tugmaning o'z tasodifiy kaliti bor; tugma muddatli va bir martalik.
+  - Qaror payload xeshiga bog'langan.
+  - Begonaning tugma bosishi rad etiladi.
+  - E-daraja faqat dashboardda.
+- **Ovozli buyruqlar.** Matnga aylantirilgandan keyin baribir alohida tasdiq bilan bajariladi.
+- **Instagram MCP.**
+  - Manzil faqat `https://` yoki localhost bo'lishi mumkin.
+  - Token secret storage'da saqlanadi.
+  - Vosita natijalari `<untrusted>` deb belgilanadi.
+  - O'qishdan boshqa vositalar faqat tasdiq bilan ishlaydi.
+- **Maxfiy kalitlar.** Kalitlar faqat dashboard'dagi "Maxfiy kalitlar" maydoni orqali kiritiladi. Bu maydon faqat yozish uchun va ruxsat etilgan nomlarni qabul qiladi. Qiymat hech qachon qaytarilmaydi va logga tushmaydi.

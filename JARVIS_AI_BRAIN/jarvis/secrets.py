@@ -24,7 +24,7 @@ def has_secret(name: str) -> bool:
 
 
 # Dashboard orqali kiritish mumkin bo'lgan kalit nomlari (faqat shular). Qiymat hech qachon qaytarilmaydi.
-ALLOWED = re.compile(r"^(telegram_bot_token|pos_api_token|twilio_auth_token|instagram_token_[a-z0-9_]{1,40}|ai_key_[a-z0-9_-]{1,40})$")
+ALLOWED = re.compile(r"^(telegram_bot_token|pos_api_token|twilio_auth_token|instagram_mcp_token|meta_app_secret|instagram_token_[a-z0-9_]{1,40}|ai_key_[a-z0-9_-]{1,40})$")
 
 
 class SecretError(ValueError):

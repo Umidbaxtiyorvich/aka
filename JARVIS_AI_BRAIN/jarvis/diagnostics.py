@@ -120,12 +120,16 @@ class Diagnostics:
 
     def telegram(self) -> dict:
         tg = self.core.telegram
-        if not tg.configured():
-            return _c("telegram", "not_configured", "token yoki ruxsat berilgan ID yo'q")
+        if not tg.token():
+            return _c("telegram", "not_configured", "bot tokeni kiritilmagan")
         t0 = time.monotonic()
         try:
             r = tg._call("getMe")
-            return _c("telegram", "ok", f"bot @{r['result'].get('username')}", round((time.monotonic() - t0) * 1000, 1),
+            owner = tg.owner()
+            if not (owner and owner["active"]):
+                return _c("telegram", "warning", f"bot @{r['result'].get('username')} ishlaydi, lekin egasi ulanmagan "
+                          "(dashboard → Telegram → 'Akkauntni ulash')", round((time.monotonic() - t0) * 1000, 1))
+            return _c("telegram", "ok", f"bot @{r['result'].get('username')}, egasi ulangan", round((time.monotonic() - t0) * 1000, 1),
                       polling=tg.status()["running"])
         except Exception as e:
             msg = str(e)

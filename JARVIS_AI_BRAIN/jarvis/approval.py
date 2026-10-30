@@ -45,6 +45,7 @@ def payload_hash(action_type: str, target: str, account: str | None, payload: di
 class ApprovalEngine:
     def __init__(self, db: Database, audit: Audit, policy: PolicyEngine | None = None):
         self.db, self.audit, self.policy = db, audit, policy
+        self.on_pending = None       # masalan, Telegram'ga tugmali so'rov yuborish (core ulaydi)
         db.ensure_columns("approvals", POLICY_COLUMNS)
 
     def request(self, *, action_type: str, target: str, level: str, payload: dict, summary: str,
@@ -82,7 +83,13 @@ class ApprovalEngine:
              int(decision.reversible) if decision else None, decision.reason if decision else None),
         )
         self.audit.log(requested_by, f"Tasdiq so'raldi: {summary}", target=target, risk=level, approval_status=status)
-        return self.get(cur.lastrowid)
+        row = self.get(cur.lastrowid)
+        if status == "pending" and self.on_pending:
+            try:
+                self.on_pending(row)
+            except Exception as e:  # xabar yuborilmasa ham tasdiq dashboardda turadi
+                self.audit.error("approval_notify", str(e))
+        return row
 
     def get(self, approval_id: int) -> dict:
         row = self.db.one("SELECT * FROM approvals WHERE id=?", (approval_id,))

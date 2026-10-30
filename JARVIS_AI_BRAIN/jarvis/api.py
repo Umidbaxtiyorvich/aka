@@ -1,6 +1,7 @@
 """FastAPI: lokal API va dashboard. Standart holatda faqat 127.0.0.1 da ishlaydi."""
 from __future__ import annotations
 
+import re
 import sys
 import time
 from pathlib import Path
@@ -26,6 +27,7 @@ from .files import FileAccessError
 from .imagegen import ImageGenError
 from .improve import ImproveError
 from .instagram import InstagramError, suggest_hashtags
+from .instagram_mcp import MCPError
 from .kgraph import KGError
 from .memory import MemoryError_
 from .planner import PlannerError
@@ -41,7 +43,7 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError)
+               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
@@ -49,7 +51,9 @@ EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "br
             "cost_warn_percent", "medium_auto_actions", "sandbox_backend", "sandbox_timeout_sec", "sandbox_memory_mb",
             "sandbox_max_retries", "backup_interval_hours", "backup_keep", "backup_max_total_mb", "backup_include_workspace",
             "image_gen_url", "vision_model", "planner_use_ai", "session_hours", "pos_api", "pos_sync",
-            "instagram_accounts", "telephony_provider", "telephony_from", "telephony_account_sid", "telephony_cost_per_min"}
+            "instagram_accounts", "telephony_provider", "telephony_from", "telephony_account_sid", "telephony_cost_per_min",
+            "telegram_owner_phone", "telegram_events", "telegram_voice_alerts", "telegram_approvals", "telegram_approval_ttl_min",
+            "telegram_autostart", "telegram_execute_after_approval", "instagram_mcp_url", "meta_app_id"}
 PROVIDER_KINDS = {"ollama", "openai_compatible", "anthropic", "offline"}
 
 DASHBOARD = PROJECT_ROOT / "dashboard"
@@ -147,6 +151,15 @@ class SettingsIn(BaseModel):
     telephony_from: str | None = None
     telephony_account_sid: str | None = None
     telephony_cost_per_min: float | None = None
+    telegram_owner_phone: str | None = None
+    telegram_events: list[str] | None = None
+    telegram_voice_alerts: bool | None = None
+    telegram_approvals: bool | None = None
+    telegram_approval_ttl_min: int | None = None
+    telegram_autostart: bool | None = None
+    telegram_execute_after_approval: bool | None = None
+    instagram_mcp_url: str | None = None
+    meta_app_id: str | None = None
     pos_api: dict | None = None
     pos_sync: dict | None = None
 
@@ -245,6 +258,11 @@ class AppIn(BaseModel):
     name: str
     file: str | None = None
     reason: str = ""
+
+class MCPCallIn(BaseModel):
+    tool: str
+    arguments: dict = {}
+
 
 class SecretIn(BaseModel):
     name: str
@@ -572,6 +590,21 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
                 if not _re.fullmatch(r"[a-z0-9_]{1,40}", str(acc.get("name", ""))) or not _re.fullmatch(r"\d{5,25}", str(acc.get("ig_user_id", ""))):
                     raise HTTPException(400, "Instagram akkaunti: name (kichik lotin harflar, raqam, _) va ig_user_id (faqat raqam) kerak")
             data["instagram_accounts"] = [{"name": a["name"], "ig_user_id": str(a["ig_user_id"])} for a in data["instagram_accounts"]]
+        if "telegram_events" in data:
+            from .telegram_bot import EVENTS
+            data["telegram_events"] = [e for e in data["telegram_events"] if e in EVENTS]
+        if "telegram_approval_ttl_min" in data and not 1 <= int(data["telegram_approval_ttl_min"]) <= 1440:
+            raise HTTPException(400, "Tasdiq muddati 1–1440 daqiqa")
+        if data.get("instagram_mcp_url"):
+            from .instagram_mcp import check_url
+            try:
+                check_url(data["instagram_mcp_url"])
+            except MCPError as e:
+                raise HTTPException(400, str(e))
+        if "meta_app_id" in data and data["meta_app_id"] and not str(data["meta_app_id"]).isdigit():
+            raise HTTPException(400, "Meta App ID faqat raqamlardan iborat")
+        if "telegram_owner_phone" in data and data["telegram_owner_phone"] and len(re.sub(r"\D", "", data["telegram_owner_phone"])) < 9:
+            raise HTTPException(400, "Telefon raqami to'liq emas")
         if data.get("telephony_provider") not in (None, "", "twilio"):
             raise HTTPException(400, "telephony_provider: bo'sh yoki twilio")
         if "sandbox_backend" in data and data["sandbox_backend"] not in ("process", "docker"):
@@ -1025,6 +1058,10 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def tg_status():
         return C().telegram.status()
 
+    @app.get("/api/telegram/history")
+    def tg_history(limit: int = 100):
+        return C().telegram.history(min(limit, 500))
+
     @app.post("/api/telegram/start")
     def tg_start():
         return guard(C().telegram.start)
@@ -1033,12 +1070,58 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def tg_stop():
         return C().telegram.stop()
 
+    @app.post("/api/telegram/pair")
+    def tg_pair():
+        return guard(C().telegram.pairing_start)
+
+    @app.post("/api/telegram/revoke")
+    def tg_revoke():
+        return C().telegram.revoke()
+
     @app.post("/api/telegram/test")
     def tg_test():
         tg = C().telegram
         if not tg.configured():
-            raise HTTPException(400, "Telegram sozlanmagan (token va telegram_allowed_ids)")
-        return {"sent_to": tg.broadcast("✅ JARVIS: test bildirishnomasi")}
+            raise HTTPException(400, "Telegram egasi ulanmagan (token → 'Akkauntni ulash')")
+        try:
+            tg.send_owner("✅ JARVIS: test xabari. Ulanish ishlayapti.")
+        except TelegramError as e:
+            raise HTTPException(400, str(e))
+        return {"sent_to": 1}
+
+    @app.post("/api/telegram/test-voice")
+    def tg_test_voice():
+        return {"result": str(guard(C().telegram.send_voice, "JARVIS ovozli xabar sinovi. Ulanish ishlayapti."))[:200]}
+
+    @app.post("/api/automation/resume")
+    def automation_resume():
+        C().resume_automation()
+        return {"paused": False}
+
+    # Instagram MCP Connector
+    @app.get("/api/instagram/mcp")
+    def ig_mcp_status():
+        return C().instagram_mcp.status()
+
+    @app.post("/api/instagram/mcp/connect")
+    def ig_mcp_connect():
+        return guard(C().instagram_mcp.connect)
+
+    @app.post("/api/instagram/mcp/call")
+    def ig_mcp_call(body: MCPCallIn):
+        return guard(C().instagram_mcp.call, body.tool, body.arguments)
+
+    @app.post("/api/instagram/mcp/request")
+    def ig_mcp_request(body: MCPCallIn):
+        return guard(C().instagram_mcp.request_call, body.tool, body.arguments)
+
+    @app.post("/api/instagram/mcp/execute/{aid}")
+    def ig_mcp_execute(aid: int):
+        return guard(C().instagram_mcp.execute_approval, aid)
+
+    @app.get("/api/instagram/token-info/{name}")
+    def ig_token_info(name: str):
+        return guard(C().instagram.token_info, name)
 
     # Ovoz
     @app.get("/api/voice/status")
@@ -1089,7 +1172,7 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def secrets_status():
         from .secrets import has_secret
         c = C()
-        names = ["telegram_bot_token", "pos_api_token", "twilio_auth_token"]
+        names = ["telegram_bot_token", "pos_api_token", "twilio_auth_token", "meta_app_secret", "instagram_mcp_token"]
         names += [f"instagram_token_{a['name']}" for a in c.settings.instagram_accounts if a.get("name")]
         names += [f"ai_key_{p['id']}" for p in c.settings.ai_providers if p.get("kind") not in ("ollama", None)]
         return [{"name": n, "set": has_secret(n)} for n in names]
@@ -1098,6 +1181,8 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def secrets_set(body: SecretIn):
         from .secrets import set_secret
         guard(set_secret, body.name, body.value)
+        if body.name == "telegram_bot_token":
+            C().telegram.on_token_changed()          # eski egalik va tugmalar bekor bo'ladi
         C().audit.log("secrets", f"Maxfiy kalit kiritildi: {body.name}", target=body.name, risk="C", approval_status="user_action")
         return {"ok": True, "name": body.name}
 
@@ -1105,6 +1190,8 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def secrets_delete(body: SecretIn):
         from .secrets import delete_secret
         guard(delete_secret, body.name)
+        if body.name == "telegram_bot_token":
+            C().telegram.on_token_changed()
         C().audit.log("secrets", f"Maxfiy kalit o'chirildi: {body.name}", target=body.name, risk="C", approval_status="user_action")
         return {"ok": True}
 
@@ -1209,6 +1296,14 @@ def main():
     app.state.core.backup.start_auto()        # jadval bo'yicha avtomatik zaxira (backup_interval_hours)
     app.state.core.start_scheduler()          # rejalashtirilgan Instagram postlari → tasdiq so'rovi
     app.state.core.pos_sync.start()           # POS hisobotlarini jadval bo'yicha o'qish (yoqilgan bo'lsa)
+    core = app.state.core
+    if core.settings.telegram_autostart and core.telegram.token():
+        try:
+            core.telegram.start()
+        except Exception as e:  # Telegram bo'lmasa ham dashboard ishlaydi
+            core.audit.error("telegram_agent", f"autostart: {e}")
+    active = sum(1 for a in core.agents.agents.values() if getattr(a, "implemented", True))
+    core.notifier.notify("Tizim ishga tushdi", f"Holat: Online\nAgentlar: {active} ta faol\nAI: {core.ai.name}", category="startup")
     uvicorn.run(app, host=a.host, port=a.port)
 
 

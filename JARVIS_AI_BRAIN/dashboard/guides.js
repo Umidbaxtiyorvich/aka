@@ -26,12 +26,12 @@ const GUIDES = {
     title: "Telegram botni qanday ulash mumkin?",
     steps: [
       "Telegram'da <b>@BotFather</b> ga yozing → <code>/newbot</code> → botga nom bering. U sizga <b>token</b> beradi (masalan <code>123456:ABC...</code>).",
-      "Tokenni pastdagi <b>telegram_bot_token</b> maydoniga qo'ying va <b>Saqlash</b> ni bosing.",
-      "O'z Telegram ID'ingizni bilish uchun <b>@userinfobot</b> ga yozing — u raqam qaytaradi.",
-      `Xavfsizlik uchun botga kim yoza olishini faqat siz qo'lda belgilaysiz: Bloknot (Notepad) bilan <code>${SETTINGS_FILE}</code> faylini oching va <code>"telegram_allowed_ids": [123456789]</code> qatoriga ID'ingizni yozing, saqlang.`,
-      "JARVIS'ni yoping va ish stolidagi <b>JARVIS</b> belgisi bilan qayta oching → shu bo'limda <b>Ishga tushirish</b> → <b>Test xabar</b>.",
+      "Tokenni pastdagi <b>telegram_bot_token</b> maydoniga qo'ying va <b>Saqlash</b> ni bosing. (Tokenni chatga yoki boshqa joyga yozmang.)",
+      "Kerak bo'lsa <b>Ruxsat berilgan telefon raqami</b> ni yozing — bot uni kontakt orqali tekshiradi.",
+      "<b>Ulash kodini olish</b> ni bosing va chiqqan havolani telefoningizda oching (yoki botga <code>/start KOD</code> yuboring).",
+      "Raqam belgilangan bo'lsa, botdagi <b>📱 Raqamni tasdiqlash</b> tugmasini bosing. Tayyor — \"Egasi: ulangan\" chiqadi.",
     ],
-    note: "Bot orqali tasdiqlash so'rovlari ko'rinadi, lekin tasdiqlash faqat shu dashboard'da qilinadi.",
+    note: "JARVIS faqat shu bitta akkaunt bilan ishlaydi. Boshqalar yozsa javob olmaydi. Muhim amallar uchun Telegram'ga ✅/❌ tugmali so'rov keladi.",
     secrets: ["telegram_bot_token"],
   },
   instagram: {
@@ -42,9 +42,12 @@ const GUIDES = {
       "Graph API Explorer'da ruxsatlarni tanlang: <code>instagram_basic</code>, <code>instagram_content_publish</code>, <code>instagram_manage_comments</code>, <code>instagram_manage_insights</code> → <b>Generate Access Token</b>, so'ng uni <b>long-lived</b> (60 kunlik) tokenga almashtiring.",
       "Akkaunt ID'sini toping (Explorer'da <code>me/accounts?fields=instagram_business_account</code>) va pastda akkaunt qo'shing.",
       "Tokenni <b>instagram_token_&lt;nom&gt;</b> maydoniga qo'ying va saqlang.",
+      "Token muddati va ruxsatlarini ko'rish uchun <b>Meta App ID</b> va <b>meta_app_secret</b> ni kiriting (App → Settings → Basic).",
+      "<b>MCP Connector</b> (ixtiyoriy): Instagram MCP serveringiz bo'lsa, pastdagi MCP kartasida manzilini va kerak bo'lsa <b>instagram_mcp_token</b> ni kiriting.",
     ],
     note: "Har bir post, izohga javob va Direct xabar alohida tasdiq bilan yuboriladi. Token muddati tugashidan oldin bildirishnoma keladi.",
     secrets: "instagram_token_",
+    extra: ["meta_app_secret", "instagram_mcp_token"],
     form: "instagram",
   },
   pos: {
@@ -112,7 +115,12 @@ async function fillGuide(box, id) {
   const s = form ? await api("/api/settings").catch(() => null) : null;
   if (form && s && g.form === "instagram") {
     form.innerHTML = `<b>Akkauntlar</b>: ${s.instagram_accounts.length ? s.instagram_accounts.map((a) => `<code>${esc(a.name)}</code> (${esc(a.ig_user_id)})`).join(", ") : '<span class="muted">yo\'q</span>'}
-      <div class="row" style="margin-top:6px"><input class="ga-n" placeholder="nom, masalan: shop"><input class="ga-i" placeholder="ig_user_id (raqam)"><button class="ga-b">Qo'shish</button></div><div class="ga-m"></div>`;
+      <div class="row" style="margin-top:6px"><input class="ga-n" placeholder="nom, masalan: shop"><input class="ga-i" placeholder="ig_user_id (raqam)"><button class="ga-b">Qo'shish</button></div>
+      <div class="row"><input class="ga-app" placeholder="Meta App ID (raqam)" value="${esc(s.meta_app_id || "")}"><button class="ghost ga-ab">Saqlash</button></div><div class="ga-m"></div>`;
+    form.querySelector(".ga-ab").onclick = async () => {
+      try { await api("/api/settings", { method: "POST", body: { meta_app_id: form.querySelector(".ga-app").value.trim() } }); form.querySelector(".ga-m").innerHTML = '<span class="ok">Saqlandi</span>'; }
+      catch (e) { form.querySelector(".ga-m").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+    };
     form.querySelector(".ga-b").onclick = async () => {
       const accs = s.instagram_accounts.concat([{ name: form.querySelector(".ga-n").value.trim().toLowerCase(), ig_user_id: form.querySelector(".ga-i").value.trim() }]);
       try { await api("/api/settings", { method: "POST", body: { instagram_accounts: accs } }); show(); } catch (e) { form.querySelector(".ga-m").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
@@ -129,7 +137,7 @@ async function fillGuide(box, id) {
   }
   if (!sec) return;
   const all = await api("/api/secrets").catch(() => []);
-  const names = Array.isArray(g.secrets) ? g.secrets : all.map((x) => x.name).filter((n) => n.startsWith(g.secrets));
+  const names = (Array.isArray(g.secrets) ? g.secrets : all.map((x) => x.name).filter((n) => n.startsWith(g.secrets))).concat(g.extra || []);
   const isSet = Object.fromEntries(all.map((x) => [x.name, x.set]));
   sec.innerHTML = `<b>Maxfiy kalitlar</b> <span class="muted">— Windows Credential Manager'da saqlanadi, ekranda qayta ko'rsatilmaydi</span>
     ${names.length ? names.map((n) => `<div class="row" style="margin-top:6px"><code style="min-width:190px">${esc(n)}</code>

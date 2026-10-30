@@ -38,6 +38,7 @@ from .router import Router
 from .sandbox import Sandbox
 from .studio import Studio
 from .telegram_bot import TelegramAssistant
+from .instagram_mcp import InstagramMCP
 from .telephony import Telephony
 from .voice import Voice
 from .security import contains_secret, redact
@@ -81,6 +82,7 @@ class JarvisCore:
         self.studio = Studio(self)
         self.imagegen = ImageGen(self)
         self.instagram = InstagramManager(self)
+        self.instagram_mcp = InstagramMCP(self)
         self.voice = Voice(self)
         self.browser = BrowserAgent(self)
         self.session_browser = SessionBrowser(self)
@@ -97,6 +99,9 @@ class JarvisCore:
         self.auth = AuthManager(self)
         self.improver = Improver(self)
         self.agents = AgentManager(self)
+        self.approvals.on_pending = self.telegram.on_approval_pending
+        self._health_state: dict = {}
+        self.automation_paused = False
 
     def start_scheduler(self, every_sec: int = 60):
         """Fon jadvali: rejalashtirilgan Instagram postlari uchun tasdiq so'rash (avtomatik nashr yo'q)."""
@@ -106,11 +111,90 @@ class JarvisCore:
         def loop():
             while True:
                 _t.sleep(every_sec)
+                if self.automation_paused:
+                    continue
                 try:
                     self.instagram.due_scheduled()
                 except Exception as e:  # jadval xatosi serverni to'xtatmasin
                     self.audit.error("scheduler", str(e))
+                try:
+                    self.health_watch()
+                except Exception as e:
+                    self.audit.error("scheduler", f"health_watch: {e}")
         threading.Thread(target=loop, daemon=True).start()
+
+    # --- monitoring: holat o'zgarganda (bir marta) xabar beradi ---
+    def _transition(self, key: str, ok: bool, title_bad: str, body: str, category: str, title_ok: str | None = None):
+        prev = self._health_state.get(key)
+        self._health_state[key] = ok
+        if prev is True and not ok:
+            self.notifier.notify(title_bad, body, severity="warning", category=category)
+        elif prev is False and ok and title_ok:
+            self.notifier.notify(title_ok, "", severity="info", category=category)
+
+    def health_watch(self, now: float | None = None) -> dict:
+        import time as _t
+        import psutil
+        now = now or _t.time()
+        out = {}
+        vm, du = psutil.virtual_memory(), psutil.disk_usage(str(self.db.path.parent if hasattr(self.db, "path") else "."))
+        problems = []
+        if vm.percent >= 92:
+            problems.append(f"RAM {vm.percent:.0f}% band")
+        if du.free < 3 * 2**30:
+            problems.append(f"diskda {du.free / 2**30:.1f} GB qoldi")
+        out["resources"] = problems
+        last = self._health_state.get("resources_at", 0)
+        if problems and now - last > 3600:
+            self._health_state["resources_at"] = now
+            self.notifier.notify("Kompyuter resurslari chegarada", "; ".join(problems), severity="warning", category="resources")
+        if self.settings.ai_provider == "ollama":
+            ok = bool(self.ai.available()[0])
+            self._transition("ollama", ok, "Mahalliy AI (Ollama) ishlamay qoldi", "Ollama dasturini oching", "api", "Mahalliy AI qayta ishlayapti")
+            out["ollama"] = ok
+        if now - self._health_state.get("ig_at", 0) > 1800:
+            self._health_state["ig_at"] = now
+            from .secrets import get_secret
+            for a in self.settings.instagram_accounts:
+                if get_secret(f"instagram_token_{a['name']}"):
+                    st = self.instagram.account_status(a["name"])
+                    self._transition(f"ig:{a['name']}", st["connected"], f"Instagram ulanishi uzildi: @{a['name']}", st.get("note", ""),
+                                     "instagram", f"Instagram qayta ulandi: @{a['name']}")
+            if self.settings.instagram_mcp_url:
+                self.instagram_mcp.check()
+        return out
+
+    # --- Telegram tasdig'idan keyin bajariladigan amallar (aniq ro'yxat) ---
+    def execute_approved(self, approval_id: int) -> str | None:
+        appr = self.approvals.get(approval_id)
+        try:
+            if appr["action_type"] == "instagram_publish":
+                post = self.db.one("SELECT id FROM ig_posts WHERE approval_id=?", (approval_id,))
+                if not post:
+                    return None
+                p = self.instagram.publish(post["id"])
+                if p["status"] == "published":
+                    return f"📤 Joylandi va tekshirildi (Instagram ID: {p['external_id']}). Post #{p['id']}."
+                if p["status"] == "unknown":
+                    return "⚠️ Natija noma'lum (tarmoq). Qayta yuborilmaydi — dashboardda 'tekshirish' ni bosing."
+                return f"❌ Joylanmadi: {p.get('last_error')}\nYechim: media havolasi ommaviy https:// ekanini va token ruxsatlarini tekshiring."
+            if appr["action_type"] == "instagram_mcp_call":
+                r = self.instagram_mcp.execute_approval(approval_id)
+                return ("❌ MCP vositasi xato qaytardi." if r["is_error"] else "✅ MCP amali bajarildi.") + " Natija dashboardda."
+        except Exception as e:
+            self.audit.error("execute_approved", f"{appr['action_type']}: {e}")
+            return f"❌ Bajarilmadi: {e}"
+        return "Amal tasdiqlandi — uni so'ragan modul (dashboard) davom ettiradi."
+
+    def stop_automation(self, source: str = "dashboard") -> str:
+        """Ruxsat etilgan avtomatik jarayonlarni to'xtatadi: jadval, POS sinxronlash, DAG navbati. Qayta yoqish — dashboardda."""
+        self.automation_paused = True
+        self.audit.log(source, "Avtomatik jarayonlar to'xtatildi", target="automation", risk="C", approval_status="user_action")
+        return "⏸ Avtomatik jarayonlar to'xtatildi (jadval, POS sinxronlash). Qayta yoqish: dashboard → Telegram → 'Avtomatikani yoqish'."
+
+    def resume_automation(self) -> None:
+        self.automation_paused = False
+        self.audit.log("user", "Avtomatik jarayonlar qayta yoqildi", target="automation", risk="C", approval_status="user_action")
 
     def reload_ai(self):
         self.ai._avail_cache.clear()

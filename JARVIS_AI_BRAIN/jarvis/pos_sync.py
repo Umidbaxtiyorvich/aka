@@ -137,7 +137,7 @@ class POSSync:
             while True:
                 time.sleep(check_every_sec)
                 cfg = self.cfg
-                if not cfg["enabled"] or not cfg["sources"]:
+                if getattr(self.core, "automation_paused", False) or not cfg["enabled"] or not cfg["sources"]:
                     continue
                 last = self.core.db.one("SELECT ts FROM pos_sync_runs ORDER BY id DESC LIMIT 1")
                 if last:

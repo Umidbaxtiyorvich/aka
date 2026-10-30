@@ -101,6 +101,9 @@ class AgentManager:
         agent.status, agent.current_task = "running", tid
         self.core.db.execute("UPDATE tasks SET status='running', started_at=? WHERE id=?",
                              (datetime.now(timezone.utc).isoformat(), tid))
+        tg = getattr(self.core, "telegram", None)
+        if tg:
+            tg.event("task", f"Vazifa boshlandi: #{tid} {t['title'][:80]}", f"Agent: {agent.title}")
         try:
             result = agent.handler(json.loads(t["payload"] or "{}"))
             text = json.dumps(result, ensure_ascii=False, default=str)
@@ -110,6 +113,8 @@ class AgentManager:
             agent.status, agent.last_result, agent.last_error = "idle", text[:300], None
             self.core.audit.log(agent.key, f"Vazifa bajarildi: {t['title']}", target=f"task#{tid}", risk="A",
                                 result=status)
+            if tg:
+                tg.event("task", f"Vazifa {'tasdiq kutmoqda' if status == 'waiting_approval' else 'tugadi'}: #{tid} {t['title'][:80]}")
         except Exception as e:
             msg = f"{type(e).__name__}: {e}"
             self.core.db.execute("UPDATE tasks SET status='failed', error=?, finished_at=? WHERE id=?",
@@ -117,6 +122,8 @@ class AgentManager:
             agent.status, agent.last_error = "error", msg
             self.core.audit.log(agent.key, f"Vazifa xatosi: {t['title']}", target=f"task#{tid}", risk="A",
                                 error_code=type(e).__name__, error_note=str(e))
+            if tg:
+                tg.event("task", f"Vazifa bajarilmadi: #{tid} {t['title'][:80]}", msg[:300], severity="warning")
             self.core.audit.error(agent.key, msg)
         finally:
             agent.current_task = None

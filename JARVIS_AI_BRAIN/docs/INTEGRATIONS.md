@@ -15,13 +15,40 @@ Qiymat ekranda ko'rinmaydi va Git, SQLite yoki loglarga tushmaydi. Xavfsizlik bi
 4. Dashboard → Sozlamalar → Provider: `ollama` → Saqlash. Holat darhol tekshiriladi.
 - VRAM 6 GB va undan ko'p bo'lsa: `qwen2.5:7b`, ~4.7 GB. RAM'ni ko'p band qiladi.
 
-## Telegram
-1. @BotFather → `/newbot` → tokenni oling.
-2. Tokenni kiriting: `python scripts\set_secret.py telegram_bot_token`
-3. O'z ID'ingizni @userinfobot orqali bilib oling.
-4. `data\settings.json` ga yozing: `"telegram_allowed_ids": [123456789]`
-5. JARVIS'ni qayta ishga tushiring → Telegram bo'limi → "Ishga tushirish" → "Test xabar".
-- Muhim xatolar va ogohlantirishlar Telegram'ga avtomatik keladi. Buni Sozlamalarda o'chirish mumkin.
+## Telegram Control Center
+Hammasi dashboard → **Telegram** sahifasida, terminal kerak emas.
+1. @BotFather → `/newbot` → tokenni oling va `telegram_bot_token` maydoniga kiriting. Token Credential Manager'da saqlanadi.
+2. Ixtiyoriy: **ruxsat berilgan telefon raqami**.
+3. **Ulash kodini olish** → havolani oching yoki botga `/start KOD` yuboring. Kod 10 daqiqa amal qiladi va bir martalik; soatiga 5 ta noto'g'ri urinishdan keyin ulash yopiladi.
+4. Raqam belgilangan bo'lsa, botdagi **📱 Raqamni tasdiqlash** tugmasini bosing. Faqat o'zingizning kontaktingiz qabul qilinadi (`contact.user_id` yuboruvchiga teng bo'lishi kerak).
+
+Xavfsizlik:
+- **Bitta ega.** Buyruqlar faqat shu `user_id` + `chat_id` dan, faqat shaxsiy chatdan qabul qilinadi. Guruh va kanallar e'tiborsiz qoldiriladi.
+- **Begonalar.** Ularga javob berilmaydi va ma'lumot berilmaydi. Har urinish audit jurnaliga yoziladi, egasiga bir marta ogohlantirish yuboriladi.
+- **Token almashsa**, egalik va barcha ochiq tugmalar bekor bo'ladi. "Ruxsatni bekor qilish" tugmasi istalgan vaqtda uzadi.
+
+**Tasdiqlash tugmalari (✅/❌).**
+- Har bir so'rov uchun tasodifiy kalit yaratiladi; muddati standart 30 daqiqa. Tugma bir martalik.
+- Qaror aynan yuborilgan versiya xeshi bilan qabul qilinadi: amal o'zgarsa, eski tugma ishlamaydi.
+- Begona bosgan tugma rad etiladi. Har qaror audit jurnaliga yoziladi.
+- E-darajali amallar (zaxiradan tiklash, kodni asosiy versiyaga o'tkazish) faqat dashboardda tasdiqlanadi. Bu `telegram_approval_max_level` (qulflangan) bilan belgilanadi.
+
+**Buyruqlar.** `/start /status /tasks /agents /approvals /approve ID /reject ID /report /voice /stop /help`. Oddiy matn JARVIS'ga topshiriq sifatida ketadi.
+
+**Hodisalar.** Qaysi hodisalar Telegram'ga yuborilishini sahifada tanlaysiz. Mavjudlari: ishga tushish, xatolar, API/xizmat uzilishi, Instagram, Telegram uzilishi, vazifalar, tasdiqlar, resurslar (RAM ≥92%, disk <3 GB), zaxira, xavfsizlik, kod o'zgarishi, POS.
+
+**Ovoz.**
+- `/voice` va critical ogohlantirishlar o'zbekcha ovozli xabar sifatida keladi (espeak-ng, OGG uchun FFmpeg).
+- Siz yuborgan ovozli xabar matnga aylantiriladi (Whisper yuklangan bo'lsa). Bajarishdan oldin "Tushundim: «…». Bajaraymi?" deb tasdiq so'raladi.
+
+**Qo'ng'iroq.** Telegram Bot API bot nomidan qo'ng'iroq qilish imkonini bermaydi, shuning uchun bu funksiya Telegram orqali YO'Q. Haqiqiy qo'ng'iroq uchun alohida telefoniya xizmati kerak: Bildirishnomalar → Twilio. U pullik va har qo'ng'iroq tasdiq bilan.
+
+**Telegram → Instagram.** «Instagram'ga Reels tayyorla: https://…/video.mp4 mavzu: chegirma» deb yozsangiz:
+1. JARVIS loyiha tuzadi: caption (AI) va hashtaglar.
+2. Media havolasini tekshiradi. Instagram API ommaviy https:// havolani talab qiladi.
+3. Telegram'ga ✅/❌ tugmali so'rov yuboradi.
+4. Tasdiqlasangiz, Graph API orqali joylaydi, natijani tekshiradi (Instagram ID) va yakuniy hisobot yuboradi.
+5. Xato bo'lsa, sababi va yechimi yoziladi.
 
 ## Instagram (Meta rasmiy API)
 Talablar:
@@ -38,6 +65,24 @@ Cheklovlar:
 - Nashr uchun rasm yoki video ommaviy `https://` URL'da bo'lishi kerak.
 - Direct xabarlar uchun Instagram Messaging API va App Review kerak. Hozircha JARVIS faqat izohlarga javob loyihasini tayyorlaydi.
 - Token muddati tugasa, bildirishnoma keladi.
+
+### Token muddati va ruxsatlari
+**Meta App ID** (Instagram yo'riqnomasidagi maydon) va `meta_app_secret` ni kiriting. Shundan keyin "token muddati va ruxsatlari" tugmasi `debug_token` orqali quyidagilarni ko'rsatadi:
+- token yaroqliligi;
+- necha kun qolgani;
+- yetishmayotgan ruxsatlar.
+
+### Instagram MCP Connector (ixtiyoriy)
+Agar sizda Instagram MCP serveri bo'lsa:
+1. Instagram sahifasidagi MCP kartasiga uning manzilini kiriting: `https://…`, yoki shu kompyuterdagi `http://127.0.0.1:…`.
+2. Kerak bo'lsa `instagram_mcp_token` ni kiriting.
+
+Ishlash tartibi:
+- JARVIS standart MCP protokoli bilan ulanadi (`initialize` → `tools/list`) va serverdagi vositalarni ro'yxatga oladi.
+- `readOnlyHint` belgisi bor vositalar darhol chaqiriladi. Qolganlari (joylash, javob, xabar) tashqi ta'sirli hisoblanadi: ular faqat tasdiq bilan bajariladi, tasdiqni Telegram tugmasi orqali ham berish mumkin.
+- Server qaytargan matn `<untrusted>` deb belgilanadi va hech qachon ko'rsatma sifatida bajarilmaydi.
+- Ulanish jadval bo'yicha tekshiriladi. Uzilsa, bildirishnoma keladi.
+- JARVIS faqat server bergan imkoniyatlarni ko'rsatadi, ortig'ini "bor" demaydi.
 
 ## POS
 - **Hozir:** CSV yoki Excel eksport → Business Intelligence. POS hujjatlari tasdiqlangach `data\pos_outbox\` ga JSON va CSV qilib yoziladi. Ularni POS'ga qo'lda import qilasiz.
