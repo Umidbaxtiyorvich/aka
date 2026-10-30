@@ -53,6 +53,38 @@ def snapshot(include_gpu: bool = False) -> dict:
     return data
 
 
+def gpu_vram_gb() -> float | None:
+    """NVIDIA bo'lsa nvidia-smi orqali aniq VRAM (GB); aniqlab bo'lmasa None — taxmin qilinmaydi."""
+    if not shutil.which("nvidia-smi"):
+        return None
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+                             capture_output=True, text=True, timeout=5).stdout.strip().splitlines()
+        return round(max(float(x) for x in out) / 1024, 1) if out else None
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
+def recommend_setup(ram_gb: float, vram_gb: float | None) -> dict:
+    """RAM va VRAM bo'yicha mahalliy AI tavsiyasi. VRAM noma'lum bo'lsa — CPU uchun ehtiyotkor tanlov."""
+    if vram_gb is not None and vram_gb >= 6 and ram_gb >= 12:
+        light, strong = "qwen2.5:3b", "qwen2.5:7b"
+    elif vram_gb is not None and vram_gb >= 3.5:
+        light, strong = "qwen2.5:1.5b", "qwen2.5:3b"          # masalan GTX 1650 4 GB + 8 GB RAM
+    elif ram_gb >= 6:
+        light, strong = "qwen2.5:1.5b", "qwen2.5:3b"          # CPU'da ishlaydi, strong sekinroq
+    else:
+        light, strong = "qwen2.5:0.5b", "qwen2.5:1.5b"
+    gpu = vram_gb is not None and vram_gb >= 3.5
+    return {
+        "light": light, "strong": strong, "vision": "moondream" if (gpu or ram_gb >= 8) else None,
+        "whisper": "small" if ram_gb >= 8 else "base",
+        "image_gen": ("Stable Diffusion 1.5, --medvram (GTX 16xx uchun --precision full --no-half), 512×512 ≈ 30–60 s"
+                      if gpu and vram_gb < 6 else "SDXL mumkin" if gpu else "Tavsiya etilmaydi (GPU yo'q/noma'lum — juda sekin)"),
+        "vram_gb": vram_gb, "ram_gb": ram_gb,
+        "note": "8 GB RAM'da bir vaqtda faqat bitta model yuklansin (Ollama standart holatda shunday qiladi)."}
+
+
 def recommend_model(ram_total_gb: float) -> str:
     if ram_total_gb < 6:
         return "qwen2.5:0.5b"

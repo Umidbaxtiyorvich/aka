@@ -370,6 +370,7 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def system():
         s = system_info.snapshot(include_gpu=True)
         s["recommended_model"] = system_info.recommend_model(s["ram_total_gb"])
+        s["recommended_setup"] = system_info.recommend_setup(s["ram_total_gb"], system_info.gpu_vram_gb())
         s["model_catalog"] = MODEL_CATALOG
         return s
 
@@ -823,6 +824,34 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
         r = guard(C().browser.inspect, body.url)
         r["text"] = r["text"][:8000]
         return r
+
+    @app.get("/api/browser/session")
+    def br_sess():
+        return C().session_browser.status()
+
+    @app.post("/api/browser/session/login")
+    def br_login(body: UrlIn):
+        return guard(C().session_browser.open_login, body.url)
+
+    @app.post("/api/browser/session/tables")
+    def br_tables(body: UrlIn):
+        return guard(C().session_browser.extract_tables, body.url)
+
+    @app.post("/api/browser/session/forget")
+    def br_forget():
+        return guard(C().session_browser.forget)
+
+    @app.post("/api/pos/preset/yespos")
+    def pos_yespos():
+        """YesPOS uchun tayyor sozlama: sayt manzili va brauzer ruxsati (faqat o'qish)."""
+        c = C()
+        c.settings.pos_site = "https://app.yespos.uz"
+        if "app.yespos.uz" not in c.settings.browser_allowed_domains:
+            c.settings.browser_allowed_domains = list(c.settings.browser_allowed_domains) + ["app.yespos.uz"]
+        c.settings.save()
+        c.audit.log("user", "YesPOS sozlamasi qo'llandi", target="settings", risk="C", approval_status="user_action")
+        return {"pos_site": c.settings.pos_site, "browser_allowed_domains": c.settings.browser_allowed_domains,
+                "reports_url": "https://app.yespos.uz/reports"}
 
     @app.post("/api/browser/site-map")
     def br_map(body: UrlIn):

@@ -21,7 +21,7 @@ from .decisions import DecisionJournal
 from .diagnostics import Diagnostics
 from .files import FileIntelligence
 from .memory import Memory, MemoryError_
-from .browser import BrowserAgent
+from .browser import BrowserAgent, SessionBrowser
 from .imagegen import ImageGen
 from .improve import Improver
 from .instagram import InstagramManager
@@ -82,6 +82,7 @@ class JarvisCore:
         self.instagram = InstagramManager(self)
         self.voice = Voice(self)
         self.browser = BrowserAgent(self)
+        self.session_browser = SessionBrowser(self)
         self.telephony = Telephony(self.settings, self.approvals)
         self.notifier.telephony = self.telephony
         self.planner = Planner(self)

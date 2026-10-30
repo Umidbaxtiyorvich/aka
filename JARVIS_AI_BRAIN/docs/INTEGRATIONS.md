@@ -139,3 +139,26 @@ Ishlash tartibi:
 - O'chirish: `... -Uninstall`
 
 Faqat sizning foydalanuvchingiz uchun ishlaydi, administrator huquqi kerak emas. Server xato bilan to'xtasa, 3 martagacha qayta ishga tushadi.
+
+## YesPOS
+Holat (2026-10-30):
+- YesPOS'ning **ochiq API hujjati topilmadi**.
+- Bulut ishlab chiqish muhitidan `app.yespos.uz` ga ulanib bo'lmadi. Shuning uchun saytning o'zi real holatda sinalmagan.
+
+Bu holatda xavfsiz yo'l — **siz o'zingiz kirgan brauzer sessiyasi orqali faqat o'qish**:
+1. `pip install playwright` va `python -m playwright install chromium` ni bajaring.
+2. Dashboard → **POS ulanishi** → **"YesPOS sozlamasi"**. Sayt va brauzer ruxsati yoqiladi.
+3. **"POS'ga kirish (o'zim kiraman)"** ni bosing:
+   - brauzer oynasi ochiladi;
+   - login va parolni **o'zingiz** kiritasiz, CAPTCHA yoki SMS kodni ham o'zingiz o'tasiz;
+   - so'ng oynani yopasiz.
+
+   JARVIS parolni ko'rmaydi va saqlamaydi. Sessiya cookie'lari `JARVIS_HOME\browser_profile` da qoladi. Ular Git'ga ham, zaxira nusxaga ham kirmaydi.
+4. Hisobot sahifasini kiriting (masalan, `https://app.yespos.uz/reports`) va **"Jadvallarni olish"** ni bosing:
+   - sahifadagi jadvallar CSV qilib saqlanadi;
+   - **"BI'ga import"** bilan tahlilga o'tadi.
+5. Kerak bo'lsa, **"Sessiyani unutish"** saqlangan cookie'larni o'chiradi.
+
+Muqobil yo'l — eng ishonchli: YesPOS hisobotidagi **Excel'ga eksport** tugmasi bilan faylni yuklab oling va BI bo'limiga yuklang.
+
+YesPOS'ga hujjat **kiritish** (yozish) qo'shilmagan. Buning uchun YesPOS'dan rasmiy API va token so'rash kerak. API berilsa, `pos_connector: "api"` va `pos_api` sozlamasi bilan ulanadi.

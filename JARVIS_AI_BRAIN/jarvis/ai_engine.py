@@ -19,7 +19,9 @@ MODEL_CATALOG = [
     {"name": "qwen2.5:0.5b", "disk_gb": 0.4, "ram_gb": 1.0, "note": "Eng yengil, sifat past"},
     {"name": "qwen2.5:1.5b", "disk_gb": 1.0, "ram_gb": 2.0, "note": "8 GB RAM uchun tavsiya etilgan boshlanish"},
     {"name": "gemma2:2b", "disk_gb": 1.6, "ram_gb": 3.0, "note": "Ko'p tilli, o'rtacha"},
+    {"name": "qwen2.5:3b", "disk_gb": 1.9, "ram_gb": 3.5, "note": "4 GB VRAM'ga (GTX 1650) to'liq sig'adi — 8 GB RAM + GTX 1650 uchun 'strong' tanlov"},
     {"name": "llama3.2:3b", "disk_gb": 2.0, "ram_gb": 4.0, "note": "Yaxshiroq, 8 GB da boshqa dasturlar bilan sekin"},
+    {"name": "moondream", "disk_gb": 1.7, "ram_gb": 2.5, "note": "Vision (rasm mazmuni) — 4 GB VRAM uchun mos"},
     {"name": "qwen2.5:7b", "disk_gb": 4.7, "ram_gb": 6.5, "note": "8 GB RAM uchun og'ir — faqat GPU (6+ GB VRAM) bo'lsa"},
 ]
 

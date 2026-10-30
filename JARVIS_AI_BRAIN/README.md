@@ -85,6 +85,8 @@ Sozlash bo'yicha qo'llanmalar: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 
 ## Windows 11'da ishga tushirish
 
+> Sizning kompyuteringiz (MSI GF63 Thin, 8 GB RAM) uchun tayyor qo'llanma: [docs/MENING_KOMPYUTERIM.md](docs/MENING_KOMPYUTERIM.md)
+
 ```powershell
 git clone https://github.com/Umidbaxtiyorvich/aka.git
 cd aka\JARVIS_AI_BRAIN

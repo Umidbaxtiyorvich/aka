@@ -158,3 +158,48 @@ def test_auto_subtitles_with_whisper(core):
     srt = open(r["output"], encoding="utf-8").read()
     assert r["segments"] == 2 and "00:00:01,300 --> 00:00:02,800" in srt and "Bugun chegirma" in srt
     assert not [f for f in os.listdir(core.studio.exports) if f.endswith(".wav") and "_audio" in f]   # vaqtinchalik audio o'chirildi
+
+
+@pytest.mark.skipif(not _chromium(), reason="playwright o'rnatilmagan")
+def test_session_browser_reads_tables_after_user_login(core, tmp_path):
+    """Login talab qiladigan sayt: sessiyasiz — login_required; sessiya bilan — jadvallar CSV'ga."""
+    import http.server
+    import threading
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            logged = "sess=ok" in (self.headers.get("Cookie") or "")
+            if self.path == "/login-ok":        # foydalanuvchi o'zi kirgandek
+                self.send_response(200)
+                self.send_header("Set-Cookie", "sess=ok; Path=/; Max-Age=3600")
+                self.end_headers()
+                self.wfile.write(b"ok")
+                return
+            body = ("<title>Hisobotlar</title><table><tr><th>Kod</th><th>Nomi</th><th>Qoldiq</th></tr>"
+                    "<tr><td>A1</td><td>Non</td><td>3</td></tr><tr><td>B2</td><td>Sut</td><td>20</td></tr></table>") if logged else \
+                   "<title>Kirish</title><form><input name=login><input type=password name=p></form>"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(body.encode())
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    core.settings.browser_allowed_domains = ["127.0.0.1"]
+    sb = core.session_browser
+    try:
+        assert sb.extract_tables(base + "/reports", wait_ms=100)["status"] == "login_required"
+        sb.extract_tables(base + "/login-ok", wait_ms=100)          # profilga cookie yoziladi (login o'rniga)
+        r = sb.extract_tables(base + "/reports", wait_ms=100)
+    finally:
+        srv.shutdown()
+    assert r["status"] == "ok" and r["tables"][0]["columns"] == ["Kod", "Nomi", "Qoldiq"] and r["tables"][0]["rows"] == 2
+    imp = core.bi.import_file(r["tables"][0]["path"], "products")
+    assert imp["rows_ok"] == 2                                      # BI'ga to'g'ridan-to'g'ri import bo'ladi
+    assert sb.forget()["status"] == "forgotten"
+    from jarvis.browser import BrowserError
+    with pytest.raises(BrowserError):
+        sb.extract_tables("http://example.com/x")

@@ -124,3 +124,12 @@ def test_router_api_and_settings_validation(client):
     assert client.post("/api/settings", json={"daily_cost_limit": 2.5}).json()["daily_cost_limit"] == 2.5
     assert any(r["risk"] == "forbidden" for r in client.get("/api/policy").json())
     assert client.post("/api/policy/evaluate", json={"op": "shell_command", "params": {"command": "format c:"}}).json()["risk"] == "forbidden"
+
+
+def test_recommend_setup_for_8gb_gtx1650():
+    from jarvis.system_info import recommend_setup
+    r = recommend_setup(7.8, 4.0)
+    assert (r["light"], r["strong"], r["vision"]) == ("qwen2.5:1.5b", "qwen2.5:3b", "moondream")
+    assert "medvram" in r["image_gen"]
+    assert "Tavsiya etilmaydi" in recommend_setup(7.8, None)["image_gen"]
+    assert recommend_setup(4, None)["light"] == "qwen2.5:0.5b"
