@@ -8,3 +8,4 @@ Pillow>=10              # rasm studiyasi (~10 MB)
 openpyxl>=3.1           # Excel (.xlsx) o'qish
 pypdf>=4                # PDF matnini o'qish
 pytest>=8               # testlar
+cryptography>=42      # Credential Vault: brauzer sessiyalarini shifrlash (Fernet)

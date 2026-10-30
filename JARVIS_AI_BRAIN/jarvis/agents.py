@@ -60,6 +60,27 @@ class AgentManager:
         A("telegram", "Telegram agenti", "Bot holati va bildirishnomalar", ["bot api"], "D", self._h_telegram)
         A("bi", "Biznes tahlilchi", "Savdo, ombor, foyda, qarzdorlik tahlili", ["bi"], "B", self._h_bi)
         A("pos", "POS agenti", "Hujjat loyihasi va tasdiq so'rovi (kiritish faqat tasdiqdan keyin)", ["pos connector"], "D", self._h_pos)
+        # Mutaxassis agentlar (Main Brain = manager; barcha natijalar Brain Core orqali tekshiriladi)
+        A("pos_expert", "POS Expert", "Ulangan POS/ERP tizimlarini o'rganadi: modullar, obyektlar, xaritalar (faqat o'qish)", ["integrations"], "A", self._h_pos_expert)
+        A("business_analyst", "Business Analyst", "Savdo, foyda, qoldiq, qarz va do'konlarni manba bilan tahlil qiladi", ["analyst"], "A", self._h_analyst)
+        A("database_expert", "Database Expert", "Ulangan bazalar sxemasi; faqat parametrli SELECT", ["database connector"], "A", self._h_db_expert)
+        A("integration", "Integration Agent", "Tashqi tizimlar holati, sinxronlash; yozish faqat tasdiq bilan", ["integrations"], "D", self._h_integration)
+        A("memory_agent", "Memory Agent", "Xotira, takrorlar va aloqalar (Connection Engine)", ["memory", "kgraph"], "B", self._h_memory)
+
+    def _h_pos_expert(self, p):
+        return [{"name": c["name"], "status": c["status"], "learning": c["learning"]} for c in self.core.integrations.list() if c["system_type"] in ("pos", "erp")]
+
+    def _h_analyst(self, p):
+        return self.core.analyst.answer(p.get("question") or p.get("text") or "bugun savdo")
+
+    def _h_db_expert(self, p):
+        return [{"name": c["name"], "tables": [e["name"] for e in c["entities"]]} for c in self.core.integrations.list("database")]
+
+    def _h_integration(self, p):
+        return self.core.integrations.health()
+
+    def _h_memory(self, p):
+        return {"duplicates": self.core.connector.duplicates()[:20], "suggestions": len(self.core.connector.suggestions())}
 
     def _add(self, key, title, role, tools, perm, handler, status="idle"):
         self.agents[key] = Agent(key, title, role, tools, perm, handler, status=status)

@@ -43,7 +43,7 @@ class Settings:
     telegram_notify: bool = True
     telegram_owner_phone: str = ""        # ixtiyoriy: kontakt orqali tekshiriladigan egasining raqami
     telegram_events: list[str] = field(default_factory=lambda: ["startup", "error", "api", "instagram", "telegram", "task",
-                                                                "approval", "resources", "backup", "security", "code", "pos"])
+                                                                "approval", "resources", "backup", "security", "code", "pos", "integration"])
     telegram_voice_alerts: bool = False   # muhim ogohlantirishlarni ovozli xabar sifatida ham yuborish
     telegram_approvals: bool = True       # tasdiq so'rovlarini tugmalar bilan Telegram'ga yuborish
     telegram_approval_ttl_min: int = 30   # Telegram tugmasi amal qilish muddati
@@ -67,6 +67,7 @@ class Settings:
     telephony_rules: list[dict] = field(default_factory=list)
     # Adaptive AI Router: [{"id","kind","model","base_url","tier","local","paid","price_in_per_1k","price_out_per_1k","enabled"}]
     ai_providers: list[dict] = field(default_factory=list)
+    ai_task_routes: dict = field(default_factory=dict)       # {"code": "claude", "pos": "local", ...} — vazifa turi bo'yicha afzal model
     # Resource & Cost Guard (pullik AI standart holatda o'chiq)
     paid_ai_allowed: bool = False
     currency: str = "USD"

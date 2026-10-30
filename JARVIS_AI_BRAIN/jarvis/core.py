@@ -43,6 +43,9 @@ from .selfheal import SelfHealer
 from .brain import Brain
 from .events import EventBus
 from .memory_connect import MemoryConnector
+from .integrations import IntegrationHub
+from .integrations.analyst import Analyst
+from .brain_core import BrainCore
 from .telephony import Telephony
 from .voice import Voice
 from .security import contains_secret, redact
@@ -111,6 +114,9 @@ class JarvisCore:
         self.selfheal = SelfHealer(self)
         self.brain = Brain(self)
         self.connector = MemoryConnector(self)
+        self.integrations = IntegrationHub(self)
+        self.analyst = Analyst(self)
+        self.brain_core = BrainCore(self)
         self.approvals.on_pending = self.telegram.on_approval_pending
         self.approvals.events = self.events
         self._health_state: dict = {}
@@ -175,6 +181,9 @@ class JarvisCore:
                                      "instagram", f"Instagram qayta ulandi: @{a['name']}")
             if self.settings.instagram_mcp_url:
                 self.instagram_mcp.check()
+        if now - self._health_state.get("integ_at", 0) > 300:          # ulanishlar holati va jadval bo'yicha sinxronlash
+            self._health_state["integ_at"] = now
+            self.integrations.monitor()
         last_heal = self._health_state.setdefault("heal_at", now)
         if now - last_heal > 6 * 3600:          # 6 soatda bir yengil tekshiruv: diagnostika + xatolarni guruhlash (test/taklifsiz)
             self._health_state["heal_at"] = now
@@ -195,6 +204,9 @@ class JarvisCore:
                 if p["status"] == "unknown":
                     return "⚠️ Natija noma'lum (tarmoq). Qayta yuborilmaydi — dashboardda 'tekshirish' ni bosing."
                 return f"❌ Joylanmadi: {p.get('last_error')}\nYechim: media havolasi ommaviy https:// ekanini va token ruxsatlarini tekshiring."
+            if appr["action_type"] == "integration_write":
+                r = self.integrations.execute_write(approval_id)
+                return f"✅ Tashqi tizimga yozildi: {str(r.get('result'))[:200]}"
             if appr["action_type"] == "instagram_mcp_call":
                 r = self.instagram_mcp.execute_approval(approval_id)
                 return ("❌ MCP vositasi xato qaytardi." if r["is_error"] else "✅ MCP amali bajarildi.") + " Natija dashboardda."
@@ -236,6 +248,10 @@ class JarvisCore:
             intent, conf = intent_mod.detect(text)
         norm = intent_mod.normalize(text)
         out = {"intent": intent, "confidence": conf}
+        if intent not in ("memory_save", "memory_query"):
+            brain = self.brain_core.think(text)          # POS / biznes / ulanishlar savollari — Brain Core (manba bilan)
+            if brain:
+                return out | brain
 
         if intent == "memory_save":
             content = text.split(":", 1)[1].strip() if ":" in text else re.sub(r"(?i)\b(eslab qol|esla|yodda tut|saqla)\b", "", text).strip()

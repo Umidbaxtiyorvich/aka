@@ -91,6 +91,21 @@ def is_private(messages: list[dict]) -> bool:
     return contains_secret(text) or bool(PII.search(text))
 
 
+# Tayyor provayder andozalari. Model nomlari o'zgarishi mumkin — dashboardda tahrirlanadi. Kalit: ai_key_<id>.
+PROVIDER_PRESETS = {
+    "claude": {"id": "claude", "kind": "anthropic", "model": "claude-sonnet-5-5", "tier": "strong", "paid": True,
+               "note": "Anthropic Claude API (console.anthropic.com). Kuchli fikrlash va kod."},
+    "groq": {"id": "groq", "kind": "openai_compatible", "base_url": "https://api.groq.com/openai/v1", "model": "llama-3.3-70b-versatile",
+             "tier": "light", "paid": True, "note": "Groq (console.groq.com) — juda tez javob, OpenAI-mos API."},
+    "gemini": {"id": "gemini", "kind": "openai_compatible", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+               "model": "gemini-2.5-flash", "tier": "strong", "paid": True, "note": "Google Gemini (aistudio.google.com) — OpenAI-mos endpoint."},
+    "ollama": {"id": "local", "kind": "ollama", "model": "qwen2.5:1.5b", "tier": "light", "paid": False, "note": "Mahalliy model (bepul, internetsiz)."},
+}
+# Vazifa turlari → afzal provayder id (settings.ai_task_routes). Maxfiy ma'lumot baribir faqat mahalliy modelga ketadi.
+TASK_TYPES = {"chat": "Oddiy suhbat", "reasoning": "Murakkab fikrlash", "code": "Kod yozish", "pos": "POS / biznes tahlili",
+              "voice": "Ovozli javob", "vision": "Rasm va hujjat tahlili", "research": "Internet qidiruvi", "agents": "Agent boshqaruvi"}
+
+
 class Router:
     """core.ai sifatida ishlatiladi: eski interfeys (name, model, available, chat) saqlangan."""
 
@@ -166,8 +181,18 @@ class Router:
         # Bir xil daraja/narx/joylashuvda — foydalanuvchi fikri va testlar bo'yicha yaxshirog'i oldinda (kamida 5 baho bo'lsa)
         cands.sort(key=lambda p: (order.index(p["tier"]) if p["tier"] in order else 2, p["paid"], not p["local"],
                                   -(q.get(p["id"], {}).get("score", 0.5) if q.get(p["id"], {}).get("enough") else 0.5)))
+        pref = (getattr(self.core.settings, "ai_task_routes", {}) or {}).get(purpose or "chat")
+        routed = None
+        if pref:
+            hit = next((p for p in cands if p["id"] == pref), None)
+            if hit:
+                cands.remove(hit)
+                cands.insert(0, hit)
+                routed = pref
+            elif any(x["provider"] == pref for x in skipped):
+                routed = f"{pref} (maxfiylik sababli o'tkazib yuborildi)"
         cands.append(next(p for p in self.profiles() if p["kind"] == "offline"))
-        return {"complexity": complexity, "private": priv, "candidates": cands, "skipped": skipped}
+        return {"complexity": complexity, "task_route": routed, "private": priv, "candidates": cands, "skipped": skipped}
 
     def route(self, messages: list[dict], purpose: str = "", private: bool | None = None) -> dict:
         ev = getattr(self.core, "events", None)

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 REGIONS = [
     {"id": "memory", "name": "Memory Center", "uz": "Xotira markazi", "color": "#22d3ee",
-     "modules": ["memory", "kgraph", "decisions"], "agents": ["file_analysis"], "actors": ["memory", "kgraph", "user"]},
+     "modules": ["memory", "kgraph", "decisions"], "agents": ["file_analysis", "memory_agent"], "actors": ["memory", "kgraph", "user"]},
     {"id": "reasoning", "name": "Reasoning Center", "uz": "Mantiqiy tahlil", "color": "#3b82f6",
      "modules": ["ai_router", "resource_guard"], "agents": ["manager", "developer"], "actors": ["ai_router", "manager", "developer"]},
     {"id": "planning", "name": "Planning Center", "uz": "Rejalashtirish", "color": "#a855f7",
@@ -19,7 +19,8 @@ REGIONS = [
     {"id": "creative", "name": "Creative Center", "uz": "Ijodiy vazifalar", "color": "#ec4899",
      "modules": ["studio", "instagram"], "agents": ["video", "instagram"], "actors": ["instagram_agent", "instagram_mcp", "studio"]},
     {"id": "agents", "name": "Agent Control Center", "uz": "Agentlar boshqaruvi", "color": "#8b5cf6",
-     "modules": ["agents"], "agents": ["research", "bi", "pos"], "actors": ["research", "bi", "pos", "pos_sync"]},
+     "modules": ["agents"], "agents": ["research", "bi", "pos", "pos_expert", "business_analyst", "database_expert", "integration"],
+     "actors": ["research", "bi", "pos", "pos_sync", "integration", "brain_core"]},
     {"id": "security", "name": "Security Center", "uz": "Xavfsizlik", "color": "#eab308",
      "modules": ["security", "policy", "approvals", "auth"], "agents": ["security", "computer"], "actors": ["security", "secrets", "computer"]},
 ]

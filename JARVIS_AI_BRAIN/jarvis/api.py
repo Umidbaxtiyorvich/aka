@@ -28,6 +28,8 @@ from .imagegen import ImageGenError
 from .improve import ImproveError
 from .instagram import InstagramError, suggest_hashtags
 from .instagram_mcp import MCPError
+from .integrations import IntegrationError
+from .integrations.vault import VaultError
 from .kgraph import KGError
 from .memory import MemoryError_
 from .planner import PlannerError
@@ -43,11 +45,11 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError)
+               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
-            "ai_providers", "paid_ai_allowed", "currency", "daily_cost_limit", "monthly_cost_limit", "daily_request_limit",
+            "ai_providers", "ai_task_routes", "paid_ai_allowed", "currency", "daily_cost_limit", "monthly_cost_limit", "daily_request_limit",
             "cost_warn_percent", "medium_auto_actions", "sandbox_backend", "sandbox_timeout_sec", "sandbox_memory_mb",
             "sandbox_max_retries", "backup_interval_hours", "backup_keep", "backup_max_total_mb", "backup_include_workspace",
             "image_gen_url", "vision_model", "planner_use_ai", "session_hours", "pos_api", "pos_sync",
@@ -142,6 +144,7 @@ class SettingsIn(BaseModel):
     low_stock_threshold: float | None = None
     save_voice_recordings: bool | None = None
     ai_providers: list[dict] | None = None
+    ai_task_routes: dict | None = None
     paid_ai_allowed: bool | None = None
     currency: str | None = None
     daily_cost_limit: float | None = None
@@ -274,6 +277,55 @@ class AppIn(BaseModel):
     file: str | None = None
     reason: str = ""
 
+class ConnIn(BaseModel):
+    name: str
+    system_type: str = ""
+    adapter: str = ""
+    preset: str = ""
+    store: str = ""
+    mode: str = "read_only"
+    config: dict = {}
+    secrets: dict = {}
+    sync_interval_min: int = 0
+
+
+class ConnUpdateIn(BaseModel):
+    name: str | None = None
+    store: str | None = None
+    config: dict | None = None
+    secrets: dict | None = None
+    sync_interval_min: int | None = None
+    enabled: bool | None = None
+
+
+class MappingIn(BaseModel):
+    source_entity: str
+    entity: str | None = None
+    fields: dict = {}
+
+
+class WriteIn(BaseModel):
+    entity: str
+    operation: str
+    payload: dict = {}
+    summary: str = ""
+
+
+class DetectIn(BaseModel):
+    url: str = ""
+    host: str = ""
+    port: int | None = None
+
+
+class QueryIn(BaseModel):
+    sql: str
+    params: list = []
+
+
+class AskIn(BaseModel):
+    question: str
+
+
 class FeedbackIn(BaseModel):
     usage_id: int
     good: bool
@@ -329,7 +381,9 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
             if (urlparse(origin).hostname or "").lower() not in allowed:
                 return JSONResponse({"detail": "Begona saytdan so'rov rad etildi"}, status_code=403)
         path = request.url.path
-        if c.settings.auth_enabled and path.startswith("/api/") and not path.startswith("/api/auth/"):
+        # Webhook — o'z tokeni bilan (X-JARVIS-Token) tekshiriladi va faqat sinxronlashni ishga tushiradi
+        is_webhook = request.method == "POST" and re.fullmatch(r"/api/integrations/\d+/webhook", path)
+        if c.settings.auth_enabled and path.startswith("/api/") and not path.startswith("/api/auth/") and not is_webhook:
             if not c.auth.check(request.cookies.get(SESSION_COOKIE)):
                 return JSONResponse({"detail": "auth_required", "pin_set": c.auth.has_pin()}, status_code=401)
         return await call_next(request)
@@ -500,6 +554,125 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.get("/api/memory/duplicates")
     def mem_duplicates():
         return C().connector.duplicates()
+
+    # Universal Integration Engine (maxfiy qiymatlar hech qachon qaytmaydi — faqat qaysi maydonlar kiritilgani)
+    @app.get("/api/integrations/catalog")
+    def integ_catalog():
+        return C().integrations.catalog()
+
+    @app.get("/api/integrations")
+    def integ_list(system_type: str = ""):
+        return C().integrations.list(system_type)
+
+    @app.post("/api/integrations")
+    def integ_create(body: ConnIn):
+        return guard(C().integrations.create, **body.model_dump())
+
+    @app.post("/api/integrations/detect")
+    def integ_detect(body: DetectIn):
+        return C().integrations.detect(url=body.url, host=body.host, port=body.port)
+
+    @app.get("/api/integrations/health")
+    def integ_health():
+        return C().integrations.health()
+
+    @app.get("/api/integrations/sync-history")
+    def integ_sync_hist(cid: int | None = None):
+        return C().integrations.sync_history(cid)
+
+    @app.get("/api/integrations/proposals")
+    def integ_props(cid: int | None = None):
+        return C().integrations.proposals(cid)
+
+    @app.post("/api/integrations/desktop-scan")
+    def integ_desktop():
+        from .integrations.mcp_db_files import DesktopConnector
+        c = C()
+        return DesktopConnector({"id": None, "config": {}}, lambda f: None, c).discover()
+
+    @app.get("/api/integrations/{cid}")
+    def integ_get(cid: int):
+        return guard(C().integrations.get, cid)
+
+    @app.post("/api/integrations/{cid}")
+    def integ_update(cid: int, body: ConnUpdateIn):
+        return guard(C().integrations.update, cid, **body.model_dump())
+
+    @app.delete("/api/integrations/{cid}")
+    def integ_delete(cid: int):
+        return guard(C().integrations.delete, cid)
+
+    @app.post("/api/integrations/{cid}/test")
+    def integ_test(cid: int):
+        return guard(C().integrations.test, cid)
+
+    @app.post("/api/integrations/{cid}/discover")
+    def integ_discover(cid: int):
+        return guard(C().integrations.discover, cid)
+
+    @app.post("/api/integrations/{cid}/mapping")
+    def integ_mapping(cid: int, body: MappingIn):
+        return guard(C().integrations.confirm_mapping, cid, body.source_entity, body.entity, body.fields)
+
+    @app.post("/api/integrations/{cid}/sync")
+    def integ_sync(cid: int, mode: str = "incremental"):
+        return guard(C().integrations.sync, cid, mode)
+
+    @app.post("/api/integrations/{cid}/mode")
+    def integ_mode(cid: int, mode: str):
+        return guard(C().integrations.set_mode, cid, mode)
+
+    @app.post("/api/integrations/{cid}/disconnect")
+    def integ_disconnect(cid: int):
+        return guard(C().integrations.disconnect, cid)
+
+    @app.post("/api/integrations/{cid}/login-window")
+    def integ_login_window(cid: int):
+        import threading
+        c = C()
+        conn = guard(c.integrations.get, cid)
+        if conn["adapter"] != "website":
+            raise HTTPException(400, "Faqat veb-sayt ulanishlari uchun")
+        threading.Thread(target=lambda: c.integrations.connector(conn).interactive_login(), daemon=True).start()
+        return {"status": "opened", "note": "Brauzer oynasida CAPTCHA/MFA'ni o'zingiz o'ting, keyin oynani yoping va 'Tekshirish' ni bosing."}
+
+    @app.get("/api/integrations/{cid}/records")
+    def integ_records(cid: int, entity: str = "", limit: int = 200, offset: int = 0):
+        return C().integrations.records(cid, entity, limit, offset)
+
+    @app.post("/api/integrations/{cid}/query")
+    def integ_query(cid: int, body: QueryIn):
+        c = C()
+        conn = guard(c.integrations.get, cid)
+        if conn["adapter"] != "database":
+            raise HTTPException(400, "Faqat ma'lumotlar bazasi ulanishlari uchun")
+        from .integrations.base import ConnectorError as _CE
+        try:
+            return c.integrations.connector(conn).query(body.sql, body.params)
+        except _CE as e:
+            raise HTTPException(400, str(e))
+
+    @app.post("/api/integrations/{cid}/write")
+    def integ_write(cid: int, body: WriteIn):
+        return guard(C().integrations.request_write, cid, body.entity, body.operation, body.payload, body.summary)
+
+    @app.post("/api/integrations/{cid}/webhook")
+    async def integ_webhook(cid: int, request: Request):
+        """Webhook Sync: tashqi tizim xabar beradi → JARVIS o'zi incremental sinxronlaydi (kelgan ma'lumot to'g'ridan-to'g'ri yozilmaydi)."""
+        import hmac
+        c = C()
+        secret = c.integrations.vault.get(cid, "webhook_secret")
+        if not secret or not hmac.compare_digest(request.headers.get("X-JARVIS-Token", ""), secret):
+            raise HTTPException(403, "Webhook tokeni noto'g'ri")
+        return guard(c.integrations.sync, cid, "incremental", "webhook")
+
+    @app.get("/api/brain-core/status")
+    def brain_core_status():
+        return C().brain_core.status()
+
+    @app.post("/api/analyst/ask")
+    def analyst_ask(body: AskIn):
+        return C().analyst.answer(body.question)
 
     # 3D Brain + jonli hodisalar (Server-Sent Events)
     @app.get("/api/brain/state")
@@ -743,6 +916,11 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def ai_router():
         c = C()
         return {"providers": c.ai.status(), "last_route": c.ai.last_route, "metrics": c.guard.providers()}
+
+    @app.get("/api/ai/presets")
+    def ai_presets():
+        from .router import PROVIDER_PRESETS, TASK_TYPES
+        return {"presets": PROVIDER_PRESETS, "task_types": TASK_TYPES, "routes": C().settings.ai_task_routes}
 
     @app.get("/api/ai/quality")
     def ai_quality():

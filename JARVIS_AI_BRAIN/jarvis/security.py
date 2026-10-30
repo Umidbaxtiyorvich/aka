@@ -33,8 +33,20 @@ def contains_secret(text: str) -> bool:
     return any(p.search(text or "") for p in SECRET_PATTERNS)
 
 
+# Vault'dan o'qilgan aniq maxfiy qiymatlar (parol, token) — har qanday matnda (log, xato, javob) yashiriladi
+_KNOWN_SECRETS: set[str] = set()
+
+
+def register_secret(value: str | None) -> None:
+    if value and len(value) >= 4:
+        _KNOWN_SECRETS.add(value)
+
+
 def redact(text: str) -> str:
     out = text or ""
+    for v in sorted(_KNOWN_SECRETS, key=len, reverse=True):
+        if v in out:
+            out = out.replace(v, "[MAXFIY-YASHIRILDI]")
     for p in SECRET_PATTERNS:
         out = p.sub("[MAXFIY-YASHIRILDI]", out)
     return out

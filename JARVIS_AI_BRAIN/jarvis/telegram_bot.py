@@ -37,6 +37,7 @@ EVENTS = {
     "instagram": "Instagram ulanishi va nashrlar", "telegram": "Telegram ulanishi", "task": "Vazifa boshlandi/tugadi/xato",
     "approval": "Tasdiqlash so'rovlari (tugmalar bilan)", "resources": "Kompyuter resurslari chegarada",
     "backup": "Zaxira nusxa xatolari", "security": "Xavfsizlik hodisalari", "code": "Kod o'zgarishlari", "pos": "POS hisobotlari",
+    "integration": "Tashqi tizimlar (POS/ERP/sayt/API) ulanishi uzilganda",
 }
 INFO_EVENTS = {"startup", "task", "approval", "instagram", "code"}   # bular 'info' darajasida ham yuboriladi
 HELP = ("JARVIS buyruqlari:\n"

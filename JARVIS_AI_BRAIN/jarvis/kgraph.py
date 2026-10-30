@@ -35,7 +35,8 @@ CATEGORIES = {"memories": "Memories", "knowledge": "Knowledge", "projects": "Pro
 TYPE_CATEGORY = {"memory": "memories", "source": "knowledge", "knowledge": "knowledge", "project": "projects", "file": "files",
                  "task": "tasks", "agent": "agents", "conversation": "conversations", "decision": "decisions", "skill": "skills",
                  "error": "errors", "module": "errors", "proposal": "solutions", "test_run": "solutions", "api": "apis",
-                 "instagram": "instagram", "telegram": "telegram", "business": "business"}
+                 "instagram": "instagram", "telegram": "telegram", "business": "business",
+                 "integration": "apis", "ext_entity": "business"}
 
 
 def category_of(node: dict) -> str:
@@ -51,7 +52,8 @@ def category_of(node: dict) -> str:
 # Tugun turi → dashboard bo'limi (tugundan tegishli joyga o'tish uchun)
 SECTIONS = {"task": "agents", "agent": "agents", "decision": "decisions", "error": "errors", "proposal": "tests", "test_run": "tests",
             "file": "files", "memory": "memory", "source": "knowledge", "project": "memory", "module": "diagnostics",
-            "conversation": "chat", "skill": "plugins", "api": "router", "instagram": "instagram", "telegram": "telegram", "business": "bi"}
+            "conversation": "chat", "skill": "plugins", "api": "router", "instagram": "instagram", "telegram": "telegram", "business": "bi",
+            "integration": "connections", "ext_entity": "connections"}
 NodeSpec = tuple  # (type, ref, label|None)
 
 
