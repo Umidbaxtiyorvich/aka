@@ -203,3 +203,64 @@ def test_session_browser_reads_tables_after_user_login(core, tmp_path):
     from jarvis.browser import BrowserError
     with pytest.raises(BrowserError):
         sb.extract_tables("http://example.com/x")
+
+
+@pytest.mark.skipif(not _chromium(), reason="playwright o'rnatilmagan")
+def test_pos_sync_replaces_snapshots_and_alerts(core):
+    import http.server
+    import threading
+    state = {"logged": True, "sales": [("S-1", "A1", 2, 4000)], "stock": 3}
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            if not state["logged"]:
+                body = "<form><input type=password></form>"
+            elif self.path.startswith("/sales"):
+                rows = "".join(f"<tr><td>{d}</td><td>sotuv</td><td>2026-10-30</td><td>Mijoz</td><td>{k}</td><td>{q}</td><td>{p}</td><td>{q * p}</td></tr>"
+                               for d, k, q, p in state["sales"])
+                body = ("<table><tr><th>Hujjat raqami</th><th>Turi</th><th>Sana</th><th>Kontragent</th><th>Kod</th><th>Miqdor</th>"
+                        f"<th>Narx</th><th>Summa</th></tr>{rows}</table>")
+            else:
+                body = ("<table><tr><th>Kod</th><th>Nomi</th><th>Tannarx</th><th>Sotish narxi</th><th>Qoldiq</th><th>Minimal</th></tr>"
+                        f"<tr><td>A1</td><td>Non</td><td>3000</td><td>4000</td><td>{state['stock']}</td><td>5</td></tr></table>")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(body.encode())
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    core.settings.browser_allowed_domains = ["127.0.0.1"]
+    core.settings.pos_sync = {"enabled": True, "sources": [{"name": "savdo", "url": base + "/sales", "wait_ms": 50},
+                                                           {"name": "qoldiq", "url": base + "/stock", "wait_ms": 50}]}
+    try:
+        r1 = core.pos_sync.run()
+        assert r1["status"] == "ok" and r1["imported"] == 2
+        assert core.bi.profit()["revenue"] == 8000
+        assert any("Kam qolgan" in n["title"] for n in core.notifier.list())          # qoldiq 3 < minimal 5
+        r2 = core.pos_sync.run()                                                       # o'zgarmagan
+        assert core.bi.profit()["revenue"] == 8000 and all("o'zgarmagan" in x for x in r2["notes"])
+        state["sales"].append(("S-2", "A1", 1, 4000))                                  # yangi savdo
+        core.pos_sync.run()
+        assert core.bi.profit()["revenue"] == 12000                                    # ikki marta hisoblanmadi
+        assert len(core.db.query("SELECT * FROM bi_movements")) == 2
+        state["logged"] = False
+        r4 = core.pos_sync.run()
+        assert r4["status"] == "login_required"
+        assert any("qayta kiring" in (n["body"] or "") for n in core.notifier.list())
+        assert core.bi.profit()["revenue"] == 12000                                    # eski ma'lumot saqlandi
+    finally:
+        srv.shutdown()
+        core.session_browser.forget()
+
+
+def test_detect_kind():
+    from jarvis.bi import BIError, BusinessIntelligence
+    assert BusinessIntelligence.detect_kind(["Kod", "Turi", "Miqdor"]) == "movements"
+    assert BusinessIntelligence.detect_kind(["Артикул", "Наименование", "Остаток"]) == "products"
+    assert BusinessIntelligence.detect_kind(["Sana", "Kontragent", "Summa"]) == "payments"
+    with pytest.raises(BIError):
+        BusinessIntelligence.detect_kind(["x", "y"])

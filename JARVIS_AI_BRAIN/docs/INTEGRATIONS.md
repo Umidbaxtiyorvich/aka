@@ -162,3 +162,17 @@ Bu holatda xavfsiz yo'l — **siz o'zingiz kirgan brauzer sessiyasi orqali faqat
 Muqobil yo'l — eng ishonchli: YesPOS hisobotidagi **Excel'ga eksport** tugmasi bilan faylni yuklab oling va BI bo'limiga yuklang.
 
 YesPOS'ga hujjat **kiritish** (yozish) qo'shilmagan. Buning uchun YesPOS'dan rasmiy API va token so'rash kerak. API berilsa, `pos_connector: "api"` va `pos_api` sozlamasi bilan ulanadi.
+
+### YesPOS — avtomatik o'qish
+1. **"YesPOS sozlamasi"** ni bosing, keyin **"POS'ga kirish"** orqali bir marta kiring.
+2. **"Avtomatik o'qish"** bo'limida hisobot sahifalarini kiriting. Har qatorga bitta: `nom | manzil | tur`. Masalan: `savdo | https://app.yespos.uz/reports | auto`.
+3. **"Hozir o'qish"** bilan sinab ko'ring. Natija to'g'ri bo'lsa, **"Avtomatik o'qishni yoqish"** ni belgilang (standart: har 6 soatda).
+
+JARVIS ishlab turganda hisobotlar jadval bo'yicha o'qiladi va BI'ga qo'shiladi:
+- har bir manbaning eski nusxasi almashtiriladi, savdo ikki marta hisoblanmaydi;
+- kam qolgan mahsulot, narx xatosi, takroriy hujjat yoki katta tafovut bo'lsa, bildirishnoma keladi (Telegram sozlangan bo'lsa unga ham);
+- sessiya tugasa, "qayta kiring" xabari keladi.
+
+YesPOS'ga hech narsa yozilmaydi.
+
+Real YesPOS bilan hali sinalmagan. Agar u jadvallarni `<table>` sifatida ko'rsatmasa yoki ustun nomlari tanilmasa, "Hozir o'qish" natijasini yuboring. Moslashtirib beraman.

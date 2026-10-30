@@ -45,6 +45,7 @@ class Settings:
     pos_site: str = ""                    # POS manzili (keyin beriladi)
     pos_connector: str = "file_export"    # file_export | api | browser
     pos_api: dict = field(default_factory=dict)   # RestApiConnector sozlamasi (tokensiz)
+    pos_sync: dict = field(default_factory=dict)  # avtomatik o'qish: {"enabled", "interval_hours", "sources": [...]}
     low_stock_threshold: float = 5
     save_voice_recordings: bool = False
     telephony_provider: str = ""          # bo'sh = o'chirilgan

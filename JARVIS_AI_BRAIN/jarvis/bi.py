@@ -133,22 +133,40 @@ class BusinessIntelligence:
     def __init__(self, db: Database, audit: Audit, settings, files):
         self.db, self.audit, self.settings, self.files = db, audit, settings, files
         db.conn.executescript(BI_SCHEMA)
+        db.ensure_columns("bi_imports", {"source": "TEXT"})
+
+    @staticmethod
+    def detect_kind(headers: list[str]) -> str:
+        cols = map_columns(headers)
+        if "sku" in cols and "qty" in cols and "doc_type" in cols:
+            return "movements"
+        if "sku" in cols:
+            return "products"
+        if "total" in cols and "party" in cols:
+            return "payments"
+        raise BIError(f"Jadval turini aniqlab bo'lmadi. Sarlavhalar: {headers[:12]}")
 
     # ---------- import ----------
-    def import_file(self, path: str, kind: str) -> dict:
-        """kind: products | movements | payments"""
-        if kind not in ("products", "movements", "payments"):
-            raise BIError("kind: products, movements yoki payments")
+    def import_file(self, path: str, kind: str, replace_source: str | None = None) -> dict:
+        """kind: products | movements | payments | auto.
+        replace_source: avtomatik sinxronlash manbasi — shu manbaning oldingi nusxasi yangisi bilan ALMASHTIRILADI
+        (har safar olingan hisobot qayta qo'shilib, savdo ikki marta hisoblanmasin)."""
+        if kind not in ("products", "movements", "payments", "auto"):
+            raise BIError("kind: products, movements, payments yoki auto")
         p = self.files._check_read(path)
         if not p.is_file():
             raise FileAccessError("Fayl topilmadi")
         digest = hashlib.sha256(p.read_bytes()).hexdigest()
-        dup = self.db.one("SELECT id, created_at FROM bi_imports WHERE sha256=?", (digest,))
+        dup = self.db.one("SELECT id, created_at, source FROM bi_imports WHERE sha256=?", (digest,))
         if dup:
+            if replace_source and dup["source"] == replace_source:
+                return {"import_id": dup["id"], "file": p.name, "unchanged": True, "rows_ok": 0, "rows_bad": 0, "issues": []}
             raise BIError(f"Bu fayl allaqachon import qilingan (#{dup['id']}, {dup['created_at']}).")
         rows = read_table(p)
         if len(rows) < 2:
             raise BIError("Faylda sarlavha va kamida bitta qator bo'lishi kerak")
+        if kind == "auto":
+            kind = self.detect_kind(rows[0])
         cols = map_columns(rows[0])
         need = {"products": ["sku"], "movements": ["sku", "qty", "doc_type"]}.get(kind, [])
         if kind == "payments":
@@ -159,8 +177,16 @@ class BusinessIntelligence:
             if missing:
                 raise BIError(f"Majburiy ustun topilmadi: {missing}. Topilgan: {list(cols)}. Sarlavhalar: {rows[0]}")
 
-        cur = self.db.execute("INSERT INTO bi_imports(file_name, sha256, kind, rows_ok, rows_bad) VALUES (?,?,?,0,0)",
-                              (p.name, digest, kind))
+        replaced = 0
+        if replace_source:
+            old = [r["id"] for r in self.db.query("SELECT id FROM bi_imports WHERE source=?", (replace_source,))]
+            for oid in old:
+                self.db.execute("DELETE FROM bi_movements WHERE import_id=?", (oid,))
+                self.db.execute("DELETE FROM bi_payments WHERE import_id=?", (oid,))
+                self.db.execute("DELETE FROM bi_imports WHERE id=?", (oid,))
+            replaced = len(old)
+        cur = self.db.execute("INSERT INTO bi_imports(file_name, sha256, kind, rows_ok, rows_bad, source) VALUES (?,?,?,0,0,?)",
+                              (p.name, digest, kind, replace_source))
         imp_id = cur.lastrowid
         ok, issues = 0, []
         get = lambda r, k: (r[cols[k]].strip() if k in cols and cols[k] < len(r) else "")  # noqa: E731
@@ -180,7 +206,7 @@ class BusinessIntelligence:
         self.audit.log("bi_agent", f"Import: {p.name} ({kind})", target=f"bi_import#{imp_id}", risk="B",
                        result=f"ok={ok}, xato={len(issues)}")
         return {"import_id": imp_id, "file": p.name, "kind": kind, "rows_ok": ok, "rows_bad": len(issues),
-                "issues": issues[:50], "columns": cols}
+                "issues": issues[:50], "columns": cols, "replaced_imports": replaced}
 
     def _import_product(self, r, get, imp_id):
         sku = get(r, "sku")

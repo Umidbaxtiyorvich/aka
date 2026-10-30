@@ -30,6 +30,7 @@ from .memory import MemoryError_
 from .planner import PlannerError
 from .plugins import PluginError
 from .pos import POSError
+from .pos_sync import POSSyncError
 from .research import ResearchError
 from .sandbox import SandboxError
 from .studio import StudioError
@@ -39,14 +40,14 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError)
+               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
             "ai_providers", "paid_ai_allowed", "currency", "daily_cost_limit", "monthly_cost_limit", "daily_request_limit",
             "cost_warn_percent", "medium_auto_actions", "sandbox_backend", "sandbox_timeout_sec", "sandbox_memory_mb",
             "sandbox_max_retries", "backup_interval_hours", "backup_keep", "backup_max_total_mb", "backup_include_workspace",
-            "image_gen_url", "vision_model", "planner_use_ai", "session_hours", "pos_api"}
+            "image_gen_url", "vision_model", "planner_use_ai", "session_hours", "pos_api", "pos_sync"}
 PROVIDER_KINDS = {"ollama", "openai_compatible", "anthropic", "offline"}
 
 DASHBOARD = PROJECT_ROOT / "dashboard"
@@ -140,6 +141,7 @@ class SettingsIn(BaseModel):
     planner_use_ai: bool | None = None
     session_hours: float | None = None
     pos_api: dict | None = None
+    pos_sync: dict | None = None
 
 class OpIn(BaseModel):
     """Umumiy so'rov: modul amali va parametrlari."""
@@ -538,6 +540,15 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
             bad = [a for a in data["medium_auto_actions"] if ACTIONS.get(a, ("high",))[0] != "medium"]
             if bad:
                 raise HTTPException(400, f"Faqat o'rta xavfli amallar avtomatik qilinadi. Mumkin emas: {bad}")
+        if "pos_sync" in data:
+            ps = data["pos_sync"]
+            for src in ps.get("sources", []):
+                if not str(src.get("url", "")).startswith("https://"):
+                    raise HTTPException(400, "Har bir hisobot manbasi https:// manzil bo'lishi kerak")
+                if src.get("kind", "auto") not in ("auto", "products", "movements", "payments"):
+                    raise HTTPException(400, "kind: auto, products, movements yoki payments")
+            if float(ps.get("interval_hours", 6)) < 0.5:
+                raise HTTPException(400, "Oraliq kamida 0.5 soat")
         if "sandbox_backend" in data and data["sandbox_backend"] not in ("process", "docker"):
             raise HTTPException(400, "sandbox_backend: process yoki docker")
         if "ai_provider" in data and data["ai_provider"] not in ("offline", "ollama"):
@@ -841,11 +852,23 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def br_forget():
         return guard(C().session_browser.forget)
 
+    @app.get("/api/pos/sync")
+    def pos_sync_status():
+        c = C()
+        return c.pos_sync.status() | {"history": c.pos_sync.history()}
+
+    @app.post("/api/pos/sync/run")
+    def pos_sync_run():
+        return guard(C().pos_sync.run)
+
     @app.post("/api/pos/preset/yespos")
     def pos_yespos():
         """YesPOS uchun tayyor sozlama: sayt manzili va brauzer ruxsati (faqat o'qish)."""
         c = C()
         c.settings.pos_site = "https://app.yespos.uz"
+        if not (c.settings.pos_sync or {}).get("sources"):
+            c.settings.pos_sync = {"enabled": False, "interval_hours": 6,
+                                   "sources": [{"name": "hisobotlar", "url": "https://app.yespos.uz/reports", "kind": "auto"}]}
         if "app.yespos.uz" not in c.settings.browser_allowed_domains:
             c.settings.browser_allowed_domains = list(c.settings.browser_allowed_domains) + ["app.yespos.uz"]
         c.settings.save()
@@ -1107,6 +1130,7 @@ def main():
     app = create_app()
     app.state.core.backup.start_auto()        # jadval bo'yicha avtomatik zaxira (backup_interval_hours)
     app.state.core.start_scheduler()          # rejalashtirilgan Instagram postlari → tasdiq so'rovi
+    app.state.core.pos_sync.start()           # POS hisobotlarini jadval bo'yicha o'qish (yoqilgan bo'lsa)
     uvicorn.run(app, host=a.host, port=a.port)
 
 

@@ -31,6 +31,7 @@ from .planner import Planner
 from .plugins import PluginManager
 from .policy import PolicyEngine
 from .pos import POSManager
+from .pos_sync import POSSync
 from .research import Research, ResearchError
 from .resource_guard import ResourceGuard
 from .router import Router
@@ -83,6 +84,7 @@ class JarvisCore:
         self.voice = Voice(self)
         self.browser = BrowserAgent(self)
         self.session_browser = SessionBrowser(self)
+        self.pos_sync = POSSync(self)
         self.telephony = Telephony(self.settings, self.approvals)
         self.notifier.telephony = self.telephony
         self.planner = Planner(self)

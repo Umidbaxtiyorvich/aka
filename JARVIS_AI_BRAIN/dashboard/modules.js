@@ -245,7 +245,15 @@ async function renderPOS(v) {
         <li>Hisobot sahifasi manzilini kiriting → "Jadvallarni olish". Faqat o'qiladi; natija CSV bo'lib BI'ga import qilinadi.</li></ol>
       <div class="row"><button class="ghost" id="yp">YesPOS sozlamasi</button><button class="ghost" id="ylog">POS'ga kirish (o'zim kiraman)</button>
         <button class="ghost" id="yforget">Sessiyani unutish</button><span id="yst" class="muted"></span></div>
-      <div class="row"><input id="yurl" value="https://app.yespos.uz/reports"><button id="ytab">Jadvallarni olish</button></div><div id="yo"></div></div>
+      <div class="row"><input id="yurl" value="https://app.yespos.uz/reports"><button id="ytab">Jadvallarni olish</button></div><div id="yo"></div>
+      <h3 style="margin-top:14px">Avtomatik o'qish</h3>
+      <p class="muted">Har bir qatorga bitta hisobot: <code>nom | manzil | tur</code> (tur: auto, products, movements, payments). JARVIS shu sahifalarni jadval bo'yicha o'qiydi,
+        BI'ga qo'shadi (eski nusxa almashtiriladi — ikki marta hisoblanmaydi) va kam qolgan mahsulot, narx xatosi, tafovut bo'lsa xabar beradi. POS'ga hech narsa yozilmaydi.</p>
+      <label><input type="checkbox" id="syon" style="width:auto"> Avtomatik o'qishni yoqish</label>
+      <div class="row"><label style="margin:0">Har</label><input id="syint" type="number" step="0.5" min="0.5" style="width:90px"><span>soatda</span></div>
+      <textarea id="sysrc" style="min-height:70px"></textarea>
+      <div class="row" style="margin-top:8px"><button id="sysave">Saqlash</button><button class="ghost" id="syrun">Hozir o'qish</button><span id="syst" class="muted"></span></div>
+      <div id="syhist"></div></div>
     <div class="card" style="margin-top:12px"><h3>Yangi hujjat loyihasi</h3><div class="row"><select id="dt" style="width:160px">${["kirim", "chiqim", "sotuv", "qaytarish", "tolov"].map((x) => `<option>${x}</option>`).join("")}</select>
       <input id="party" placeholder="Yetkazib beruvchi / qabul qiluvchi"><input id="acc" placeholder="Akkaunt/filial (ixtiyoriy)" style="width:200px"></div>
       <textarea id="items">[{"sku": "A1", "name": "Non", "qty": 10, "price": 3000}]</textarea><div class="row" style="margin-top:8px"><button id="mk">Loyiha yaratish</button></div><pre id="o" hidden></pre></div>
@@ -254,9 +262,22 @@ async function renderPOS(v) {
       ${d.status === "draft" ? `<button class="ghost" data-ed="${d.id}">tahrir</button> <button data-req="${d.id}">tasdiqqa</button>` : ""}
       ${d.status === "pending_approval" ? `<button class="ghost" data-ed="${d.id}">tahrir</button> <button data-sub="${d.id}">POSga kiritish</button>` : ""}
       ${d.status === "unknown" ? `<button data-chk="${d.id}">POSda tekshirish</button>` : ""}</td></tr>`).join("")}</table>` : '<span class="muted">Hujjat yo\'q</span>'}</div>`;
+  const drawSync = async () => { const st = await api("/api/pos/sync");
+    $("#syon").checked = !!st.config.enabled; $("#syint").value = st.config.interval_hours;
+    $("#sysrc").value = st.config.sources.map((x) => `${x.name || ""} | ${x.url} | ${x.kind || "auto"}`).join("\n");
+    $("#syst").textContent = st.last_success ? `oxirgi muvaffaqiyatli: ${st.last_success.ts}` : "hali o'qilmagan";
+    $("#syhist").innerHTML = st.history.length ? table(st.history.slice(0, 8), ["ts", "status", "imported", "alerts", "detail"]) : ""; };
+  drawSync();
+  $("#sysave").onclick = async () => { try {
+    const sources = $("#sysrc").value.split("\n").map((l) => l.split("|").map((x) => x.trim())).filter((x) => x[1] || x[0].startsWith("http"))
+      .map((x) => x[0].startsWith("http") ? { name: "hisobot", url: x[0], kind: "auto" } : { name: x[0] || "hisobot", url: x[1], kind: x[2] || "auto" });
+    await post("/api/settings", { pos_sync: { enabled: $("#syon").checked, interval_hours: Number($("#syint").value || 6), sources } });
+    $("#syst").innerHTML = '<span class="ok">Saqlandi</span>'; } catch (e) { $("#syst").innerHTML = `<span class="bad">${esc(e.message)}</span>`; } };
+  $("#syrun").onclick = async () => { $("#syst").textContent = "O'qilmoqda…"; try { const r = await post("/api/pos/sync/run");
+    $("#syst").innerHTML = `<span class="${r.status === "ok" ? "ok" : "warn"}">${esc(r.status)}: ${esc(r.detail || "")}</span>`; drawSync(); } catch (e) { $("#syst").innerHTML = `<span class="bad">${esc(e.message)}</span>`; } };
   const yst = async () => { const x = await api("/api/browser/session"); $("#yst").textContent = x.login_window_open ? "login oynasi ochiq" : x.profile_exists ? "sessiya profili bor" : "sessiya yo'q"; };
   yst();
-  $("#yp").onclick = async () => { const r = await post("/api/pos/preset/yespos"); $("#yo").innerHTML = `<span class="ok">Sozlandi: ${esc(r.pos_site)}</span>`; };
+  $("#yp").onclick = async () => { const r = await post("/api/pos/preset/yespos"); $("#yo").innerHTML = `<span class="ok">Sozlandi: ${esc(r.pos_site)}</span>`; drawSync(); };
   $("#ylog").onclick = async () => { try { const r = await post("/api/browser/session/login", { url: "https://app.yespos.uz" }); $("#yo").textContent = r.note; setTimeout(yst, 1500); } catch (e) { fail($("#yo"), e); } };
   $("#yforget").onclick = async () => { if (confirm("Saqlangan POS sessiyasi (cookie) o'chirilsinmi?")) { try { await post("/api/browser/session/forget"); yst(); } catch (e) { fail($("#yo"), e); } } };
   $("#ytab").onclick = async () => { $("#yo").textContent = "O'qilmoqda…"; try { const r = await post("/api/browser/session/tables", { url: $("#yurl").value.trim() });
