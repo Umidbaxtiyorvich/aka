@@ -95,19 +95,24 @@ Say "Kod: $InstallDir" "Green"
 Set-Location $InstallDir
 $parts = $Py.Split(" ")
 if (-not (Test-Path ".venv\Scripts\python.exe")) {
+    Say "Virtual muhit yaratilmoqda (.venv)..."
     & $parts[0] $parts[1..9] -m venv .venv
     if ($LASTEXITCODE -ne 0) { throw "venv yaratilmadi" }
 }
 $VPy = Join-Path $InstallDir ".venv\Scripts\python.exe"
-& $VPy -m pip install --upgrade pip --quiet
-& $VPy -m pip install -r requirements.txt --quiet
+Say "pip yangilanmoqda..."
+& $VPy -m pip install --upgrade pip --disable-pip-version-check --progress-bar on
+Say "Kutubxonalar o'rnatilmoqda (~60 MB, internetga qarab 2-10 daqiqa). Oynani yopmang..."
+& $VPy -m pip install -r requirements.txt --disable-pip-version-check --progress-bar on
 if ($LASTEXITCODE -ne 0) { throw "Kutubxonalar o'rnatilmadi (internetni tekshiring)" }
 & $VPy -c "import jarvis.core; print('JARVIS', __import__('jarvis').__version__, 'tayyor')"
 if ($LASTEXITCODE -ne 0) { throw "JARVIS yuklanmadi" }
 
 # --- 4. Ixtiyoriy komponentlar ---
 if (Ask "Brauzer agenti (YesPOS hisobotlarini o'qish uchun, Chromium ~150 MB) o'rnatilsinmi?") {
-    & $VPy -m pip install playwright --quiet
+    Say "Playwright o'rnatilmoqda..."
+    & $VPy -m pip install playwright --disable-pip-version-check
+    Say "Chromium yuklanmoqda (~150 MB)..."
     & $VPy -m playwright install chromium
 }
 if (-not (Have "ffmpeg") -and (Ask "FFmpeg (video studiya, ~100 MB) o'rnatilsinmi?")) { WingetInstall "Gyan.FFmpeg" "FFmpeg" | Out-Null }
@@ -117,7 +122,8 @@ if (-not (Have "espeak-ng") -and (Ask "espeak-ng (o'zbekcha ovoz, ~5 MB) o'rnati
     }
 }
 if (Ask "Ovozni mahalliy tanish (faster-whisper, ~100 MB; model keyin dashboard'dan yuklanadi) o'rnatilsinmi?") {
-    & $VPy -m pip install faster-whisper --quiet
+    Say "faster-whisper o'rnatilmoqda..."
+    & $VPy -m pip install faster-whisper --disable-pip-version-check
 }
 if (-not (Have "ollama") -and (Ask "Ollama (mahalliy AI dvigateli, ~1 GB) o'rnatilsinmi?")) { WingetInstall "Ollama.Ollama" "Ollama" | Out-Null }
 if (Have "ollama") {
