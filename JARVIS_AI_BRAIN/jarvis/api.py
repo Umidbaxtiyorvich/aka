@@ -1,6 +1,7 @@
 """FastAPI: lokal API va dashboard. Standart holatda faqat 127.0.0.1 da ishlaydi."""
 from __future__ import annotations
 
+import sys
 import time
 from pathlib import Path
 
@@ -1149,6 +1150,14 @@ def main():
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
     a = ap.parse_args()
+    if sys.stdout is None or sys.stderr is None:
+        # pythonw.exe (oynasiz) ostida stdout/stderr yo'q — uvicorn yiqilmasligi va xatolar ko'rinishi uchun log faylga yo'naltiriladi
+        from .config import jarvis_home
+        log_dir = jarvis_home() / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        stream = open(log_dir / "server.log", "a", encoding="utf-8", buffering=1)
+        sys.stdout = sys.stdout or stream
+        sys.stderr = sys.stderr or stream
     if a.host not in ("127.0.0.1", "localhost"):
         print("OGOHLANTIRISH: server tarmoqqa ochilmoqda. PIN himoyasi bor, lekin HTTPS yo'q — faqat ishonchli tarmoqda!"
               " allowed_hosts ga kompyuter IP manzilini settings.json orqali qo'shing.")

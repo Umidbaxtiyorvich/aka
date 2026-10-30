@@ -119,3 +119,12 @@ jobs:
           & "$d\.venv\Scripts\python.exe" -c "import jarvis.core"
           if ($LASTEXITCODE -ne 0) { throw ".venv tiklanmadi" }
           "Buzuq .venv tiklandi OK"
+      - name: Desktop launcher starts the windowless server (pythonw)
+        shell: powershell
+        run: |
+          $d = "$env:RUNNER_TEMP\jarvis"
+          cmd /c "$d\JARVIS.cmd"
+          if ($LASTEXITCODE -ne 0) { Get-Content "$d\data\logs\server.log" -ErrorAction SilentlyContinue; throw "JARVIS.cmd server ishga tushmadi" }
+          $r = Invoke-RestMethod http://127.0.0.1:8765/api/auth/status
+          "pythonw server OK: $($r | ConvertTo-Json -Compress)"
+          Get-Process pythonw -ErrorAction SilentlyContinue | Stop-Process -Force

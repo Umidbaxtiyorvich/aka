@@ -195,8 +195,19 @@ $launcher = Join-Path $InstallDir "JARVIS.cmd"
 @"
 @echo off
 cd /d "$InstallDir"
+rem Server allaqachon ishlayotgan bo'lsa, qayta ishga tushirilmaydi
+curl.exe -s -o nul http://127.0.0.1:8765/api/auth/status && goto open
 start "" /min "$InstallDir\.venv\Scripts\pythonw.exe" -m jarvis.api --port 8765
-timeout /t 3 /nobreak >nul
+echo JARVIS ishga tushmoqda...
+for /l %%i in (1,1,60) do (
+  curl.exe -s -o nul http://127.0.0.1:8765/api/auth/status && goto open
+  timeout /t 1 /nobreak >nul
+)
+echo JARVIS ishga tushmadi. Sababi: data\logs\server.log
+echo Qo'lda tekshirish: .venv\Scripts\python.exe -m jarvis.api
+pause
+exit /b 1
+:open
 start "" http://127.0.0.1:8765
 "@ | Set-Content -Path $launcher -Encoding ASCII
 try {
