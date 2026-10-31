@@ -105,7 +105,7 @@ function hubEditForm(box, pid, v) {
     try { const body = {}; if ($("#he_key").value) body.api_key = $("#he_key").value; if ($("#he_model").value) body.model = $("#he_model").value;
       if ($("#he_in").value !== "") body.price_in_per_1k = +$("#he_in").value; if ($("#he_out").value !== "") body.price_out_per_1k = +$("#he_out").value;
       const r = await post(`/api/ai/hub/providers/${pid}`, body); $("#he_key").value = "";
-      $("#he_msg").innerHTML = r.verification ? hubSteps(r.verification) : '<span class="pill ok">saqlandi</span>'; setTimeout(() => renderProviderCenter(v), r.verification ? 2500 : 600);
+      $("#he_msg").innerHTML = r.verification ? hubSteps(r.verification) : '<span class="pill ok">saqlandi</span>'; later(() => renderProviderCenter(v), r.verification ? 2500 : 600);
     } catch (e) { fail($("#he_msg"), e); } };
 }
 
@@ -239,7 +239,7 @@ async function miDetail(el, cats, v) {
   el.querySelectorAll("[data-mc]").forEach((a) => { a.onclick = () => { MI.cat = a.dataset.mc; miDetail(el, cats, v); }; });
   el.querySelectorAll("[data-ed]").forEach((d) => { d.onblur = async () => { try { await post(`/api/memory-import/items/${d.dataset.ed}`, { content: d.textContent }); } catch (e) { fail($("#mimsg2"), e); } }; });
   const act = async (body) => { try { const r = await post(`/api/memory-import/${iid}/decide`, body); $("#mimsg2").innerHTML = `<span class="pill ok">${r.done} ta bajarildi</span>${r.errors.length ? ` <span class="bad small">${esc(r.errors.join("; "))}</span>` : ""}`;
-    setTimeout(() => miDetail(el, cats, v), 700); } catch (e) { fail($("#mimsg2"), e); } };
+    later(() => miDetail(el, cats, v), 700); } catch (e) { fail($("#mimsg2"), e); } };
   $("#miall").onclick = () => act({ action: "import", category: MI.cat });
   $("#mirej").onclick = () => act({ action: "reject", category: MI.cat });
   $("#misel").onclick = () => { const ids = [...el.querySelectorAll("[data-it]")].filter((x) => x.checked).map((x) => +x.dataset.it); if (ids.length) act({ action: "import", ids }); };

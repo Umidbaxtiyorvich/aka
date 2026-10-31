@@ -41,7 +41,7 @@ async function renderGuardian(v) {
       <details class="small"><summary>Oldingi hisobotlar (${p.reports.length})</summary>${p.reports.map((r) => `<div>${esc(r.period)} (${esc(r.kind)}): ${esc(JSON.stringify(r.report.missions))} · AI ${r.report.ai_requests}</div>`).join("")}</details></div></div>`;
   v.querySelectorAll("[data-ga]").forEach((b) => { b.onclick = async () => {
     if (b.dataset.ga === "emergency_stop" && !confirm("Barcha avtomatik jarayonlar va missiyalar to'xtatilsinmi?")) return;
-    try { const r = await post(`/api/guardian/${b.dataset.ga}`); $("#gmsg").innerHTML = `<span class="pill ok">${esc(String(r.result).slice(0, 200))}</span>`; setTimeout(() => renderGuardian(v), 900); }
+    try { const r = await post(`/api/guardian/${b.dataset.ga}`); $("#gmsg").innerHTML = `<span class="pill ok">${esc(String(r.result).slice(0, 200))}</span>`; later(() => renderGuardian(v), 900); }
     catch (e) { fail($("#gmsg"), e); } }; });
   $("#alsave").onclick = async () => { const val = +(v.querySelector("[name=alvl]:checked") || {}).value;
     try { await post("/api/settings", { autonomy_level: val }); $("#almsg").innerHTML = `<span class="pill ok">Level ${val} saqlandi</span>`; } catch (e) { fail($("#almsg"), e); } };
@@ -119,7 +119,7 @@ async function renderResearcher(v) {
         <div class="kv"><span>Manbalar / mustaqil domenlar</span><b>${a.sources} / ${a.independent_domains}</b></div><div class="kv"><span>Ishonch</span><b>${esc(a.confidence)}</b></div>
         <div class="small">Umumiy atamalar: ${esc(a.shared_terms.join(", ") || "—")}</div>${a.flagged.length ? `<p class="small warn">Shubhali ko'rsatma matni bor: ${esc(a.flagged.join(", "))}</p>` : ""}
         ${table(r.sources.map((s) => ({ n: s.n, sarlavha: s.title, url: s.url, sana: s.fetched_at, ishonchlilik: s.reliability })), ["n", "sarlavha", "url", "sana", "ishonchlilik"])}
-        <p class="small muted">${esc(a.note)}</p>`; setTimeout(() => renderResearcher(v), 100);
+        <p class="small muted">${esc(a.note)}</p>`; later(() => renderResearcher(v), 100);
     } catch (e) { fail($("#rres"), e); } };
   v.querySelectorAll("[data-rf]").forEach((b) => { b.onclick = async () => { await post(`/api/researcher/findings/${b.dataset.rf}?accept=${b.dataset.ok === "1"}`); renderResearcher(v); }; });
 }
@@ -159,7 +159,7 @@ async function renderSkills(v) {
       <div class="small muted">${esc(p.description || "")}</div></span><span><button class="ghost" data-skt="${esc(p.name)}">Sinash</button><button class="ghost" data-skv="${esc(p.name)}">Versiyalar</button></span></div>
       <div id="skx_${esc(p.name)}"></div>`).join("")}<p class="small"><a href="#plugins">→ Yoqish/o'chirish va sozlamalar (Kengaytmalar)</a></p></div>`;
   $("#skgo").onclick = async () => { try { const r = await post("/api/skills", { name: $("#skn").value.trim(), description: $("#skd").value.trim(), use_ai: $("#skai").checked });
-    $("#skmsg").innerHTML = `<span class="pill ok">yaratildi: ${esc(r.name)} (${esc(r.created_by)})</span>${r.findings.length ? ` <span class="warn small">${r.findings.length} ta ogohlantirish</span>` : ""}`; setTimeout(() => renderSkills(v), 800); }
+    $("#skmsg").innerHTML = `<span class="pill ok">yaratildi: ${esc(r.name)} (${esc(r.created_by)})</span>${r.findings.length ? ` <span class="warn small">${r.findings.length} ta ogohlantirish</span>` : ""}`; later(() => renderSkills(v), 800); }
     catch (e) { fail($("#skmsg"), e); } };
   v.querySelectorAll("[data-skt]").forEach((b) => { b.onclick = async () => { const box = $(`#skx_${b.dataset.skt}`);
     try { const r = await post(`/api/skills/${b.dataset.skt}/test`); box.innerHTML = `<p class="small">${r.passed ? "✅ testlar o'tdi" : "❌ testlar o'tmadi"} · ${r.results.length} test · ${r.findings.length} ogohlantirish</p>

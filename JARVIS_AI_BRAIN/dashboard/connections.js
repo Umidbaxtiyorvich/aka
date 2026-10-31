@@ -131,7 +131,7 @@ async function ccAdd(body, v) {
       m.innerHTML = '<span class="muted">Saqlandi. Tekshirilmoqda…</span>';
       let t; try { t = await post(`/api/integrations/${c.id}/test`); } catch (e) { t = { status: "error", status_note: e.message }; }
       m.innerHTML = `${stPill(t.status)} <span class="small">${esc(t.status_note || "")}</span>`;
-      CC.tab = "all"; CC.sel = c.id; setTimeout(() => renderConnections(v), 1200);
+      CC.tab = "all"; CC.sel = c.id; later(() => renderConnections(v), 1200);
     } catch (e) { fail(m, e); }
   };
 }

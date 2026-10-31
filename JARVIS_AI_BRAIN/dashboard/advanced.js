@@ -67,7 +67,7 @@ async function renderRouter(v) {
     daily_request_limit: Number($("#rl").value), cost_warn_percent: Number($("#wp").value), currency: $("#cur").value }); $("#lm").innerHTML = '<span class="ok">Saqlandi</span>'; } catch (e) { fail($("#lm"), e); } };
   $("#rp").onclick = async () => out($("#ro"), await post("/api/ai/route-preview", { text: $("#rt").value }));
   v.addEventListener("click", async (e) => { const id = e.target.dataset.ev; if (!id) return;
-    out($("#evo"), "Sinalmoqda…"); try { out($("#evo"), await post(`/api/ai/evaluate/${encodeURIComponent(id)}`)); setTimeout(show, 1500); } catch (er) { fail($("#evo"), er); } });
+    out($("#evo"), "Sinalmoqda…"); try { out($("#evo"), await post(`/api/ai/evaluate/${encodeURIComponent(id)}`)); later(show, 1500); } catch (er) { fail($("#evo"), er); } });
 }
 
 // ---------------- Policy ----------------
@@ -216,7 +216,7 @@ async function renderPlugins(v) {
     if (d.req) { const a = await post(`/api/plugins/${d.req}/request-enable`);
       if (confirm(`Tasdiq #${a.id} yaratildi:\n${a.summary}\n\nTasdiqlashlar bo'limiga o'tasizmi? Tasdiqlagach, shu yerga qaytib «Yoqishni yakunlash»ni bosasiz.`)) location.hash = "approvals";
       o(d.req).hidden = false; o(d.req).innerHTML = `<button data-fin="${esc(d.req)}" data-aid="${a.id}">Yoqishni yakunlash (tasdiqdan keyin)</button>`; }
-    if (d.fin) { out(o(d.fin), await post(`/api/plugins/${d.fin}/enable`, { approval_id: Number(d.aid) })); setTimeout(show, 800); }
+    if (d.fin) { out(o(d.fin), await post(`/api/plugins/${d.fin}/enable`, { approval_id: Number(d.aid) })); later(show, 800); }
     if (d.run) { const inp = $(`[data-in="${d.run}"]`).value.trim(); out(o(d.run), await post(`/api/plugins/${d.run}/run`, { input: inp ? JSON.parse(inp) : {} })); }
     if (d.st) { await post(`/api/plugins/${d.n}/status`, { status: d.st }); show(); }
     if (d.logs) out(o(d.logs), await api(`/api/plugins/${d.logs}/logs`));
@@ -258,7 +258,7 @@ async function renderBackups(v) {
         <td>${i.last_verify ? pill(i.last_verify.ok ? "ok" : "error", i.last_verify.ok ? "o'tdi" : "o'tmadi") : '<span class="muted">tekshirilmagan</span>'}</td>
         <td><button class="ghost" data-ver="${esc(i.name)}">tekshirish</button> <button class="danger" data-rr="${esc(i.name)}">tiklash</button></td></tr>`).join("")}</table>` : '<p class="muted">Hali nusxa yo\'q</p>'}</div>
     <div class="card" style="margin-top:12px"><h3>Tarix</h3>${table(d.history, ["ts", "action", "ok", "name", "label", "error"])}<p class="muted">Tiklash tartibi: docs/BACKUP.md. Maxfiy kalitlar nusxaga kirmaydi.</p></div>`;
-  $("#mk").onclick = async () => { try { out($("#o"), await post("/api/backups", { label: "dashboard", include_workspace: $("#ws").checked })); setTimeout(show, 800); } catch (e) { fail($("#o"), e); } };
+  $("#mk").onclick = async () => { try { out($("#o"), await post("/api/backups", { label: "dashboard", include_workspace: $("#ws").checked })); later(show, 800); } catch (e) { fail($("#o"), e); } };
   v.onclick = async (e) => { const d2 = e.target.dataset; try {
     if (d2.ver) { const r = await post(`/api/backups/${encodeURIComponent(d2.ver)}/verify`); out($("#o"), r.checks.map((c) => `${c.ok ? "OK  " : "XATO"} ${c.check} ${c.note || ""}`).join("\n")); }
     if (d2.rr) { if (!confirm(`DIQQAT: ma'lumotlar ${d2.rr} holatiga qaytariladi. Davom etasizmi? (avval tasdiq so'raladi)`)) return;

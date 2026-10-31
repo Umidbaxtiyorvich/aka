@@ -202,7 +202,7 @@ async function renderTelegram(v) {
 /approve ID  /reject ID  /report  /voice  /stop  /help
 
 Matn: «Instagram'ga Reels tayyorla: https://.../video.mp4 mavzu: chegirma»</pre></div></div>`;
-  const act = async (path) => { try { out($("#o"), await post(path)); setTimeout(show, 600); } catch (e) { fail($("#o"), e); } };
+  const act = async (path) => { try { out($("#o"), await post(path)); later(show, 600); } catch (e) { fail($("#o"), e); } };
   $("#start").onclick = () => act("/api/telegram/start"); $("#stop").onclick = () => act("/api/telegram/stop");
   $("#test").onclick = () => act("/api/telegram/test"); $("#tv").onclick = () => act("/api/telegram/test-voice");
   $("#revoke").onclick = () => confirm("Telegram akkauntining ruxsati bekor qilinsinmi? Qayta ulash uchun yangi kod kerak bo'ladi.") && act("/api/telegram/revoke");
@@ -249,7 +249,7 @@ async function renderBI(v) {
     const f = $("#f").files[0]; if (!f) return alert("Fayl tanlang");
     const fd = new FormData(); fd.append("file", f);
     const res = await fetch(`/api/bi/upload?kind=${$("#kind").value}`, { method: "POST", body: fd }); const data = await res.json();
-    if (!res.ok) return fail($("#o"), new Error(data.detail)); out($("#o"), data); setTimeout(show, 1500);
+    if (!res.ok) return fail($("#o"), new Error(data.detail)); out($("#o"), data); later(show, 1500);
   };
 }
 
@@ -310,8 +310,8 @@ async function renderPOS(v) {
   v.onclick = async (e) => { const d = e.target.dataset; try {
     if (d.ed) { const doc = docs.find((x) => x.id == d.ed); const t = prompt("Mahsulotlar (JSON). O'zgartirsangiz, eski tasdiq bekor bo'ladi:", JSON.stringify(doc.items)); if (t) { await put(`/api/pos/documents/${d.ed}`, { items: JSON.parse(t) }); show(); } }
     if (d.req) { await post(`/api/pos/documents/${d.req}/request-approval`); location.hash = "approvals"; }
-    if (d.sub) { out($("#o"), await post(`/api/pos/documents/${d.sub}/submit`)); setTimeout(show, 1200); }
-    if (d.chk) { out($("#o"), await post(`/api/pos/documents/${d.chk}/check`)); setTimeout(show, 1200); }
+    if (d.sub) { out($("#o"), await post(`/api/pos/documents/${d.sub}/submit`)); later(show, 1200); }
+    if (d.chk) { out($("#o"), await post(`/api/pos/documents/${d.chk}/check`)); later(show, 1200); }
   } catch (er) { fail($("#o"), er); } };
 }
 
@@ -364,16 +364,16 @@ async function renderImprove(el) {
   $("#fb").onclick = async () => {
     out($("#fo"), "AI patch yozmoqda (bir necha daqiqa olishi mumkin)…");
     try { const r = await post("/api/improve/feature", { description: $("#fd").value, files: $("#ff").value.split(",").map((x) => x.trim()).filter(Boolean) });
-      out($("#fo"), `Taklif #${r.id}: ${r.title}\nFayllar: ${r.files.join(", ")}\n${r.next}`); setTimeout(show, 1500);
+      out($("#fo"), `Taklif #${r.id}: ${r.title}\nFayllar: ${r.files.join(", ")}\n${r.next}`); later(show, 1500);
     } catch (e) { fail($("#fo"), e); } };
   $("#pc").onclick = async () => { try { await post("/api/improve/proposals", { title: $("#pt").value, diff: $("#pd").value }); show(); } catch (e) { fail($("#po"), e); } };
   el.onclick = async (e) => { const d = e.target.dataset; try {
-    if (d.t) { out($("#po"), "Test qilinmoqda…"); out($("#po"), await post(`/api/improve/proposals/${d.t}/test`)); setTimeout(show, 800); }
+    if (d.t) { out($("#po"), "Test qilinmoqda…"); out($("#po"), await post(`/api/improve/proposals/${d.t}/test`)); later(show, 800); }
     if (d.r) { await post(`/api/improve/proposals/${d.r}/request-apply`); location.hash = "approvals"; }
-    if (d.a) { out($("#po"), await post(`/api/improve/proposals/${d.a}/apply`)); setTimeout(show, 800); }
+    if (d.a) { out($("#po"), await post(`/api/improve/proposals/${d.a}/apply`)); later(show, 800); }
     if (d.rm) { await post(`/api/improve/proposals/${d.rm}/request-merge`); location.hash = "approvals"; }
-    if (d.m && confirm("Kod asosiy versiyaga o'tkaziladi (oldin yana test qilinadi). Davom etasizmi?")) { out($("#po"), "Birlashtirilgan versiya test qilinmoqda…"); out($("#po"), await post(`/api/improve/proposals/${d.m}/merge`)); setTimeout(show, 1500); }
-    if (d.rb && confirm("Branch o'chiriladi. Davom etasizmi?")) { out($("#po"), await post(`/api/improve/proposals/${d.rb}/rollback`)); setTimeout(show, 800); }
-    if (d.rv && confirm("O'zgarish asosiy versiyadan qaytariladi. Davom etasizmi?")) { out($("#po"), await post(`/api/improve/proposals/${d.rv}/revert`)); setTimeout(show, 800); }
+    if (d.m && confirm("Kod asosiy versiyaga o'tkaziladi (oldin yana test qilinadi). Davom etasizmi?")) { out($("#po"), "Birlashtirilgan versiya test qilinmoqda…"); out($("#po"), await post(`/api/improve/proposals/${d.m}/merge`)); later(show, 1500); }
+    if (d.rb && confirm("Branch o'chiriladi. Davom etasizmi?")) { out($("#po"), await post(`/api/improve/proposals/${d.rb}/rollback`)); later(show, 800); }
+    if (d.rv && confirm("O'zgarish asosiy versiyadan qaytariladi. Davom etasizmi?")) { out($("#po"), await post(`/api/improve/proposals/${d.rv}/revert`)); later(show, 800); }
   } catch (er) { fail($("#po"), er); } };
 }

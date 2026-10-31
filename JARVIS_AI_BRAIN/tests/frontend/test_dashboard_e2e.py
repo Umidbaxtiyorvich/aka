@@ -386,3 +386,17 @@ def test_jarvis3_pages_guardian_simlab_skills(server, page, core):
     page.click("[data-room=qa]")
     page.wait_for_selector("#odet:has-text('xonasi')")
     assert not page.errors, page.errors
+
+
+def test_delayed_rerender_does_not_wipe_other_section(server, page, core):
+    """Regressiya: BI importidan keyingi kechiktirilgan qayta chizish boshqa bo'limda yozilgan matnni o'chirmasligi kerak."""
+    page.goto(server + "#bi")
+    page.wait_for_selector("#f")
+    page.set_input_files("#f", str(PROJECT_ROOT / "sample_data" / "demo_mahsulotlar.csv"))
+    page.click("#up")
+    page.wait_for_selector("#o:has-text('rows_ok')")
+    page.goto(server + "#dag")
+    page.fill("#goal", "fayllarni ko'rsat")
+    page.wait_for_timeout(2000)                       # BI'ning 1.5 s dagi qayta chizishi o'tib ketsin
+    assert page.input_value("#goal") == "fayllarni ko'rsat"
+    assert not page.errors, page.errors

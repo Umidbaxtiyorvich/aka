@@ -124,6 +124,11 @@ function buildMenu() {
 }
 
 let timer = null;
+// Kechiktirilgan qayta chizish: foydalanuvchi boshqa bo'limga o'tib ketgan bo'lsa — hech narsa qilmaydi (aks holda u yozayotgan matn o'chadi)
+function later(fn, ms) {
+  const sec = location.hash;
+  setTimeout(() => { if (location.hash === sec) fn(); }, ms);
+}
 async function show() {
   clearInterval(timer);
   if (window.JARVIS_VIZ) window.JARVIS_VIZ.cleanup();      // 3D sahnalar va oqim tinglovchilarini bo'shatish
@@ -258,7 +263,7 @@ async function renderAgents(v) {
   $("#mkplan").onclick = async () => { try { await api("/api/plans", { method: "POST", body: { text: $("#goal").value } }); drawPlans(); } catch (e) { alert(e.message); } };
   $("#plans").onclick = async (e) => { const id = e.target.dataset.run; if (id) { await api(`/api/plans/${id}/run`, { method: "POST" }); drawPlans(); } };
   $("#go").onclick = async () => {
-    try { await api("/api/tasks", { method: "POST", body: { agent: $("#ag").value, title: $("#tt").value || "Vazifa", payload: JSON.parse($("#pl").value || "{}") } }); setTimeout(show, 400); }
+    try { await api("/api/tasks", { method: "POST", body: { agent: $("#ag").value, title: $("#tt").value || "Vazifa", payload: JSON.parse($("#pl").value || "{}") } }); later(show, 400); }
     catch (e) { alert(e.message); }
   };
 }
