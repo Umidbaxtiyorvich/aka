@@ -41,6 +41,7 @@ from .semantic import SemanticError
 from .documents import DocError
 from .computer_use import ComputerUseError
 from .site_actions import SiteSkillError
+from .site_tasks import SiteTaskError
 from .integrations.base import ConnectorError
 from .memory_import import MAX_UPLOAD as MI_MAX, ImportError_ as MIError
 from .voice_pro import VoiceProError
@@ -59,7 +60,7 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError, MissionError, AssetError, SimError, WorkspaceError, ToolError, SwarmError, SemanticError, DocError, ComputerUseError, ConnectorError, SiteSkillError)
+               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError, MissionError, AssetError, SimError, WorkspaceError, ToolError, SwarmError, SemanticError, DocError, ComputerUseError, ConnectorError, SiteSkillError, SiteTaskError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
@@ -71,7 +72,7 @@ EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "br
             "image_gen_url", "vision_model", "planner_use_ai", "session_hours", "pos_api", "pos_sync",
             "instagram_accounts", "telephony_provider", "telephony_from", "telephony_account_sid", "telephony_cost_per_min",
             "telegram_owner_phone", "telegram_events", "telegram_voice_alerts", "telegram_approvals", "telegram_approval_ttl_min",
-            "telegram_autostart", "telegram_execute_after_approval", "instagram_mcp_url", "meta_app_id"}
+            "telegram_autostart", "telegram_execute_after_approval", "agent_mode", "instagram_mcp_url", "meta_app_id"}
 PROVIDER_KINDS = {"ollama", "openai_compatible", "anthropic", "offline", "azure_openai"}
 
 DASHBOARD = PROJECT_ROOT / "dashboard"
@@ -194,6 +195,7 @@ class SettingsIn(BaseModel):
     backup_max_total_mb: int | None = None
     backup_include_workspace: bool | None = None
     image_gen_url: str | None = None
+    agent_mode: bool | None = None
     vision_model: str | None = None
     planner_use_ai: bool | None = None
     session_hours: float | None = None
@@ -353,6 +355,23 @@ class SiteSkillIn(BaseModel):
     submit_selector: str = ""
     result_selector: str = ""
     skill_id: int | None = None
+
+
+class TeachIn(BaseModel):
+    conn_id: int
+    name: str
+    start_url: str = ""
+
+
+class TaskFinalIn(BaseModel):
+    name: str = ""
+    description: str = ""
+    steps: list[dict]
+    success_text: str = ""
+
+
+class TaskRunIn(BaseModel):
+    params: dict = {}
 
 
 class DoIn(BaseModel):
@@ -770,6 +789,38 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
         if body.skill_id:
             return guard(c.site_skills.propose, body.skill_id, body.prompt or body.text)
         return guard(c.site_skills.run_agent, body.agent, body.capability, body.prompt or body.text)
+
+    # Site Tasks — saytda amalni o'rgatish va buyruq bilan takrorlash
+    @app.get("/api/site-tasks")
+    def st_list(conn_id: int | None = None):
+        c = C()
+        return {"tasks": c.site_tasks.list(conn_id), "runs": c.site_tasks.runs()}
+
+    @app.post("/api/site-tasks/record")
+    def st_record(body: TeachIn):
+        return guard(C().site_tasks.start_recording, body.conn_id, body.name, body.start_url)
+
+    @app.get("/api/site-tasks/{tid}")
+    def st_get(tid: int):
+        return guard(C().site_tasks.get, tid)
+
+    @app.post("/api/site-tasks/{tid}/finalize")
+    def st_finalize(tid: int, body: TaskFinalIn):
+        return guard(C().site_tasks.finalize, tid, body.name, body.description, body.steps, body.success_text)
+
+    @app.delete("/api/site-tasks/{tid}")
+    def st_delete(tid: int):
+        return guard(C().site_tasks.delete, tid)
+
+    @app.post("/api/site-tasks/{tid}/propose")
+    def st_propose(tid: int, body: TaskRunIn):
+        return guard(C().site_tasks.propose, tid, body.params)
+
+    @app.post("/api/approvals/{aid}/run")
+    def appr_run(aid: int):
+        from .agent_loop import run_approved
+        c = C()
+        return guard(run_approved, c, aid)
 
     @app.post("/api/site-skills/execute/{aid}")
     def ss_execute(aid: int):

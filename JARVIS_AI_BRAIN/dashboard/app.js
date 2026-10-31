@@ -72,7 +72,7 @@ const SECTIONS = [
   ["smartrouter", "🚦 AI tanlash va xarajat", renderSmartRouter, "Agentlar va AI"],
   ["models", "📖 AI modellar", renderModelCatalog, "Agentlar va AI"],
   ["connections", "🔌 Ulanishlar (sayt, POS, API)", renderConnections, "Ulanishlar va biznes"],
-  ["siteskills", "🧩 Saytlar orqali topshiriq", renderSiteSkills, "Ulanishlar va biznes"],
+  ["siteskills", "🧩 Saytlar: topshiriq va o'rgatish", renderSiteSkills, "Ulanishlar va biznes"],
   ["business", "📊 Biznes markazi", renderBusiness, "Ulanishlar va biznes"],
   ["bi", "📈 Excel/CSV hisobotlar", renderBI, "Ulanishlar va biznes"],
   ["pos", "🧾 POS hujjatlari", renderPOS, "Ulanishlar va biznes"],
@@ -209,6 +209,7 @@ async function renderChat(v) {
   const add = (role, text, usage) => { log.insertAdjacentHTML("beforeend", `<div class="msg ${role}">${esc(text)}${usage ? `<div class="fb" style="margin-top:6px">
       <button class="ghost" data-fb="${usage}" data-g="1" title="Yaxshi javob">👍</button> <button class="ghost" data-fb="${usage}" data-g="0" title="Yomon javob">👎</button></div>` : ""}</div>`); log.scrollTop = 1e9; };
   log.onclick = async (e) => { const d = e.target.dataset;
+    if (await agentApprovalClick(e)) return;
     if (d.paid) {      // foydalanuvchi shu savol uchun pullik modelni tugma bilan tasdiqladi
       e.target.disabled = true;
       try { const r = await api("/api/chat", { method: "POST", body: { text: d.paid, allow_paid: true } }); add("assistant", r.text, r.route && r.route.usage_id); }
@@ -222,6 +223,7 @@ async function renderChat(v) {
     const t = $("#msg").value.trim(); if (!t) return;
     $("#msg").value = ""; add("user", t);
     try { const r = await api("/api/chat", { method: "POST", body: { text: t } }); add("assistant", r.text, r.route && r.route.usage_id);
+      if ((r.steps || []).length || (r.approvals || []).length) { log.insertAdjacentHTML("beforeend", `<div class="msg assistant">${agentExtrasHtml(r)}</div>`); log.scrollTop = 1e9; }
       if (r.plan) { openTaskModal(r.plan); log.insertAdjacentHTML("beforeend", '<div class="msg assistant"><button data-plan="1">🧩 Bajarish oynasini ochish</button></div>'); log.lastElementChild.querySelector("button").onclick = () => openTaskModal(r.plan); }
       if (r.paid_confirm_needed) log.insertAdjacentHTML("beforeend", `<div class="msg assistant"><button data-paid="${esc(t)}">💳 Pullik (kuchliroq) model bilan qayta so'rash</button>
         <span class="small muted">Xarajat kunlik/oylik limit ichida hisoblanadi.</span></div>`); }

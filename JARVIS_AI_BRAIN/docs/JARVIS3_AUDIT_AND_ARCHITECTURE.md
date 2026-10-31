@@ -286,3 +286,15 @@ Halol cheklovlar: CAPTCHA, SMS/2FA va Google/Telegram/OneID orqali kirish chetla
 Xavfsizlik: har bir sayt amali alohida tasdiq (sizning hisobingiz, kredit sarflanishi mumkin); tasdiqdan keyin payload o'zgarsa — bekor; ikki marta bajarilmaydi; maxfiy matn saytga yuborilmaydi; faqat shu domen; CAPTCHA/SMS chetlab o'tilmaydi; sayt to'lov yoki kredit so'rasa — to'xtaydi; moliyaviy yozuvlar (savdo, to'lov, kirim/chiqim) bu yo'l bilan bajarilmaydi. Avtonomlik Level 0 da o'chiq.
 
 Halol cheklovlar: universal "so'rov maydoni + tugma + yangi natija" usuli ko'p oddiy generator/chat saytlarda ishlaydi, lekin murakkab saytlarda (bir necha qadam, sozlamalar oynasi, navbat) selektorni qo'lda ko'rsatish kerak bo'lishi mumkin. Real Leonardo/ChatGPT hisoblari bilan sinalmagan — test shu kompyuterdagi sinov sayti (login + rasm generatori + tarjimon) va haqiqiy Chromium bilan.
+
+## 14. v1.6.0 — Agent rejimi (chatda odamday ishlash) va saytda amalni o'rgatish
+| Qism | Fayl | Nima |
+|---|---|---|
+| Agent rejimi | `agent_loop.py`, `core.py` | ulangan AI modeli bor bo'lsa chat (dashboard va Telegram) agentga o'tadi: topshiriqni tushunadi → vositani o'zi tanlaydi (≤6 qadam) → natijani ko'rib davom etadi → o'zbekcha javob. Chatda "🧠 Qanday o'yladim" va tasdiq tugmalari. Model yo'q bo'lsa — oldingi qoidaga asoslangan javob |
+| Yangi vositalar | `agent_loop.py` | `connections.list`, `connection.refresh` (saytga HOZIR kirib o'qish), `site.task` (o'rgatilgan amal, tasdiq), `site.generate`, `site.skills`, `instagram.*` (loyiha — B, nashr/Direct — D tasdiq), `telegram.send` (D tasdiq) + mavjud `analyst.ask`, `memory.search`, `integration.propose_write` ... |
+| Amalni o'rgatish | `site_tasks.py` | ko'rinadigan brauzerda bir marta ko'rsatasiz (masalan YesPOS kirim) → bosishlar/to'ldirishlar yozib olinadi (parol maydonlari yozilmaydi) → o'zgaruvchi qiymatlarga nom berasiz → keyin "Vali savdoga 12 ta Fanta 9500 dan kirim qil" → AI parametrlarni ajratadi → tasdiq (moliyaviy — E, faqat dashboardda) → qadamlar bajariladi, muvaffaqiyat matni tekshiriladi, skrinshot |
+| Tasdiqdan keyin bajarish | `agent_loop.run_approved`, `/api/approvals/{id}/run`, `core.execute_approved` | sayt amali, sayt generatsiyasi, POS yozish, Instagram nashr/Direct, Telegram xabar — bitta tugma; Telegram tasdig'idan keyin ham (D gacha) |
+
+Xavfsizlik: AI hech qachon tashqi tizimga to'g'ridan-to'g'ri yozmaydi — faqat tasdiq so'rovi; tasdiqdan keyin amal o'zgarsa — bekor; ikki marta bajarilmaydi; qadam xato bersa darhol to'xtaydi va "noma'lum — tizimda tekshiring" deydi (qayta yubormaydi); parol/token AI'ga yuborilmaydi (redact); maxfiy savdo ma'lumoti bo'lsa AI Router faqat mahalliy modelni tanlaydi.
+
+Halol cheklovlar: agent sifati ulangan modelga bog'liq — 8 GB RAM'dagi kichik mahalliy model oddiy topshiriqlarni bajaradi, murakkab ko'p qadamli o'ylash uchun kuchli model (Claude/Gemini/Groq — API kalit bilan) kerak. Testlarda AI soxta (aniq JSON qadamlar) — agent sikli, tasdiq va bajarish sinaladi, model aqli emas. O'rgatilgan amal sayt dizayni o'zgarsa buzilishi mumkin — unda qayta o'rgatish kerak. Real YesPOS bilan sinalmagan (sinov POS sayti + haqiqiy Chromium).

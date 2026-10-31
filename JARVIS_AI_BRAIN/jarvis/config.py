@@ -106,6 +106,7 @@ class Settings:
         {"bloknot": ["notepad.exe"], "kalkulyator": ["calc.exe"], "paint": ["mspaint.exe"], "explorer": ["explorer.exe"]}
         if os.name == "nt" else {}))
     # Mahalliy rasm generatori va vision (ixtiyoriy)
+    agent_mode: bool = True               # chat: AI vositalarni o'zi tanlaydi (yozish — faqat tasdiq bilan)
     image_gen_url: str = ""               # masalan http://127.0.0.1:7860 (Stable Diffusion WebUI --api)
     vision_model: str = ""                # masalan moondream (Ollama)
     planner_use_ai: bool = True           # AI mavjud bo'lsa, maqsadni bosqichlarga AI ajratadi

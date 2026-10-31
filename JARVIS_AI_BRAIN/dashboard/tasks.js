@@ -89,11 +89,13 @@ async function renderSiteSkills(v) {
           <label>So'rov maydoni</label><input id="skp" placeholder="textarea#prompt"><label>Tugma</label><input id="sks" placeholder="button.generate">
           <label>Natija (matn uchun)</label><input id="skr" placeholder=".result"></details>
         <div class="row"><button id="sksave">Saqlash</button></div><div id="skmsg"></div></details>` : ""}</div>
+    <div id="teach"></div>
     <div class="card"><h3>Oxirgi bajarilganlar</h3>${d.runs.length ? d.runs.map((r) => `<div class="kv small"><span>#${r.id} ${esc(r.capability)} · ${esc((r.prompt || "").slice(0, 60))}</span>
       <span>${r.status === "ok" ? '<span class="pill ok">ok</span>' : `<span class="pill warn">${esc(r.status)}</span>`} ${r.outputs.filter((p) => /\.(png|jpe?g|webp|gif)$/i.test(p)).slice(0, 3)
         .map((p) => `<a href="${fileUrl(p)}" target="_blank"><img src="${fileUrl(p)}" style="height:34px;vertical-align:middle;border-radius:4px"></a>`).join(" ")}</span></div>`).join("") : '<span class="muted">Hali yo\'q</span>'}</div>`;
   const go = async () => { const t = $("#tktext").value.trim(); if (!t) return;
     try { openTaskModal(await post("/api/do/plan", { text: t })); } catch (e) { alert(e.message); } };
+  renderTeach($("#teach"));
   $("#tkplan").onclick = go;
   $("#tktext").addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
   v.onclick = async (e) => {
@@ -112,5 +114,79 @@ async function renderSiteSkills(v) {
         renderSiteSkills(v);
       } catch (er) { fail($("#skmsg"), er); }
     }
+  };
+}
+
+// ---------- Agent rejimi: chatdagi qadamlar va tasdiq tugmalari ----------
+function agentExtrasHtml(r) {
+  const steps = (r.steps || []).length ? `<details class="small"><summary>🧠 Qanday o'yladim (${r.steps.length} qadam)</summary>${r.steps.map((s, i) =>
+    `<div class="kv small"><span>${i + 1}. <b>${esc(s.tool)}</b> ${esc(s.why || "")}</span><span class="${s.status === "error" ? "bad" : "muted"}">${esc(s.status)}</span></div>`).join("")}</details>` : "";
+  const ap = (r.approvals || []).map((a) => `<div class="cm-step" data-apbox="${a.id}">🛡 <b>Tasdiq kerak (${esc(a.level)})</b>: ${esc(a.summary)}
+    ${a.level === "E" ? '<div class="small warn">Moliyaviy amal — diqqat bilan tekshiring.</div>' : ""}
+    <div class="row"><button data-apok="${a.id}" data-h="${esc(a.payload_hash)}">✅ Tasdiqlash va bajarish</button><button class="ghost" data-apno="${a.id}" data-h="${esc(a.payload_hash)}">Rad etish</button></div>
+    <div data-apres="${a.id}"></div></div>`).join("");
+  return steps + ap;
+}
+
+async function agentApprovalClick(e) {
+  const d = e.target.dataset, id = d.apok || d.apno; if (!id) return false;
+  const box = document.querySelector(`[data-apres="${id}"]`);
+  e.target.closest(".row").querySelectorAll("button").forEach((b) => { b.disabled = true; });
+  try {
+    await post(`/api/approvals/${id}/decide`, { approve: !!d.apok, confirm_hash: d.h });
+    if (!d.apok) { box.innerHTML = '<span class="muted">Rad etildi — hech narsa bajarilmadi.</span>'; return true; }
+    box.innerHTML = '<span class="muted">⏳ Bajarilmoqda…</span>';
+    const r = await post(`/api/approvals/${id}/run`);
+    box.innerHTML = r.outputs || r.text !== undefined ? taskResultHtml(r) : `${r.status === "ok" || r.status === "executed" ? statusPill(true, "Bajarildi") : `<span class="pill warn">${esc(r.status)}</span>`}
+      ${r.error ? `<p class="bad small">${esc(r.error)}</p>` : ""}${r.note ? `<p class="small muted">${esc(r.note)}</p>` : ""}
+      ${r.screenshot ? `<details><summary class="small">Skrinshot (isbot)</summary><img src="${fileUrl(r.screenshot)}" class="tres-img"></details>` : ""}`;
+  } catch (er) { fail(box, er); }
+  return true;
+}
+
+// ---------- Amalni o'rgatish (bir marta ko'rsatish → keyin buyruq bilan) ----------
+async function renderTeach(el) {
+  const [d, conns] = await Promise.all([api("/api/site-tasks"), api("/api/integrations")]);
+  const sites = conns.filter((c) => c.adapter === "website");
+  el.innerHTML = `<div class="card"><h3>🎓 Saytda amalni o'rgatish</h3>
+    <p class="small muted">Masalan YesPOS'da "kirim": brauzer oynasi ochiladi, siz bir marta kirim qilib ko'rsatasiz va pastdagi yashil
+    "✅ JARVIS: o'rgatishni tugatdim" tugmasini bosasiz. Keyin qaysi qiymatlar o'zgarishini belgilaysiz (kontragent, tovar, miqdor, narx).
+    So'ng chatda: <i>"Vali savdoga 12 ta Fanta 9500 dan kirim qil"</i> — JARVIS tayyorlaydi va tasdiqingizdan keyin kiritadi. Parol maydonlari yozib olinmaydi.</p>
+    ${sites.length ? `<div class="row"><select id="tcconn">${sites.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
+      <input id="tcname" placeholder="Amal nomi (masalan: kirim)"><input id="tcurl" placeholder="Boshlang'ich sahifa (ixtiyoriy)" style="flex:1"><button id="tcgo">Brauzerni ochib o'rgatish</button></div>`
+      : '<p class="muted">Avval saytni ulang (Ulanishlar → havola).</p>'}<div id="tcmsg"></div></div>
+    ${d.tasks.map((t) => `<div class="card" data-task="${t.id}"><div class="row" style="justify-content:space-between;margin:0"><b>${esc(t.name)} — ${esc(t.conn_name)}</b>
+      <span>${{ ready: '<span class="pill ok">tayyor</span>', recording: '<span class="pill warn">yozib olinmoqda…</span>', recorded: '<span class="pill warn">parametrlarni belgilang</span>' }[t.status] || `<span class="pill">${esc(t.status)}</span>`}
+      ${t.financial ? '<span class="pill warn">moliyaviy (E)</span>' : ""} ${t.verified ? '<span class="pill ok">sinalgan</span>' : ""}
+      <button class="ghost" data-tdel="${t.id}">O'chirish</button></span></div>
+      ${t.status === "recorded" ? `<p class="small muted">${t.steps.length} qadam yozib olindi. O'zgaruvchi qiymatlarga nom bering (bo'sh — doim bir xil):</p>
+        <table><tr><th>#</th><th>Amal</th><th>Maydon / tugma</th><th>Namuna</th><th>Parametr nomi</th></tr>${t.steps.map((s, i) => `<tr><td>${i + 1}</td><td>${esc(s.op)}</td>
+          <td class="small">${esc(s.label || s.text || s.selector || s.url || "")}</td><td class="small">${esc(s.value ?? "")}</td>
+          <td>${["fill", "select"].includes(s.op) ? `<input data-pi="${i}" value="${esc(s.suggest || "")}" placeholder="masalan: miqdor" style="width:130px">` : ""}</td></tr>`).join("")}</table>
+        <label>Tavsif</label><input id="tdesc${t.id}" placeholder="POS'ga tovar kirimi"><label>Muvaffaqiyat belgisi (sahifada chiqadigan matn, ixtiyoriy)</label><input id="tsucc${t.id}" placeholder="Saqlandi">
+        <div class="row"><button data-tfin="${t.id}">Saqlash</button></div><div id="tfmsg${t.id}"></div>`
+        : t.status === "ready" ? `<p class="small muted">${esc(t.description || "")} · parametrlar: ${t.params.map((p) => esc(p.name)).join(", ") || "yo'q"} · ${t.runs} marta bajarilgan</p>
+        <div class="row">${t.params.map((p) => `<input data-tp="${t.id}" data-n="${esc(p.name)}" placeholder="${esc(p.label)} (${esc(p.example || "")})">`).join("")}<button data-trun="${t.id}">Bajarish (tasdiq bilan)</button></div><div id="trmsg${t.id}"></div>`
+        : t.status === "recording" ? '<p class="small muted">Brauzer oynasida ko\'rsating va yashil tugmani bosing…</p>' : `<p class="small muted">${esc(t.note || "")}</p>`}</div>`).join("")}`;
+  if (d.tasks.some((t) => t.status === "recording")) later(() => renderTeach(el), 3000);
+  el.onclick = async (e) => {
+    if (await agentApprovalClick(e)) return;
+    const b = e.target.closest("button"); if (!b) return;
+    try {
+      if (b.id === "tcgo") { await post("/api/site-tasks/record", { conn_id: +$("#tcconn").value, name: $("#tcname").value.trim(), start_url: $("#tcurl").value.trim() }); return renderTeach(el); }
+      if (b.dataset.tdel) { if (confirm("Amal o'chirilsinmi?")) { await api(`/api/site-tasks/${b.dataset.tdel}`, { method: "DELETE" }); renderTeach(el); } return; }
+      if (b.dataset.tfin) {
+        const id = +b.dataset.tfin, t = d.tasks.find((x) => x.id === id), box = el.querySelector(`[data-task="${id}"]`);
+        const steps = t.steps.map((s, i) => { const inp = box.querySelector(`[data-pi="${i}"]`); return { ...s, param: inp && inp.value.trim() ? inp.value.trim() : null }; });
+        await post(`/api/site-tasks/${id}/finalize`, { name: t.name, description: $(`#tdesc${id}`).value, steps, success_text: $(`#tsucc${id}`).value });
+        return renderTeach(el);
+      }
+      if (b.dataset.trun) {
+        const id = b.dataset.trun, params = {};
+        el.querySelectorAll(`[data-tp="${id}"]`).forEach((i) => { params[i.dataset.n] = i.value; });
+        const r = await post(`/api/site-tasks/${id}/propose`, { params });
+        $(`#trmsg${id}`).innerHTML = agentExtrasHtml({ approvals: [r.approval] });
+      }
+    } catch (er) { fail($("#tcmsg"), er); alert(er.message); }
   };
 }

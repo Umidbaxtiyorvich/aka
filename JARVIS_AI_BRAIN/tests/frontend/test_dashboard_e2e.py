@@ -500,3 +500,33 @@ def test_task_router_modal_from_command_bar(server, page):
     page.wait_for_selector("#cmodal input[name=tko]")
     assert "JARVIS AI" in page.text_content("#cmodal")
     assert not page.errors, page.errors
+
+
+def test_agent_chat_shows_steps_and_approval_buttons(server, page, core, monkeypatch):
+    """Agent rejimi (soxta AI): chatda qadamlar va "Tasdiqlash va bajarish" tugmasi; bosilgandan keyingina yuboriladi."""
+    import json as _j
+    sent = []
+    script = [{"tool": "telegram.send", "args": {"text": "Bugungi hisobot tayyor"}, "why": "foydalanuvchi so'radi"},
+              {"answer": "Telegram xabari tayyor — tasdiqlang."}]
+    calls = []
+
+    def fake_route(msgs, purpose="", private=None, allow_paid=False):
+        calls.append(1)
+        return {"text": _j.dumps(script[len(calls) - 1], ensure_ascii=False), "route": {"provider": "test-ai", "model": "fake"}}
+    monkeypatch.setattr(core.ai, "route", fake_route)
+    monkeypatch.setattr(core.agent, "ready", lambda: True)
+    monkeypatch.setattr(core.telegram, "owner", lambda: {"chat_id": 1})
+    monkeypatch.setattr(core.telegram, "send_owner", lambda text, buttons=None: sent.append(text) or {"ok": True})
+    monkeypatch.setattr(core.telegram, "on_approval_pending", lambda appr: None)
+    core.approvals.on_pending = None
+    page.goto(server + "#chat")
+    page.fill("#msg", "Telegramimga hisobot tayyorligini yoz")
+    page.press("#msg", "Enter")
+    page.wait_for_selector("[data-apok]")
+    assert "Qanday o'yladim" in page.text_content("#log") and not sent
+    page.click("[data-apok]")
+    page.wait_for_selector("[data-apres] .pill.ok")
+    assert sent == ["Bugungi hisobot tayyor"]
+    page.goto(server + "#siteskills")
+    page.wait_for_selector("text=Saytda amalni o'rgatish")
+    assert not page.errors, page.errors

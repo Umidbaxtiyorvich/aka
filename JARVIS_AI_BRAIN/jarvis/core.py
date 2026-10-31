@@ -50,6 +50,8 @@ from .voice_pro import VoicePro
 from .telephony import Telephony
 from .voice import Voice
 from .site_actions import SiteSkills
+from .site_tasks import SiteTasks
+from .agent_loop import AgentLoop, register_tools as register_agent_tools
 from .security import contains_secret, redact
 
 CAPABILITIES = {
@@ -121,6 +123,7 @@ class JarvisCore:
         self.connector = MemoryConnector(self)
         self.integrations = IntegrationHub(self)
         self.site_skills = SiteSkills(self)
+        self.site_tasks = SiteTasks(self)
         self.analyst = Analyst(self)
         self.brain_core = BrainCore(self)
         from .memory_import import MemoryImporter
@@ -146,6 +149,8 @@ class JarvisCore:
         from .command import CommandCenter
         from .tools import ToolRegistry
         self.tools = ToolRegistry(self)
+        register_agent_tools(self)
+        self.agent = AgentLoop(self)
         from .swarm import Swarm
         self.swarm = Swarm(self)
         from .semantic import SemanticMemory
@@ -256,6 +261,12 @@ class JarvisCore:
             if appr["action_type"] == "integration_write":
                 r = self.integrations.execute_write(approval_id)
                 return f"✅ Tashqi tizimga yozildi: {str(r.get('result'))[:200]}"
+            if appr["action_type"] in ("site_task", "site_action", "telegram_send", "instagram_dm"):
+                from .agent_loop import run_approved
+                r = run_approved(self, approval_id)
+                st = r.get("status")
+                return (("✅ Bajarildi" if st in ("ok", "executed") else f"⚠️ Holat: {st}") + (f" — {r['error']}" if r.get("error") else "")
+                        + (f"\n{r['text'][:500]}" if r.get("text") else "") + (f"\nFayllar: {', '.join(r['outputs'])}" if r.get("outputs") else ""))
             if appr["action_type"] == "instagram_mcp_call":
                 r = self.instagram_mcp.execute_approval(approval_id)
                 return ("❌ MCP vositasi xato qaytardi." if r["is_error"] else "✅ MCP amali bajarildi.") + " Natija dashboardda."
@@ -320,6 +331,14 @@ class JarvisCore:
             else:
                 lines.append("Barcha bosqichlar xavfsiz (LOW) — avtomatik boshlandi. Holat: Topshiriqlar bo'limida.")
             return out | {"text": "\n".join(lines), "mission_id": m["id"], "intent": "mission"}
+        if intent not in ("memory_save",) and self.agent.ready():   # Agent rejimi: AI o'ylaydi, vositalarni o'zi chaqiradi
+            try:
+                ag = self.agent.run(text, allow_paid=getattr(self, "_allow_paid", False))
+            except Exception as e:                           # noqa: BLE001 — agent xatosi oddiy javobga qaytadi
+                self.audit.error("agent", str(e)[:300])
+                ag = None
+            if ag:
+                return out | ag
         if intent not in ("memory_save", "memory_query"):
             cap = self.site_skills.detect_task(text)          # Task Router: "rasm yarat", "video yarat" ... → ulangan sayt yoki o'z agenti
             if cap:
