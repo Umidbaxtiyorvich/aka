@@ -141,8 +141,11 @@ jobs:
           if ($cmd -notmatch "scripts\\update\.ps1") { throw "yangilash fayli update.ps1 ni chaqirmaydi" }
           powershell -NoProfile -ExecutionPolicy Bypass -File "$d\scripts\update.ps1" -Minimal -NoLaunch -Branch "${{ github.ref_name }}"
           if ($LASTEXITCODE -ne 0) { throw "update.ps1 xato bilan tugadi" }
+          Push-Location $d
           & "$d\.venv\Scripts\python.exe" -c "import jarvis; print('versiya', jarvis.__version__)"
-          if ($LASTEXITCODE -ne 0) { throw "yangilangandan keyin jarvis yuklanmadi" }
+          $code = $LASTEXITCODE
+          Pop-Location
+          if ($code -ne 0) { throw "yangilangandan keyin jarvis yuklanmadi" }
           "Yangi yangilash yo'li OK"
       - name: Installer repairs a broken .venv (interrupted install)
         shell: powershell
