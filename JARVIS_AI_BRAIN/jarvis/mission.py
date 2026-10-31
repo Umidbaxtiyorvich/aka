@@ -290,6 +290,8 @@ class MissionEngine:
                 return False, f"testlar muvaffaqiyatsiz: {res['tests'].get('failed')}"
             if rule == "sources" and not (res.get("sources") or res.get("results") or res.get("url")):
                 return False, "manba ko'rsatilmagan"
+            if rule == "supervisor" and not (res.get("supervisor") or {}).get("ok"):
+                return False, "Supervisor tasdiqlamadi"
             if rule == "text" and not str(res.get("text") or res.get("answer") or "").strip():
                 return False, "javob matni bo'sh"
         return True, "tekshiruvdan o'tdi" + (" (AI maslahati — amal bajarilmagan)" if node["agent"] == "manager" else "")

@@ -114,6 +114,18 @@ class ToolRegistry:
                agents=["user", "security", "manager"]))
         R(Tool("mission.create", "Missiya rejasi", "Maqsaddan reja tuzadi (boshlash — avtonomlik darajasi va xavfga ko'ra)", "B",
                {"goal": S("string", True, "maqsad")}, "missiya", lambda a: self._mission(a), agents=["user", "manager"], idempotent=False))
+        R(Tool("docs.extract", "Hujjatni o'qish", "Word/PowerPoint/PDF/Excel/ODF/RTF/rasm (OCR) — matn, jadvallar, tuzilma", "A",
+               {"path": S("string", True, "fayl yo'li")}, "matn va tuzilma", lambda a: c.documents.extract(a["path"]),
+               agents=["user", "file_analysis", "manager"], timeout=150))
+        R(Tool("docs.find", "Hujjat ichidan qidirish", "Katta hujjatni bo'laklab, kerakli qismlarni topadi", "A",
+               {"path": S("string", True, "fayl"), "query": S("string", True, "so'zlar")}, "mos bo'laklar",
+               lambda a: c.documents.find(a["path"], a["query"]), agents=["user", "file_analysis", "research"]))
+        R(Tool("computer.screenshot", "Ekranni ko'rish", "Skrinshot (maxfiy oynalarda emas), ixtiyoriy tahlil", "A",
+               {"analyze": S("boolean", description="vision/OCR tahlili", default=False)}, "rasm yo'li va tahlil",
+               lambda a: c.computer_use.screenshot(bool(a.get("analyze"))), agents=["user", "computer"], rate_per_min=10))
+        R(Tool("computer.propose_actions", "Sichqoncha/klaviatura (taklif)", "Amallar ketma-ketligini tasdiqqa qo'yadi — bajarish faqat tasdiqdan keyin", "C",
+               {"actions": S("array", True, "[{type: click|type|hotkey|focus_window|...}]"), "reason": S("string", description="nima uchun")}, "tasdiq so'rovi",
+               lambda a: c.computer_use.propose(a["actions"], a.get("reason", ""), requested_by="tool"), agents=["user", "computer"], idempotent=False, approval=True, rate_per_min=10))
         R(Tool("computer.propose_command", "Kompyuter buyrug'i (taklif)", "Buyruqni tasdiqqa qo'yadi — bajarish faqat siz tasdiqlagandan keyin", "C",
                {"command": S("string", True, "buyruq"), "reason": S("string", description="nima uchun")}, "tasdiq so'rovi",
                lambda a: c.computer.propose(a["command"], a.get("reason", "")), agents=["user", "computer"], idempotent=False, approval=True, rate_per_min=10))

@@ -418,3 +418,29 @@ def test_global_command_bar_and_tools_page(server, page, core):
     page.wait_for_selector("#to_guardian_status:has-text('checks')")
     assert core.tools.calls()[0]["tool"] == "guardian.status"
     assert not page.errors, page.errors
+
+
+def test_v13_pages_docs_swarm_computer(server, page, core, tmp_path):
+    f = tmp_path / "eslatma.txt"
+    f.write_text("JARVIS uchun sinov hujjati. Ombor shanba yopiq.", encoding="utf-8")
+    page.goto(server + "#docintel")
+    page.set_input_files("#dfile", str(f))
+    page.click("#dup")
+    page.wait_for_selector("#dres:has-text('So\\'z / bo\\'lak')")
+    page.fill("#dq", "ombor")
+    page.click("#dfind")
+    page.wait_for_selector("#dout:has-text('Ombor')")
+    core.memory.add("Ombor kaliti qo'riqchida", "knowledge", source="user")
+    page.goto(server + "#swarm")
+    page.wait_for_selector("#sgo")
+    page.click("#sgo")
+    page.wait_for_selector("#sout:has-text('supervisor')")
+    assert core.swarm.history()[0]["to_agent"] == "memory_agent"
+    page.goto(server + "#computeruse")
+    page.wait_for_selector("#cprop")
+    page.click("#cprop")
+    page.wait_for_selector("#cpmsg:has-text('Tasdiq #')")
+    assert core.approvals.list("pending")[0]["action_type"] == "computer_use"
+    page.goto(server + "#semantic")
+    page.wait_for_selector("text=Semantik xotira")
+    assert not page.errors, page.errors

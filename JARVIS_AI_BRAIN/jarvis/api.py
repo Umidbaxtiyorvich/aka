@@ -36,6 +36,10 @@ from .assets import AssetError
 from .simlab import SimError
 from .workspace import WorkspaceError
 from .tools import ToolError
+from .swarm import SwarmError
+from .semantic import SemanticError
+from .documents import DocError
+from .computer_use import ComputerUseError
 from .memory_import import MAX_UPLOAD as MI_MAX, ImportError_ as MIError
 from .voice_pro import VoiceProError
 from .kgraph import KGError
@@ -53,7 +57,7 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError, MissionError, AssetError, SimError, WorkspaceError, ToolError)
+               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError, MissionError, AssetError, SimError, WorkspaceError, ToolError, SwarmError, SemanticError, DocError, ComputerUseError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
@@ -434,6 +438,32 @@ class SkillIn(BaseModel):
 
 class ToolInvokeIn(BaseModel):
     args: dict = {}
+
+
+class DelegateIn(BaseModel):
+    from_agent: str
+    to_agent: str
+    tool: str
+    args: dict = {}
+
+
+class DocIn(BaseModel):
+    path: str = ""
+    query: str = ""
+    ai: bool = False
+    fmt: str = "md"
+    b: str = ""
+    replacements: dict = {}
+    title: str = ""
+    text: str = ""
+    slides: list[dict] = []
+
+
+class CUIn(BaseModel):
+    actions: list[dict] = []
+    reason: str = ""
+    title: str = ""
+    name: str = ""
 
 
 class AskIn(BaseModel):
@@ -1350,6 +1380,109 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
             return C().command.run(body.text)
         except ValueError as e:
             raise HTTPException(400, str(e))
+
+    # Agent Swarm
+    @app.get("/api/swarm")
+    def swarm_info(limit: int = 100):
+        c = C()
+        return {"history": c.swarm.history(min(limit, 500)), "routes": c.swarm.routes()}
+
+    @app.post("/api/swarm/delegate")
+    def swarm_delegate(body: DelegateIn):
+        return guard(C().swarm.delegate, body.from_agent, body.to_agent, body.tool, body.args)
+
+    # Semantik xotira (model faqat aniq tasdiq bilan yuklanadi)
+    @app.get("/api/semantic")
+    def semantic_status():
+        return C().semantic.status()
+
+    @app.post("/api/semantic/install")
+    def semantic_install(confirm: bool = False, model: str = "nomic-embed-text"):
+        if not re.fullmatch(r"[\w.:/-]{2,80}", model):
+            raise HTTPException(400, "Model nomi noto'g'ri")
+        return guard(C().semantic.install, confirm, model)
+
+    @app.post("/api/semantic/enable")
+    def semantic_enable(model: str):
+        if not re.fullmatch(r"[\w.:/-]{2,80}", model):
+            raise HTTPException(400, "Model nomi noto'g'ri")
+        return C().semantic.enable(model)
+
+    @app.post("/api/semantic/index")
+    def semantic_index():
+        return guard(C().semantic.index)
+
+    @app.get("/api/semantic/search")
+    def semantic_search(q: str):
+        return C().semantic.hybrid(q, 10)
+
+    # File Intelligence
+    @app.get("/api/docs/formats")
+    def docs_formats():
+        return C().documents.formats()
+
+    @app.post("/api/docs/{op}")
+    def docs_op(op: str, body: DocIn):
+        d = C().documents
+        ops = {"extract": lambda: d.extract(body.path), "find": lambda: d.find(body.path, body.query), "summary": lambda: d.summary(body.path, body.ai),
+               "compare": lambda: d.compare(body.path, body.b), "export": lambda: d.export_text(body.path, body.fmt),
+               "docx-replace": lambda: d.docx_replace(body.path, body.replacements), "create-docx": lambda: d.create_docx(body.title, body.text),
+               "create-pptx": lambda: d.create_pptx(body.title, body.slides)}
+        if op not in ops:
+            raise HTTPException(404, "Noma'lum amal")
+        return guard(ops[op])
+
+    @app.post("/api/docs-upload")
+    async def docs_upload(file: UploadFile):
+        c = C()
+        name = Path(file.filename or "fayl").name[:120]
+        from .documents import SUPPORTED
+        if Path(name).suffix.lower() not in SUPPORTED:
+            raise HTTPException(400, f"Bu format qo'llab-quvvatlanmaydi: {Path(name).suffix or '?'}")
+        data = await file.read(25 * 2**20 + 1)
+        if len(data) > 25 * 2**20:
+            raise HTTPException(400, "Fayl 25 MB dan katta")
+        dest_dir = Path(c.settings.allowed_write_dirs[0]) / "uploads"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest, n = dest_dir / name, 1
+        while dest.exists():
+            dest, n = dest_dir / f"{Path(name).stem}_{n}{Path(name).suffix}", n + 1
+        dest.write_bytes(data)
+        return guard(c.documents.extract, str(dest))
+
+    # Computer Use (har sichqoncha/klaviatura ketma-ketligi — tasdiq bilan)
+    @app.get("/api/computer-use")
+    def cu_status():
+        c = C()
+        return c.computer_use.status() | {"macros": c.computer_use.macros(), "log": c.computer_use.log(30)}
+
+    @app.get("/api/computer-use/windows")
+    def cu_windows():
+        return guard(C().computer_use.windows)
+
+    @app.post("/api/computer-use/screenshot")
+    def cu_screenshot(analyze: bool = False):
+        return guard(C().computer_use.screenshot, analyze)
+
+    @app.post("/api/computer-use/ui-tree")
+    def cu_tree(body: CUIn):
+        return guard(C().computer_use.ui_tree, body.title)
+
+    @app.post("/api/computer-use/propose")
+    def cu_propose(body: CUIn):
+        return guard(C().computer_use.propose, body.actions, body.reason)
+
+    @app.post("/api/computer-use/execute/{approval_id}")
+    def cu_execute(approval_id: int):
+        return guard(C().computer_use.execute, approval_id)
+
+    @app.post("/api/computer-use/macros")
+    def cu_save_macro(body: CUIn):
+        return guard(C().computer_use.save_macro, body.name, body.actions)
+
+    @app.post("/api/computer-use/macros/{name}/replay")
+    def cu_replay(name: str):
+        return guard(C().computer_use.replay, name)
 
     @app.get("/api/permissions/agents")
     def perm_agents():

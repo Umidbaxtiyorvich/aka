@@ -82,6 +82,7 @@ class Settings:
     ai_allowed_providers: list[str] = field(default_factory=list)   # bo'sh = hammasi
     ai_confirm_paid: bool = False                            # pullik modeldan oldin foydalanuvchi tasdig'i
     approval_ttl_hours: int = 72                             # C–E tasdiqlar muddati (qulflangan: faqat settings.json)
+    embedding_model: str = ""                                # semantik xotira (masalan nomic-embed-text) — foydalanuvchi yoqadi
     autonomy_level: int = 2                                  # 0 maslahat · 1 reja+tasdiq · 2 xavfsiz amallar · 3 agentlar · 4 to'liq sikl
     mission_auto_resume: bool = True                         # qayta ishga tushganda uzilgan missiyalarni checkpointdan davom ettirish
     ai_max_request_cost: float = 0.0                         # bir so'rov uchun maksimal xarajat (0 = cheklanmagan, kunlik/oylik limit baribir)

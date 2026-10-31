@@ -34,9 +34,11 @@ PROFILES = {
     "database_expert": ("read", "pos", "none", "no_error"),
     "integration": ("read", "agents", "none", "no_error"),
     "memory_agent": ("analysis", "chat", "write_approved", "no_error"),
+    "swarm": ("analysis", "agents", "none", "supervisor"),
 }
 VERIFY_RULES = {"text": "Javob bo'sh emas", "no_error": "Natijada xato yo'q", "tests": "Testlar o'tdi", "sources": "Manbalar ko'rsatilgan",
-                "approval": "Tasdiq so'rovi yaratildi (amal tasdiqdan keyin bajariladi)"}
+                "approval": "Tasdiq so'rovi yaratildi (amal tasdiqdan keyin bajariladi)",
+                "supervisor": "Supervisor tasdig'i (holat, bo'sh natija, xato, tool qoidasi)"}
 
 
 class PermissionManager:

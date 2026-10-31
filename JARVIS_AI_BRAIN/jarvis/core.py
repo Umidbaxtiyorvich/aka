@@ -144,6 +144,14 @@ class JarvisCore:
         from .command import CommandCenter
         from .tools import ToolRegistry
         self.tools = ToolRegistry(self)
+        from .swarm import Swarm
+        self.swarm = Swarm(self)
+        from .semantic import SemanticMemory
+        self.semantic = SemanticMemory(self)
+        from .computer_use import ComputerUse
+        from .documents import Documents
+        self.documents = Documents(self)
+        self.computer_use = ComputerUse(self)
         self.command = CommandCenter(self)
         self.approvals.on_pending = self.telegram.on_approval_pending
         self.approvals.ttl_hours = int(self.settings.approval_ttl_hours or 0)
@@ -213,6 +221,12 @@ class JarvisCore:
         if now - self._health_state.get("integ_at", 0) > 300:          # ulanishlar holati va jadval bo'yicha sinxronlash
             self._health_state["integ_at"] = now
             self.integrations.monitor()
+        if self.settings.embedding_model and now - self._health_state.get("sem_at", 0) > 600:   # yangi xotiralarni vektorlash (fon)
+            self._health_state["sem_at"] = now
+            try:
+                out["semantic"] = self.semantic.index()
+            except Exception as e:
+                self.audit.error("semantic", str(e))
         if now - self._health_state.get("proactive_at", 0) > 3600:      # soatiga bir: takliflar, kunlik/haftalik hisobot, xavfsiz tiklash
             self._health_state["proactive_at"] = now
             out["proactive"] = self.proactive.tick()
@@ -403,7 +417,7 @@ class JarvisCore:
         return out | self._ask_ai(text)
 
     def _ask_ai(self, text: str) -> dict:
-        context = self.memory.search(intent_mod.normalize(text), limit=5)
+        context = self.semantic.hybrid(intent_mod.normalize(text), k=5)      # ma'no + kalit so'z (model yo'q bo'lsa — faqat kalit so'z)
         mem = "\n".join(f"- {m['content']} (manba: {m['source']})" for m in context)
         history = self.db.query("SELECT role, content FROM conversations ORDER BY id DESC LIMIT 6")[::-1]
         messages = [{"role": "system", "content": SYSTEM_PROMPT + ("\nXotiradan:\n" + mem if mem else "")}]

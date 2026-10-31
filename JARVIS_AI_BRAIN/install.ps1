@@ -218,6 +218,12 @@ if (Ask "Ovozni mahalliy tanish (faster-whisper, ~100 MB; model keyin dashboard'
     Say "faster-whisper o'rnatilmoqda..."
     & $VPy -m pip install faster-whisper --disable-pip-version-check
 }
+if (Ask "Kompyuterni boshqarish (Computer Use: sichqoncha/klaviatura/oynalar, pyautogui + pywinauto ~25 MB) o'rnatilsinmi? Har bir amal baribir sizning tasdig'ingiz bilan bajariladi") {
+    & $VPy -m pip install pyautogui pygetwindow pywinauto --disable-pip-version-check
+}
+if (-not (Have "tesseract") -and (Ask "OCR - rasm va skanerlangan hujjatdagi matnni o'qish (Tesseract, ~70 MB) o'rnatilsinmi?")) {
+    WingetInstall "UB-Mannheim.TesseractOCR" "Tesseract OCR" | Out-Null      # PATH o'zgartirilmaydi: JARVIS odatiy joydan topadi
+}
 if (-not (Have "ollama") -and (Ask "Ollama (mahalliy AI dvigateli, ~1 GB) o'rnatilsinmi?")) { WingetInstall "Ollama.Ollama" "Ollama" | Out-Null }
 if (Have "ollama") {
     & $VPy scripts\setup_ai.py

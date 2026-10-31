@@ -25,7 +25,22 @@ def split_goal(goal: str) -> list[str]:
     return parts or [goal.strip()]
 
 
+# Agent Swarm: Main Brain (manager) aniq tool orqali mutaxassis agentga topshiradi, Supervisor tekshiradi
+SWARM_RULES = [
+    (re.compile(r"(?i)^\s*(xotiradan qidir|eslab ko'?r|xotirada)\s*:?\s*(.+)"), "memory_agent", "memory.search", "query"),
+    (re.compile(r"(?i)^\s*(fayl qidir|faylni top)\s*:?\s*(.+)"), "file_analysis", "assets.search", "query"),
+    (re.compile(r"(?i)^\s*(savdo prognozi|prognoz)\b\s*:?\s*(.*)"), "business_analyst", "business.forecast", None),
+    (re.compile(r"(?i)^\s*(biznes savol|biznes tahlil)\s*:?\s*(.+)"), "business_analyst", "analyst.ask", "question"),
+    (re.compile(r"(?i)^\s*(matnni tekshir|xavfsizlik tekshiruvi)\s*:?\s*(.+)"), "security", "security.scan_text", "text"),
+    (re.compile(r"(?i)^\s*(dry-?run|sinab ko'?r)\s*:?\s*(.+)"), "manager", "simlab.mission", "goal"),
+]
+
+
 def step_for(text: str) -> dict:
+    for rx, agent, tool, arg in SWARM_RULES:
+        m = rx.match(text)
+        if m:
+            return {"agent": "swarm", "payload": {"to": agent, "tool": tool, "args": {arg: m.group(2).strip()} if arg else {}}}
     it, _ = intent_mod.detect(text)
     m = re.search(r"`([^`]+)`", text)
     if it == "command" and m:

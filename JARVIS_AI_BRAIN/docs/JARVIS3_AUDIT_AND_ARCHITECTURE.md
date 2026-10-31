@@ -255,3 +255,13 @@ Windows CI: "Update stops the old running server" va "JARVIS.exe eski serverni a
 | Command Center | `command.py`, `dashboard/command.js` | har bo'lim tepasida buyruq satri (Ctrl+K): yozganda global qidiruv (xotira, missiya, vazifa, fayl, ulanish, bildirishnoma, graf, tool), Enter — `/qidir`, `/missiya`, `/holat`, `/to'xtat`, `/davom`, `/hisobot`, `/tool`, yoki oddiy matn → JARVIS chat. Chat/ovozda ham "jarvis to'xtat", "missiya holati" |
 
 Cheklov: agentlar hozircha o'z handlerlari orqali ishlaydi; Tool Registry orqali agentlararo topshiriq — keyingi bosqich (Agent Swarm).
+
+## 11. v1.3.0 — Agent Swarm, semantik xotira, File Intelligence, Computer Use
+| Modul | Fayl | Nima ishlaydi | Cheklov (halol) |
+|---|---|---|---|
+| Agent Swarm + Supervisor | `swarm.py`, `planner.py`, `agents.py` (`swarm` agenti) | agentlararo topshiriq faqat Tool Registry orqali; QABUL QILUVCHI ruxsati bilan; yuboruvchi chegarasidan yuqori ish topshirilmaydi; chuqurlik ≤3, zanjir ≤20, sikl rad; Supervisor tekshiruvi; missiyada "xotiradan qidir:", "fayl qidir:", "prognoz", "biznes savol:", "matnni tekshir:", "dry-run:" | Supervisor qoidaga asoslangan (AI emas) |
+| Semantik xotira | `semantic.py` | Ollama embedding (`nomic-embed-text`), vektorlar JARVIS bazasida, gibrid qidiruv (RRF), takrorni ma'no bo'yicha topish, chat konteksti gibrid; model **faqat foydalanuvchi tasdig'i bilan** yuklanadi | model bo'lmasa — kalit so'z rejimi (ochiq aytiladi) |
+| File Intelligence | `documents.py` | DOCX (matn+jadval), PPTX (slaydlar), ODT/ODP/ODS, RTF, PDF, XLSX, matn/kod, OCR (Tesseract); bo'laklash va qidiruv; xulosa (ixtiyoriy mahalliy AI, `private=True`); solishtirish; Word nusxasida almashtirish; DOCX/PPTX yaratish; yuklash (25 MB, format tekshiruvi) | .doc/.ppt/.xls (eski) yo'q; OCR — Tesseract o'rnatilsa |
+| Computer Use | `computer_use.py` | oynalar, skrinshot (+vision/OCR), UI Automation daraxti, sichqoncha/klaviatura ketma-ketligi — **har biri aniq tasdiq bilan**, maxfiy oynalar (parol/bank/login/CAPTCHA) bloklanadi, maxfiy matn yozilmaydi, xavfli tugmalar taqiqlangan, xato — darhol to'xtash, makrolar (qayta ijro — yangi tasdiq), jurnal | haqiqiy drayver (pyautogui/pywinauto) faqat Windows'da; bulutda faqat soxta drayver bilan sinalgan |
+
+O'rnatuvchi: ixtiyoriy "Kompyuterni boshqarish" (pyautogui, pygetwindow, pywinauto) va "OCR" (Tesseract, PATH o'zgartirilmaydi).
