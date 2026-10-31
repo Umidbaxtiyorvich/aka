@@ -13,6 +13,7 @@ import re
 QUICK = {"/qidir": "Hamma joydan qidirish: /qidir <so'z>", "/missiya": "Missiya yaratish: /missiya <maqsad>",
          "/holat": "Tizim va missiyalar holati", "/to'xtat": "Favqulodda to'xtatish (barcha avtomatika va missiyalar)",
          "/davom": "Avtomatikani qayta yoqish", "/hisobot": "Kunlik hisobot", "/tool": "Tool chaqirish: /tool <id> {json}",
+         "/bajar": "Topshiriq: mos ulangan sayt yoki JARVIS agenti bilan (masalan: /bajar rasm yarat: tog'dagi qal'a)",
          "/yordam": "Buyruqlar ro'yxati"}
 STOP_RX = re.compile(r"(?i)^(/to'?xtat|/stop|jarvis,?\s*(hammasini\s*)?to'?xtat|missiyalarni to'?xtat)\b")
 STATUS_RX = re.compile(r"(?i)^(/holat|missiya(lar)?\s*holati|holat qanday|jarvis,?\s*holat)\b")
@@ -85,5 +86,10 @@ class CommandCenter:
                 raise ValueError("Argumentlar JSON noto'g'ri") from None
             r = c.tools.invoke(m.group(1), args, caller="user")
             return {"kind": "tool", "text": f"{r['tool']}: {r['status']} ({r['duration_ms']} ms)", "data": r}
+        if t.startswith("/bajar"):                           # topshiriq: mos ulangan sayt yoki JARVIS agenti (tasdiq bilan)
+            plan = c.site_skills.plan(t[6:].strip())
+            return {"kind": "plan", "text": plan["text"], "plan": plan}
         r = c.chat(t)
+        if r.get("plan"):
+            return {"kind": "plan", "text": r["text"], "plan": r["plan"]}
         return {"kind": "chat", "text": r.get("text", ""), "mission_id": r.get("mission_id"), "link": "#mission" if r.get("mission_id") else "#chat"}

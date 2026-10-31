@@ -258,6 +258,12 @@ class IntegrationHub:
                               json.dumps(sugg, ensure_ascii=False), json.dumps(learning, ensure_ascii=False, default=str), _now(), cid))
         self._status(cid, "connected", d.get("note", ""))
         self._kg_discovery(self.get(cid))
+        ss = getattr(self.core, "site_skills", None)
+        if ss and c["adapter"] == "website":                # sayt nima qila oladi (rasm/video/matn yaratish ...) — Site Skills
+            try:
+                ss.detect(cid, d.get("pages", []))
+            except Exception as e:                         # noqa: BLE001 — aniqlash xatosi ulanishni buzmaydi
+                self.core.audit.error("site_skills", f"Ko'nikma aniqlash: {e}")
         self.core.audit.log("integration", f"O'rganildi: {c['name']} — {len(ents)} obyekt, o'qiladigan {len(readable)}", target=f"conn#{cid}", risk="A")
         return self.get(cid) | {"discovery": {k: v for k, v in d.items() if k != "entities"}}
 

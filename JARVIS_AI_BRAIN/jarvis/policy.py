@@ -39,6 +39,7 @@ ACTIONS: dict[str, tuple[str, str, bool, str]] = {
     "instagram_dm": ("high", "D", False, "Instagram Direct orqali mijozga xabar yuboriladi"),
     "app_launch": ("medium", "C", True, "Kompyuterda ruxsat berilgan dastur ochiladi"),
     "computer_use": ("medium", "C", False, "Sichqoncha va klaviatura bilan kompyuterda amallar ketma-ketligi bajariladi"),
+    "site_action": ("high", "D", False, "Ulangan saytda sizning hisobingizdan amal bajariladi (kredit/limit sarflanishi mumkin)"),
     "telegram_send": ("high", "D", False, "Telegram orqali xabar yuboriladi"),
     "phone_call": ("high", "D", False, "Pullik telefon qo'ng'irog'i"),
     "paid_ai_call": ("high", "D", False, "Pullik AI xizmatiga so'rov (xarajat)"),

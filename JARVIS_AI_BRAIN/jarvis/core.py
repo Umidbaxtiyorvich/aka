@@ -49,6 +49,7 @@ from .brain_core import BrainCore
 from .voice_pro import VoicePro
 from .telephony import Telephony
 from .voice import Voice
+from .site_actions import SiteSkills
 from .security import contains_secret, redact
 
 CAPABILITIES = {
@@ -119,6 +120,7 @@ class JarvisCore:
         self.brain = Brain(self)
         self.connector = MemoryConnector(self)
         self.integrations = IntegrationHub(self)
+        self.site_skills = SiteSkills(self)
         self.analyst = Analyst(self)
         self.brain_core = BrainCore(self)
         from .memory_import import MemoryImporter
@@ -319,6 +321,12 @@ class JarvisCore:
                 lines.append("Barcha bosqichlar xavfsiz (LOW) — avtomatik boshlandi. Holat: Topshiriqlar bo'limida.")
             return out | {"text": "\n".join(lines), "mission_id": m["id"], "intent": "mission"}
         if intent not in ("memory_save", "memory_query"):
+            cap = self.site_skills.detect_task(text)          # Task Router: "rasm yarat", "video yarat" ... → ulangan sayt yoki o'z agenti
+            if cap:
+                plan = self.site_skills.plan(text, cap)
+                named = any(o.get("named") for o in plan["options"])
+                if cap in ("image.generate", "video.generate", "audio.generate") or named:
+                    return out | {"text": plan["text"], "intent": "task_router", "plan": plan}
             brain = self.brain_core.think(text)          # POS / biznes / ulanishlar savollari — Brain Core (manba bilan)
             if brain:
                 return out | brain

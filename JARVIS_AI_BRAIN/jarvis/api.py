@@ -40,6 +40,7 @@ from .swarm import SwarmError
 from .semantic import SemanticError
 from .documents import DocError
 from .computer_use import ComputerUseError
+from .site_actions import SiteSkillError
 from .integrations.base import ConnectorError
 from .memory_import import MAX_UPLOAD as MI_MAX, ImportError_ as MIError
 from .voice_pro import VoiceProError
@@ -58,7 +59,7 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError, MissionError, AssetError, SimError, WorkspaceError, ToolError, SwarmError, SemanticError, DocError, ComputerUseError, ConnectorError)
+               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError, MissionError, AssetError, SimError, WorkspaceError, ToolError, SwarmError, SemanticError, DocError, ComputerUseError, ConnectorError, SiteSkillError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
@@ -341,6 +342,25 @@ class WriteIn(BaseModel):
     operation: str
     payload: dict = {}
     summary: str = ""
+
+
+class SiteSkillIn(BaseModel):
+    conn_id: int
+    capability: str
+    url: str = ""
+    title: str = ""
+    prompt_selector: str = ""
+    submit_selector: str = ""
+    result_selector: str = ""
+    skill_id: int | None = None
+
+
+class DoIn(BaseModel):
+    text: str = ""
+    prompt: str = ""
+    capability: str = ""
+    skill_id: int | None = None
+    agent: str = ""
 
 
 class DetectIn(BaseModel):
@@ -717,6 +737,43 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.post("/api/integrations/detect")
     def integ_detect(body: DetectIn):
         return C().integrations.detect(url=body.url, host=body.host, port=body.port)
+
+    # Site Skills / Task Router — ulangan saytlardan topshiriq bajarish
+    @app.get("/api/site-skills")
+    def ss_list(conn_id: int | None = None):
+        c = C()
+        return {"skills": c.site_skills.list(conn_id), "catalog": c.site_skills.catalog(), "runs": c.site_skills.runs(30)}
+
+    @app.post("/api/site-skills")
+    def ss_save(body: SiteSkillIn):
+        return guard(C().site_skills.save, body.conn_id, body.capability, body.url, body.title, body.prompt_selector,
+                     body.submit_selector, body.result_selector, body.skill_id)
+
+    @app.delete("/api/site-skills/{sid}")
+    def ss_delete(sid: int):
+        return guard(C().site_skills.delete, sid)
+
+    @app.post("/api/integrations/{cid}/skills/detect")
+    def ss_detect(cid: int):
+        c = C()
+        conn = guard(c.integrations.get, cid)
+        pages = [{"url": e.get("source"), "title": e.get("name"), "prompts": [], "buttons": []} for e in conn.get("entities") or []]
+        return guard(c.site_skills.detect, cid, pages)
+
+    @app.post("/api/do/plan")
+    def do_plan(body: DoIn):
+        return guard(C().site_skills.plan, body.text, body.capability or None)
+
+    @app.post("/api/do/run")
+    def do_run(body: DoIn):
+        c = C()
+        if body.skill_id:
+            return guard(c.site_skills.propose, body.skill_id, body.prompt or body.text)
+        return guard(c.site_skills.run_agent, body.agent, body.capability, body.prompt or body.text)
+
+    @app.post("/api/site-skills/execute/{aid}")
+    def ss_execute(aid: int):
+        return guard(C().site_skills.execute, aid)
 
     @app.post("/api/integrations/probe-login")
     def integ_probe_login(body: DetectIn):

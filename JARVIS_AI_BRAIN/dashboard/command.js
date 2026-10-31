@@ -28,6 +28,7 @@
     try {
       const r = await api("/api/command", { method: "POST", body: { text } });
       if (r.kind === "search") showHtml(renderSearch(r));
+      else if (r.kind === "plan") { hide(); openTaskModal(r.plan); }
       else showHtml(`<div class="small" style="white-space:pre-wrap">${esc(r.text)}</div>${r.link ? `<a class="small" href="${r.link}">→ ochish</a>` : ""}`);
       inp.value = "";
     } catch (er) { showHtml(`<span class="bad small">${esc(er.message)}</span>`); }

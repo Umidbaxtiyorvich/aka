@@ -483,3 +483,20 @@ def test_site_link_opens_connect_modal_with_detected_fields(server, page):
         page.wait_for_selector("#cmodal", state="detached")
     finally:
         site.shutdown()
+
+
+def test_task_router_modal_from_command_bar(server, page):
+    """Buyruq satriga "rasm yarat: ..." → topshiriq oynasi: sayt ulanmagan va generator yo'q — halol aytiladi, bajarish tugmasi o'chiq."""
+    page.goto(server + "#siteskills")
+    page.wait_for_selector("#tktext")
+    page.fill("#gcmd", "rasm yaratib ber: tog'dagi qal'a")
+    page.press("#gcmd", "Enter")
+    page.wait_for_selector("#cmodal #tkp")
+    assert page.input_value("#cmodal #tkp") == "tog'dagi qal'a"
+    assert "Rasm yaratish" in page.text_content("#cmodal") and page.is_disabled("#tkgo")
+    page.click("#cmx")
+    page.fill("#tktext", "tarjima qil: salom")
+    page.press("#tktext", "Enter")
+    page.wait_for_selector("#cmodal input[name=tko]")
+    assert "JARVIS AI" in page.text_content("#cmodal")
+    assert not page.errors, page.errors

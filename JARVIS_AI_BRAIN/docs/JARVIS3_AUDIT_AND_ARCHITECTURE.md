@@ -275,3 +275,14 @@ O'rnatuvchi: ixtiyoriy "Kompyuterni boshqarish" (pyautogui, pygetwindow, pywinau
 | O'zbekcha | `dashboard/*.js`, `core.py`, `mission.py`, `agents.py`, `swarm.py` | inglizcha sarlavha va xabarlar o'zbekchaga o'tkazildi |
 
 Halol cheklovlar: CAPTCHA, SMS/2FA va Google/Telegram/OneID orqali kirish chetlab o'tilmaydi — "Brauzerda kirish" oynasida foydalanuvchi o'zi bajaradi; SMS kod saqlanmaydi. JavaScript bilan chiziladigan saytlarda maydonlar brauzer agenti (Playwright) bo'lsa aniqlanadi, bo'lmasa "login + parol" taxmin qilinadi va shunday deb ko'rsatiladi. Real POS hisobi bilan sinalmagan — testlar shu kompyuterdagi sinov sayti va soxta (mock) sahifalar bilan.
+
+## 13. v1.5.0 — ulangan saytlardan topshiriq bajarish (Site Skills + Task Router)
+| Qism | Fayl | Nima |
+|---|---|---|
+| Ko'nikmalarni aniqlash | `site_actions.py`, `integrations/website.py` | sayt o'rganilganda (discover) har sahifadagi so'rov maydoni va tugmalar ko'riladi → sayt nima qila olishi aniqlanadi: rasm, video, ovoz/musiqa yaratish, tarjima, matn/AI javob. Ma'lum saytlar (Leonardo, Ideogram, ChatGPT, Gemini, Runway, Suno, DeepL ...) domen bo'yicha ham taniladi. Qo'lda qo'shish/tuzatish mumkin |
+| Task Router | `site_actions.py`, `core.py`, `command.py` | chat, buyruq satri yoki "Saytlar orqali topshiriq" bo'limida: topshiriq turi aniqlanadi → variantlar: siz nomini aytgan sayt → ulangan va sinalgan sayt → boshqa mos sayt → JARVIS agenti (mahalliy SD, AI chat, TTS). Hech kim qila olmasa — halol aytiladi va nima ulash kerakligi ko'rsatiladi |
+| Bajarish | `website.py: perform` | tasdiqdan keyin (D, har safar) brauzer agenti saytga kiradi, so'rovni yozadi, tugmani bosadi, yangi natijani kutadi; rasm/video/audio fayllar va matn JARVIS papkasiga (`exports/site`) saqlanadi + isbot skrinshoti. Muvaffaqiyatli ko'nikma "sinalgan" bo'ladi |
+
+Xavfsizlik: har bir sayt amali alohida tasdiq (sizning hisobingiz, kredit sarflanishi mumkin); tasdiqdan keyin payload o'zgarsa — bekor; ikki marta bajarilmaydi; maxfiy matn saytga yuborilmaydi; faqat shu domen; CAPTCHA/SMS chetlab o'tilmaydi; sayt to'lov yoki kredit so'rasa — to'xtaydi; moliyaviy yozuvlar (savdo, to'lov, kirim/chiqim) bu yo'l bilan bajarilmaydi. Avtonomlik Level 0 da o'chiq.
+
+Halol cheklovlar: universal "so'rov maydoni + tugma + yangi natija" usuli ko'p oddiy generator/chat saytlarda ishlaydi, lekin murakkab saytlarda (bir necha qadam, sozlamalar oynasi, navbat) selektorni qo'lda ko'rsatish kerak bo'lishi mumkin. Real Leonardo/ChatGPT hisoblari bilan sinalmagan — test shu kompyuterdagi sinov sayti (login + rasm generatori + tarjimon) va haqiqiy Chromium bilan.

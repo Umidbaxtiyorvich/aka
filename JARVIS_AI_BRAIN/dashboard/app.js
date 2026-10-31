@@ -72,6 +72,7 @@ const SECTIONS = [
   ["smartrouter", "🚦 AI tanlash va xarajat", renderSmartRouter, "Agentlar va AI"],
   ["models", "📖 AI modellar", renderModelCatalog, "Agentlar va AI"],
   ["connections", "🔌 Ulanishlar (sayt, POS, API)", renderConnections, "Ulanishlar va biznes"],
+  ["siteskills", "🧩 Saytlar orqali topshiriq", renderSiteSkills, "Ulanishlar va biznes"],
   ["business", "📊 Biznes markazi", renderBusiness, "Ulanishlar va biznes"],
   ["bi", "📈 Excel/CSV hisobotlar", renderBI, "Ulanishlar va biznes"],
   ["pos", "🧾 POS hujjatlari", renderPOS, "Ulanishlar va biznes"],
@@ -221,6 +222,7 @@ async function renderChat(v) {
     const t = $("#msg").value.trim(); if (!t) return;
     $("#msg").value = ""; add("user", t);
     try { const r = await api("/api/chat", { method: "POST", body: { text: t } }); add("assistant", r.text, r.route && r.route.usage_id);
+      if (r.plan) { openTaskModal(r.plan); log.insertAdjacentHTML("beforeend", '<div class="msg assistant"><button data-plan="1">🧩 Bajarish oynasini ochish</button></div>'); log.lastElementChild.querySelector("button").onclick = () => openTaskModal(r.plan); }
       if (r.paid_confirm_needed) log.insertAdjacentHTML("beforeend", `<div class="msg assistant"><button data-paid="${esc(t)}">💳 Pullik (kuchliroq) model bilan qayta so'rash</button>
         <span class="small muted">Xarajat kunlik/oylik limit ichida hisoblanadi.</span></div>`); }
     catch (e) { add("assistant", "Xato: " + e.message); }
@@ -355,13 +357,15 @@ async function renderApprovals(v) {
     ${a.status === "approved" && a.action_type === "sandbox_unsafe_run" ? '<a href="#sandbox">Sandbox\'da ishga tushirish →</a>' : ""}
     ${a.status === "approved" && a.action_type === "app_launch" ? `<button data-app="${a.id}">Ochish</button>` : ""}
     ${a.status === "approved" && a.action_type === "phone_call" ? `<button class="danger" data-call="${a.id}">Qo'ng'iroq qilish (pullik)</button>` : ""}
-    ${a.status === "approved" && a.action_type === "instagram_dm" ? '<a href="#instagram">Direct javobni yuborish →</a>' : ""}</div><pre id="o${a.id}" hidden></pre></div>`).join("")
+    ${a.status === "approved" && a.action_type === "instagram_dm" ? '<a href="#instagram">Direct javobni yuborish →</a>' : ""}
+    ${a.status === "approved" && a.action_type === "site_action" ? `<button data-site="${a.id}">🌐 Saytda bajarish</button>` : ""}</div><pre id="o${a.id}" hidden></pre><div id="sr${a.id}"></div></div>`).join("")
     : '<div class="card muted">Tasdiq so\'rovlari yo\'q</div>';
   v.onclick = async (e) => {
     const d = e.target.dataset;
     try {
       if (d.ok || d.no) { await api(`/api/approvals/${d.ok || d.no}/decide`, { method: "POST", body: { approve: !!d.ok, confirm_hash: d.h } }); show(); }
       if (d.run) { const r = await api(`/api/approvals/${d.run}/execute`, { method: "POST" }); const o = $("#o" + d.run); o.hidden = false; o.textContent = `exit=${r.exit_code}\n${r.output}`; }
+      if (d.site) { e.target.disabled = true; const el = $("#sr" + d.site); el.innerHTML = '<p class="muted">⏳ Saytda bajarilmoqda…</p>'; el.innerHTML = taskResultHtml(await post(`/api/site-skills/execute/${d.site}`)); }
       if (d.app) { const r = await api(`/api/apps/launch/${d.app}`, { method: "POST" }); const o = $("#o" + d.app); o.hidden = false; o.textContent = `Ochildi: ${r.app} (pid ${r.pid})`; }
       if (d.call && confirm("Pullik qo'ng'iroq amalga oshiriladi. Davom etasizmi?")) { const r = await api(`/api/telephony/call/${d.call}`, { method: "POST" }); const o = $("#o" + d.call); o.hidden = false; o.textContent = JSON.stringify(r); }
     } catch (er) { alert(er.message); }
