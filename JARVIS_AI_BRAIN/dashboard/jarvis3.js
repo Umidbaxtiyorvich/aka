@@ -27,7 +27,8 @@ async function renderGuardian(v) {
     <div class="card"><h3>🛡 Guardian <span class="pill ${GST[g.overall]}">${esc(g.overall)}</span></h3>
       ${g.checks.map((c) => `<div class="kv"><span>${esc(c.title)}${c.note ? `<div class="small muted">${esc(c.note)}</div>` : ""}</span><span>
         <span class="pill ${GST[c.status]}">${esc(c.value)}</span>${c.action ? ` <button class="ghost" data-ga="${c.action}">${esc(g.actions[c.action].split(" (")[0])}</button>` : ""}</span></div>`).join("")}
-      <div class="row" style="margin-top:10px"><button class="bad" data-ga="emergency_stop">⛔ Favqulodda to'xtatish</button><button class="ghost" data-ga="backup_now">Zaxira yaratish</button></div>
+      <div class="row" style="margin-top:10px"><button class="bad" data-ga="emergency_stop">⛔ Favqulodda to'xtatish</button><button class="ghost" data-ga="backup_now">Zaxira yaratish</button>
+        <button class="ghost" id="gupd">🔄 JARVIS'ni yangilash</button></div>
       <div id="gmsg"></div><details class="small"><summary>Guardian amallari tarixi</summary>${table(g.events, ["ts", "action", "auto", "result"])}</details></div>
     <div class="card"><h3>🎚 Avtonomlik darajasi</h3>
       ${LVL.map((t, i) => `<label class="small" style="display:block"><input type="radio" name="alvl" value="${i}" ${+set.autonomy_level === i ? "checked" : ""}> Level ${esc(t)}</label>`).join("")}
@@ -43,6 +44,8 @@ async function renderGuardian(v) {
     if (b.dataset.ga === "emergency_stop" && !confirm("Barcha avtomatik jarayonlar va missiyalar to'xtatilsinmi?")) return;
     try { const r = await post(`/api/guardian/${b.dataset.ga}`); $("#gmsg").innerHTML = `<span class="pill ok">${esc(String(r.result).slice(0, 200))}</span>`; later(() => renderGuardian(v), 900); }
     catch (e) { fail($("#gmsg"), e); } }; });
+  $("#gupd").onclick = async () => { if (!confirm("Yangilash oynasi ochiladi. JARVIS bir necha daqiqaga to'xtaydi. Davom etilsinmi?")) return;
+    try { const r = await post("/api/system/update"); $("#gmsg").innerHTML = `<span class="pill ok">${esc(r.note)}</span>`; } catch (e) { fail($("#gmsg"), e); } };
   $("#alsave").onclick = async () => { const val = +(v.querySelector("[name=alvl]:checked") || {}).value;
     try { await post("/api/settings", { autonomy_level: val }); $("#almsg").innerHTML = `<span class="pill ok">Level ${val} saqlandi</span>`; } catch (e) { fail($("#almsg"), e); } };
   const rep = async (k) => { try { out($("#rout"), await post(`/api/proactive/report?kind=${k}`)); } catch (e) { fail($("#rout"), e); } };

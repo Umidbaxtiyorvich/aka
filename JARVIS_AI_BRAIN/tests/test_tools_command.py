@@ -128,3 +128,10 @@ def test_api(client, core):
     assert client.post("/api/command", json={"text": ""}).status_code == 400
     assert client.post("/api/command", json={"text": "/holat"}).json()["kind"] == "status"
     assert client.get("/api/tools/calls").json()[0]["tool"] == "guardian.status"
+
+
+def test_system_update_endpoint_is_local_windows_only(client):
+    import sys
+    r = client.post("/api/system/update")
+    if sys.platform != "win32":
+        assert r.status_code == 400 and "Windows" in r.json()["detail"]

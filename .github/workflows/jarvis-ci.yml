@@ -131,6 +131,19 @@ jobs:
           if (git -C $d status --porcelain --untracked-files=no) { throw "ishchi papka toza emas" }
           git -C $d log --oneline -5 | Out-Host
           "Git yangilanish OK"
+      - name: New update path (JARVIS_yangilash.cmd -> scripts\update.ps1) works
+        shell: powershell
+        run: |
+          $d = "$env:RUNNER_TEMP\jarvis"
+          if (-not (Test-Path "$d\JARVIS_yangilash.cmd")) { throw "JARVIS_yangilash.cmd yaratilmadi" }
+          $cmd = Get-Content "$d\JARVIS_yangilash.cmd" -Raw
+          if ($cmd -match "irm|iex|Invoke-Expression") { throw "yangilash fayli hali ham irm|iex ishlatyapti" }
+          if ($cmd -notmatch "scripts\\update\.ps1") { throw "yangilash fayli update.ps1 ni chaqirmaydi" }
+          powershell -NoProfile -ExecutionPolicy Bypass -File "$d\scripts\update.ps1" -Minimal -NoLaunch -Branch "${{ github.ref_name }}"
+          if ($LASTEXITCODE -ne 0) { throw "update.ps1 xato bilan tugadi" }
+          & "$d\.venv\Scripts\python.exe" -c "import jarvis; print('versiya', jarvis.__version__)"
+          if ($LASTEXITCODE -ne 0) { throw "yangilangandan keyin jarvis yuklanmadi" }
+          "Yangi yangilash yo'li OK"
       - name: Installer repairs a broken .venv (interrupted install)
         shell: powershell
         run: |

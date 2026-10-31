@@ -1484,6 +1484,24 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     def cu_replay(name: str):
         return guard(C().computer_use.replay, name)
 
+    # Yangilash oynasini ochish (faqat shu kompyuterdan, faqat Windows): yorliq bloklangan holatlar uchun zaxira yo'l
+    @app.post("/api/system/update")
+    def system_update(request: Request):
+        import subprocess
+        from .config import PROJECT_ROOT
+        if (request.client.host if request.client else "") not in ("127.0.0.1", "::1", "localhost", "testclient"):
+            raise HTTPException(403, "Yangilashni faqat shu kompyuterning o'zidan boshlash mumkin")
+        if sys.platform != "win32":
+            raise HTTPException(400, "Yangilash oynasi faqat Windows'da ochiladi (bu muhit: " + sys.platform + ")")
+        script = PROJECT_ROOT / "scripts" / "update.ps1"
+        if not script.exists():
+            raise HTTPException(400, "scripts\\update.ps1 topilmadi")
+        ps = Path(__import__("os").environ.get("SystemRoot", r"C:\Windows")) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+        subprocess.Popen([str(ps), "-NoProfile", "-ExecutionPolicy", "Bypass", "-NoExit", "-File", str(script)], cwd=str(PROJECT_ROOT),
+                         creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+        C().audit.log("user", "Yangilash oynasi ochildi (dashboard)", target="update", risk="C", approval_status="user_action")
+        return {"started": True, "note": "Yangilash oynasi ochildi. JARVIS bir necha daqiqaga to'xtaydi va yangi versiya bilan qayta ochiladi."}
+
     @app.get("/api/permissions/agents")
     def perm_agents():
         return C().permissions.profiles()

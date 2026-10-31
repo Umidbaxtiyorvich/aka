@@ -281,10 +281,20 @@ try {
     $sh.Description = "JARVIS AI BRAIN"
     $sh.Save()
     Say "Ish stolida 'JARVIS' yorlig'i yaratildi." "Green"
-    # Yangilash yorlig'i: bosilganda shu o'rnatuvchi GitHub'dan qayta ishga tushadi (xotira va sozlamalar saqlanadi)
+    # Yangilash yorlig'i: oddiy .cmd -> mahalliy scripts\update.ps1 (o'rnatuvchini faylga yuklab, fayldan bajaradi).
+    # Avvalgi "powershell -Command irm | iex" yorlig'ini ba'zi antivirus/Windows himoyasi bloklardi.
+    $upCmd = Join-Path $InstallDir "JARVIS_yangilash.cmd"
+    @"
+@echo off
+title JARVIS yangilash
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\update.ps1"
+if errorlevel 1 echo Yangilash xato bilan tugadi. Yuqoridagi qizil xabarni o'qing.
+echo.
+pause
+"@ | Set-Content -Path $upCmd -Encoding ASCII
     $up = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $desk "JARVIS yangilash.lnk"))
-    $up.TargetPath = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
-    $up.Arguments = "-NoExit -ExecutionPolicy Bypass -Command `"irm https://raw.githubusercontent.com/$Repo/$Branch/JARVIS_AI_BRAIN/install.ps1 | iex`""
+    $up.TargetPath = $upCmd
+    $up.Arguments = ""
     $up.WorkingDirectory = $InstallDir
     if (Test-Path $icon) { $up.IconLocation = "$icon,0" }
     $up.Description = "JARVIS AI BRAIN ni yangilash"
@@ -300,5 +310,5 @@ Say ""
 Say "=== Tayyor: JARVIS $NewVersion ===" "Green"
 Say "Ochish: ish stolidagi 'JARVIS' belgisi (yoki $launcher). Terminal kerak emas."
 Say "Birinchi kirishda PIN o'rnatasiz. YesPOS: POS ulanishi -> 'YesPOS sozlamasi' -> 'POS'ga kirish'."
-Say "Yangilash: shu buyruqni qayta ishga tushiring (xotira saqlanadi)."
+Say "Yangilash: ish stolidagi 'JARVIS yangilash' (yoki $InstallDir\JARVIS_yangilash.cmd). Xotira saqlanadi."
 if (-not $NoLaunch) { Start-Process $launcher }

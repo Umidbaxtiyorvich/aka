@@ -3,7 +3,8 @@
 // Nima qiladi: Ollama ishlamayotgan bo'lsa yoqadi -> JARVIS serveri ishlamayotgan bo'lsa oynasiz ishga tushiradi ->
 // tayyor bo'lishini kutadi -> dasturdek alohida oynada (Edge/Chrome --app) ochadi.
 // Yangilangandan keyin eski server qolib ketgan bo'lsa (versiyasi diskdagi koddan farq qilsa) — uni to'xtatib, yangisini yoqadi.
-// Kalitlar: --no-browser (faqat serverni yoqish, CI uchun), --quiet (xato oynasini ko'rsatmaslik).
+// Kalitlar: --no-browser (faqat serverni yoqish, CI uchun), --quiet (xato oynasini ko'rsatmaslik),
+//          --update (yangilash oynasini ochadi: scripts\update.ps1 — yorliq bloklangan bo'lsa ham ishlaydi).
 // C# 5 (csc v4) bilan mos yozilgan.
 using System;
 using System.Diagnostics;
@@ -154,6 +155,22 @@ static class JarvisLauncher
         bool quiet = noBrowser || Array.IndexOf(args, "--quiet") >= 0;
         string root = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
         string pyw = Path.Combine(root, @".venv\Scripts\pythonw.exe");
+
+        if (Array.IndexOf(args, "--update") >= 0)
+        {
+            string ps = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), @"WindowsPowerShell\v1.0\powershell.exe");
+            string script = Path.Combine(root, @"scripts\update.ps1");
+            if (!File.Exists(script))
+            {
+                if (!quiet) MessageBox.Show("Yangilash skripti topilmadi:\n" + script, "JARVIS", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return 3;
+            }
+            ProcessStartInfo u = new ProcessStartInfo(ps, "-NoProfile -ExecutionPolicy Bypass -NoExit -File \"" + script + "\"");
+            u.WorkingDirectory = root;
+            u.UseShellExecute = true;
+            Process.Start(u);
+            return 0;
+        }
 
         string status = Get(Url + "/api/auth/status", 1500);
         if (status != null)
