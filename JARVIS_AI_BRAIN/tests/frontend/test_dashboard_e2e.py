@@ -220,7 +220,8 @@ def test_offline_badge_and_low_quality(server, page, core):
     page.route("**/api/events/stream**", lambda r: r.abort())
     page.goto(server + "#brain")
     page.wait_for_function("document.querySelector('.live-badge').textContent.includes('OFFLINE')", timeout=15000)
-    assert "OFFLINE" in page.text_content("#foot")
+    # Pastki izoh 3D sahna yuklangandan keyin chiziladi (sekin CI'da badge'dan kechroq) — uni ham kutamiz
+    page.wait_for_function("(document.querySelector('#foot') || {}).textContent && document.querySelector('#foot').textContent.includes('OFFLINE')", timeout=20000)
     page.select_option("#qual", "low")
     page.wait_for_selector("#stage canvas", timeout=20000)
     assert page.evaluate("BrainState.quality") == "low"
