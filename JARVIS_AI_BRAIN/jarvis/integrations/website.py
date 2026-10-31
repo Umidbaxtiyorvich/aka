@@ -64,13 +64,30 @@ SKIP_NAV = re.compile(r"(?i)log ?out|sign ?out|chiqish|выход|выйти|del
 def _json_rows(obj, depth: int = 0):
     """JSON ichidan eng katta "obyektlar ro'yxati"ni topish (API javobi: {data: [...]}, {items: [...]}, [...])."""
     best = obj if isinstance(obj, list) and obj and all(isinstance(x, dict) for x in obj[:20]) else None
-    if depth < 3:
+    if depth < 5:
         kids = obj.values() if isinstance(obj, dict) else (obj[:3] if isinstance(obj, list) and best is None else [])
         for v in kids:
             r = _json_rows(v, depth + 1)
             if r and (best is None or len(r) > len(best)):
                 best = r
     return best
+
+
+TRACKERS = re.compile(r"(?i)google|gstatic|doubleclick|yandex|mc\.|metrika|facebook|fbcdn|sentry|hotjar|clarity|intercom|crisp|jivo|tawk|"
+                      r"segment|mixpanel|amplitude|onesignal|firebase|cloudflareinsights|newrelic|bugsnag|gravatar|cdn")
+GRID_JS = """(limit) => { const rows = [...document.querySelectorAll('[role=row]')].filter(r => r.offsetParent !== null);
+  if (rows.length < 2) return [];
+  const cells = r => [...r.querySelectorAll('[role=columnheader],[role=cell],[role=gridcell]')].map(c => (c.innerText || '').trim());
+  const head = cells(rows[0]); if (head.length < 2) return [];
+  return [[head, ...rows.slice(1, limit + 1).map(cells).filter(c => c.length === head.length)]]; }"""
+
+
+def _shape(obj) -> str:
+    if isinstance(obj, dict):
+        return "{" + ", ".join(list(obj)[:6]) + ("…" if len(obj) > 6 else "") + "}"
+    if isinstance(obj, list):
+        return f"[{len(obj)} ta]"
+    return type(obj).__name__
 
 
 def _flat(row: dict) -> dict:
@@ -236,7 +253,15 @@ class WebsiteConnector(BaseConnector):
         return {"status": "connected", "note": "Sessiya shifrlangan holda saqlandi"}
 
     def _api_ok(self, url: str) -> bool:
-        return _site(urlparse(url).hostname) == _site(urlparse(self.base()).hostname)
+        """Saytning o'z serveri (boshqa subdomen yoki alohida API domeni ham bo'lishi mumkin) — reklama/statistika xizmatlari emas."""
+        host = urlparse(url).hostname or ""
+        return _site(host) == _site(urlparse(self.base()).hostname) or not TRACKERS.search(host)
+
+    @staticmethod
+    def _key(url: str) -> str:
+        """Sahifa kaliti: hash-marshrutli SPA (#/products) sahifalari alohida hisoblanadi."""
+        base, _, frag = url.partition("#")
+        return base + ("#" + frag if frag.startswith(("/", "!")) else "")
 
     def discover(self):
         maxp = max(1, min(int(self.cfg.get("max_pages") or 20), 60))
@@ -245,18 +270,31 @@ class WebsiteConnector(BaseConnector):
             seen, queue, pages, modules = set(), [page.url], [], []
             apis: dict = {}
 
-            def on_resp(resp):                          # SPA saytlar ma'lumotni API (JSON) orqali yuklaydi — shu javoblar o'qiladi
+            def on_resp(resp):                          # SPA saytlar ma'lumotni API (JSON) orqali yuklaydi — sayt o'zi yuborgan javoblar o'qiladi
                 try:
-                    if resp.request.method != "GET" or "json" not in (resp.headers.get("content-type") or "") or not self._api_ok(resp.url):
+                    req = resp.request
+                    if req.resource_type not in ("xhr", "fetch"):
                         return
-                    rows = _json_rows(resp.json())
+                    ct = resp.headers.get("content-type") or ""
+                    entry = {"method": req.method, "host": urlparse(resp.url).hostname, "path": urlparse(resp.url).path[:120], "status": resp.status,
+                             "type": ct.split(";")[0][:40]}
+                    if len(netlog) < 120:
+                        netlog.append(entry)
+                    if "json" not in ct or not self._api_ok(resp.url) or resp.status >= 400:
+                        return
+                    data = resp.json()
+                    entry["shape"] = _shape(data)
+                    rows = _json_rows(data)
+                    entry["rows"] = len(rows) if rows else 0
                     if rows:
-                        key = urlparse(resp.url).path
+                        key = f"{req.method} {urlparse(resp.url).hostname}{urlparse(resp.url).path}"
                         fields = sorted({k for r in rows[:20] for k in _flat(r)})
                         if key not in apis or len(rows) > apis[key]["count"]:
-                            apis[key] = {"url": resp.url, "page": page.url, "fields": fields, "count": len(rows)}
+                            apis[key] = {"url": resp.url, "method": req.method, "page": page.url, "fields": fields, "count": len(rows),
+                                         "path": urlparse(resp.url).path}
                 except Exception:                           # noqa: BLE001 — bitta javob o'qilmasa ham davom etadi
                     pass
+            netlog: list = []
             page.on("response", on_resp)
             try:
                 page.reload(wait_until="domcontentloaded", timeout=30000)
@@ -266,24 +304,25 @@ class WebsiteConnector(BaseConnector):
             explicit = [u.strip() for u in (self.cfg.get("pages") or "").splitlines() if u.strip()]
             queue = explicit + queue
             while queue and len(pages) < maxp:
-                url = queue.pop(0).split("#")[0]
+                url = self._key(queue.pop(0))
                 if url in seen or not self._same_origin(url) or re.search(r"(?i)logout|signout|chiqish|выход|delete|remove", url):
                     continue
                 seen.add(url)
-                if url != page.url:
+                if url != self._key(page.url):
                     time.sleep(self.delay)
                     page.goto(url, wait_until="domcontentloaded", timeout=30000)
                     try:
                         page.wait_for_load_state("networkidle", timeout=8000)
                     except Exception:
                         pass
+                page.wait_for_timeout(1200)                 # SPA ma'lumotni kechroq yuklashi mumkin
                 info = page.evaluate(PAGE_JS)
-                tables = page.evaluate(TABLES_JS, 3)
+                tables = page.evaluate(TABLES_JS, 3) or page.evaluate(GRID_JS, 3)
                 modules += info["nav"]
                 pages.append({"url": page.url, "title": info["title"], "tables": [{"columns": t[0], "sample_rows": len(t) - 1} for t in tables],
                               "forms": info["forms"], "prompts": info.get("prompts", []), "buttons": info.get("buttons", [])})
                 for href, _ in info["links"]:
-                    if self._same_origin(href) and href.split("#")[0] not in seen:
+                    if self._same_origin(href) and self._key(href) not in seen:
                         queue.append(href)
             # Menyu bo'limlarini bosib ko'rish (SPA: havolasiz menyular). Faqat navigatsiya — xavfli so'zli tugmalar bosilmaydi.
             clicked = 0
@@ -300,30 +339,36 @@ class WebsiteConnector(BaseConnector):
                         page.wait_for_load_state("networkidle", timeout=8000)
                     except Exception:
                         pass
-                    if page.url.split("#")[0] not in seen and self._same_origin(page.url):
-                        seen.add(page.url.split("#")[0])
+                    page.wait_for_timeout(1200)
+                    if self._key(page.url) not in seen and self._same_origin(page.url):
+                        seen.add(self._key(page.url))
                         info = page.evaluate(PAGE_JS)
-                        tables = page.evaluate(TABLES_JS, 3)
+                        tables = page.evaluate(TABLES_JS, 3) or page.evaluate(GRID_JS, 3)
                         pages.append({"url": page.url, "title": info["title"] or text, "tables": [{"columns": t[0], "sample_rows": len(t) - 1} for t in tables],
                                       "forms": info["forms"], "prompts": info.get("prompts", []), "buttons": info.get("buttons", [])})
                 except Exception:                           # noqa: BLE001
                     continue
-            return pages, modules, apis
-        pages, modules, apis = self._session(crawl)
+            return pages, modules, apis, netlog
+        pages, modules, apis, netlog = self._session(crawl)
         ents = [{"name": f"{p['title'] or p['url']} #{i + 1}" if len(p["tables"]) > 1 else (p["title"] or p["url"]), "source": p["url"],
                  "table_index": i, "fields": t["columns"], "readable": True} for p in pages for i, t in enumerate(p["tables"])]
         names = {e["name"] for e in ents}
-        for path, a in apis.items():
+        for _key, a in apis.items():
+            path = a["path"]
             seg = next((s for s in reversed(path.strip("/").split("/")) if s and not s.isdigit() and not re.fullmatch(r"v\d+|api|list|index", s)), path)
             name = f"{seg} (API)"
             while name in names:
                 name += "+"
             names.add(name)
-            ents.append({"name": name, "source": "json:" + a["url"], "page": a["page"], "fields": a["fields"], "readable": True, "kind": "api", "rows_seen": a["count"]})
+            ents.append({"name": name, "source": "json:" + a["url"], "page": a["page"], "fields": a["fields"], "readable": True, "kind": "api",
+                         "rows_seen": a["count"], "method": a["method"]})
         n_api = len(apis)
-        return {"modules": sorted(set(m for m in modules if len(m) < 40))[:60], "entities": ents, "pages": pages,
+        seen_json = sum(1 for n in netlog if "json" in n.get("type", ""))
+        return {"modules": sorted(set(m for m in modules if len(m) < 40))[:60], "entities": ents, "pages": pages, "network": netlog,
                 "note": f"{len(pages)} sahifa o'rganildi: {len(ents) - n_api} jadval va {n_api} ta API ma'lumot manbai topildi (faqat o'qildi)"
-                        + ("" if ents else " — o'qiladigan ma'lumot topilmadi. Kerakli bo'lim manzillarini sozlamalarda 'O'qiladigan sahifalar'ga yozing.")}
+                        + ("" if ents else f" — o'qiladigan ma'lumot topilmadi (tarmoqda {len(netlog)} ta so'rov, {seen_json} ta JSON ko'rildi). "
+                                                 "Batafsil → 'O'rganish hisoboti'da sayt nimalar yuborganini ko'ring yoki tovarlar/savdolar sahifasi "
+                                                 "manzilini 'O'qiladigan sahifalar'ga yozing.")}
 
     def perform(self, skill: dict, prompt: str, out_dir, run_id: int, timeout_s: int = 180) -> dict:
         """Tasdiqlangan topshiriqni saytda bajarish: so'rovni yozish, tugmani bosish, yangi natijani olish (faqat shu domen)."""
@@ -422,7 +467,7 @@ class WebsiteConnector(BaseConnector):
             return {"outputs": files, "text": text[:8000], "screenshot": str(shot) if shot else None, "page": page.url}
         return self._session(act)
 
-    def _fetch_json(self, api: str, page_url: str, limit: int) -> dict:
+    def _fetch_json(self, api: str, page_url: str, limit: int, method: str = "GET") -> dict:
         if not self._api_ok(api) or not self._same_origin(page_url):
             raise ConnectorError("Boshqa domen o'qilmaydi", "permission_denied")
 
@@ -437,7 +482,9 @@ class WebsiteConnector(BaseConnector):
                             got["rows"] = rows
                 except Exception:                           # noqa: BLE001
                     pass
-            try:                                            # 1) to'g'ridan-to'g'ri (cookie sessiyasi bilan)
+            try:                                            # 1) to'g'ridan-to'g'ri (cookie sessiyasi bilan) — faqat GET
+                if method != "GET":
+                    raise ValueError("POST — faqat sahifa orqali")
                 r = page.context.request.get(api, timeout=30000)
                 if r.ok and "json" in (r.headers.get("content-type") or ""):
                     rows = _json_rows(r.json())
@@ -464,7 +511,7 @@ class WebsiteConnector(BaseConnector):
         ent = next((e for e in (self.conn.get("entities") or []) if e["name"] == entity), None)
         url = ent["source"] if ent else entity
         if url.startswith("json:"):
-            return self._fetch_json(url[5:], (ent or {}).get("page") or self.base(), limit)
+            return self._fetch_json(url[5:], (ent or {}).get("page") or self.base(), limit, (ent or {}).get("method", "GET"))
         if not url.startswith("http"):
             url = urljoin(self.base() + "/", url)
         if not self._same_origin(url):

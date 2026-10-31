@@ -319,3 +319,10 @@ bosib ko'riladi (chiqish/o'chirish/sotish/to'lov/yangi/sozlama kabi tugmalar bos
 ochib sayt o'zi yuborgan (token bilan) javob olinadi. Xato xabarlari aniq: nima topildi va nima qilish kerak.
 Instagram/Facebook/Telegram havolasi sayt sifatida ulanmaydi — rasmiy API bo'limiga yo'naltiriladi (avtomatik kirish akkauntni muzlatishi mumkin).
 Cheklov: sahifalash (pagination) bo'lsa, hozircha sayt birinchi sahifada ko'rsatgan qism olinadi.
+
+## 17. v1.7.2 — avtomatik o'rganish va chuqurroq tahlil
+* Ulanish "ulangan" bo'lishi bilan (Tekshirish) JARVIS fonda o'zi o'rganadi → xaritalaydi → sinxronlaydi; kuniga bir marta qayta o'rganadi (Ofis → Hisobchi). Faqat o'qish.
+* Lug'at bilan tushunilmagan manbalar AI'dan so'raladi (faqat obyekt va maydon NOMLARI, qiymatlar yuborilmaydi), natija "ai_suggested" (60%).
+* Topiladigan manbalar kengaydi: POST/JSON-RPC javoblari, `#/` marshrutli sahifalar, boshqa domendagi o'z API serveri (reklama/statistika xizmatlari emas), 5 qavat chuqur JSON, `role=row` jadvallar.
+* "O'rganish hisoboti" (Batafsil): sayt yuborgan so'rovlar — usul, server, yo'l, holat, tuzilma, ro'yxat hajmi (qiymatlar va parol ko'rsatilmaydi). Ma'lumot topilmasa sababni shu yerdan aniqlash mumkin.
+* Yozish (kirim, nashr, xabar) avvalgidek faqat buyruq va tasdiq bilan.

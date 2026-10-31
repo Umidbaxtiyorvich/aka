@@ -39,7 +39,9 @@ def core(tmp_path, monkeypatch):
     # Umumiy testlarda PIN o'chiq; himoya test_auth.py da alohida sinaladi
     s = Settings(allowed_read_dirs=[str(ws)], allowed_write_dirs=[str(ws)], auth_enabled=False,
                  allowed_hosts=["127.0.0.1", "localhost", "testserver"])
-    return JarvisCore(db_path=tmp_path / "t.db", settings=s)
+    c = JarvisCore(db_path=tmp_path / "t.db", settings=s)
+    c.integrations.auto_learn = False             # fonda avtomatik o'rganish — alohida testda yoqiladi
+    return c
 
 
 @pytest.fixture

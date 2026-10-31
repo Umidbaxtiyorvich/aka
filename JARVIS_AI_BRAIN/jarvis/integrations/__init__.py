@@ -218,7 +218,59 @@ class IntegrationHub:
         r = self._call(cid, "test", lambda: self.connector(c).connect())
         self._status(cid, r.get("status", "connected"), r.get("note", ""))
         self.core.audit.log("integration", f"Ulanish tekshirildi: {c['name']} → {r.get('status')}", target=f"conn#{cid}", risk="A")
-        return self.get(cid) | {"result": r}
+        out = self.get(cid) | {"result": r}
+        if out["status"] == "connected" and self.auto_learn:
+            out["auto_learn"] = self.auto_learn_start(cid)
+        return out
+
+    # ---------------- Avtomatik o'rganish (faqat o'qish) ----------------
+    auto_learn = True                                       # testlarda o'chiriladi
+    _learning: set = set()
+
+    def needs_learning(self, c: dict) -> bool:
+        if not c.get("entities"):
+            return True
+        last = (c.get("learning") or {}).get("learned_at")
+        try:
+            t = datetime.fromisoformat(last)
+            t = t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+            return (datetime.now(timezone.utc) - t).total_seconds() > 24 * 3600
+        except (TypeError, ValueError):
+            return True
+
+    def auto_learn_start(self, cid: int, force: bool = False) -> dict:
+        """Ulanish ishlasa — fonda o'zi o'rganadi (discover), xaritalaydi va sinxronlaydi. Hammasi faqat o'qish."""
+        c = self.get(cid)
+        if cid in self._learning:
+            return {"started": False, "note": "o'rganilmoqda…"}
+        if not force and not self.needs_learning(c):
+            return {"started": False, "note": "yaqinda o'rganilgan"}
+        import threading
+        self._learning.add(cid)
+        self._status(cid, "connected", "⏳ JARVIS saytni o'zi o'rganmoqda va ma'lumotni olmoqda (1–3 daqiqa) — sahifani keyinroq yangilang")
+
+        def work():
+            off = getattr(self.core, "office_live", None)
+            try:
+                if off:
+                    off.log("hisobchi", f"{c['name']}: saytni o'rganyapman (bo'limlar, jadvallar, API)…", "work")
+                d = self.discover(cid)
+                n = len(d.get("entities") or [])
+                mapped = [k for k, v in (d.get("mapping") or {}).items() if v.get("entity")]
+                if off:
+                    off.log("hisobchi", f"{c['name']}: {n} ta ma'lumot manbai topildi, {len(mapped)} tasi tushunildi", "done" if mapped else "warn")
+                if mapped:
+                    s = self.sync(cid, trigger="auto_learn")
+                    if off:
+                        off.log("hisobchi", f"{c['name']}: ma'lumot olindi — {json.dumps(s.get('counts') or {}, ensure_ascii=False)[:150]}", "done")
+            except Exception as e:                          # noqa: BLE001 — holat ulanish kartasida ko'rinadi
+                self.core.audit.error("integration", f"auto_learn #{cid}: {e}")
+                if off:
+                    off.log("hisobchi", f"{c['name']}: o'rganishda muammo — {str(e)[:150]}", "error")
+            finally:
+                self._learning.discard(cid)
+        threading.Thread(target=work, daemon=True, name=f"learn-{cid}").start()
+        return {"started": True, "note": "JARVIS saytni o'zi o'rganmoqda va ma'lumotni olmoqda (1–3 daqiqa)"}
 
     def disconnect(self, cid: int) -> dict:
         c = self.get(cid)
@@ -240,6 +292,7 @@ class IntegrationHub:
         d = self._call(cid, "discover", lambda: self.connector(c).discover())
         ents = d.get("entities", [])
         sugg = M.suggest(ents)
+        self._ai_map(ents, sugg)
         old = c["mapping"] or {}
         for k, v in sugg.items():                    # foydalanuvchi tasdiqlagan xaritalar saqlanadi
             if old.get(k, {}).get("status") == "confirmed":
@@ -250,7 +303,7 @@ class IntegrationHub:
                                   "confidence": sugg.get(e["name"], {}).get("confidence", 0), "unmapped": sugg.get(e["name"], {}).get("unmapped", [])}
                                  for e in ents],
                     "data_available": {k: any(v.get("entity") == k for v in sugg.values()) for k in M.MODEL},
-                    "relations": d.get("relations", []), "note": d.get("note", ""), "extra": {k: d[k] for k in ("known_business_apps", "local_ports") if k in d},
+                    "relations": d.get("relations", []), "note": d.get("note", ""), "extra": {k: d[k] for k in ("known_business_apps", "local_ports", "network") if k in d},
                     "learned_at": _now(), "mode": c["mode"],
                     "warning": "Noma'lum maydonlar to'ldirilmagan — 'unmapped' ro'yxatini tekshiring. Tahlilda faqat tasdiqlangan yoki ishonchli xaritalar ishlatiladi."}
         self.core.db.execute("UPDATE integrations SET modules=?, entities=?, mapping=?, learning=?, updated_at=? WHERE id=?",
@@ -266,6 +319,38 @@ class IntegrationHub:
                 self.core.audit.error("site_skills", f"Ko'nikma aniqlash: {e}")
         self.core.audit.log("integration", f"O'rganildi: {c['name']} — {len(ents)} obyekt, o'qiladigan {len(readable)}", target=f"conn#{cid}", risk="A")
         return self.get(cid) | {"discovery": {k: v for k, v in d.items() if k != "entities"}}
+
+    def _ai_map(self, ents: list[dict], sugg: dict):
+        """Lug'at bilan tushunilmagan obyektlarni AI'dan so'rash (faqat obyekt va maydon NOMLARI yuboriladi, qiymatlar emas)."""
+        unknown = [e for e in ents if not (sugg.get(e["name"]) or {}).get("entity") and e.get("fields")][:8]
+        ai = getattr(self.core, "ai", None)
+        if not unknown or not ai or not any(p["kind"] != "offline" and p["available"] for p in ai.status()):
+            return
+        spec = {k: list(v) for k, v in M.MODEL.items()}
+        q = ("POS/biznes tizimidan olingan ma'lumot manbalari (nomi va maydon nomlari). Har biri JARVIS modelidagi qaysi obyektga mos va "
+             f"maydonlari qaysi maydonga mos? Model: {json.dumps(spec, ensure_ascii=False)}\nManbalar: "
+             + json.dumps([{"name": e["name"], "fields": e["fields"][:40]} for e in unknown], ensure_ascii=False)
+             + '\nFaqat JSON qaytar: {"<manba nomi>": {"entity": "product|sale|customer|supplier|payment|movement|expense|null", '
+               '"fields": {"<manba maydoni>": "<model maydoni>"}}}. Ishonching komil bo\'lmasa — null.')
+        try:
+            r = ai.route([{"role": "user", "content": q}], purpose="analysis", private=False)
+            if (r.get("route") or {}).get("provider") == "offline":
+                return
+            import re as _re
+            m = _re.search(r"\{.*\}", r.get("text", ""), _re.S)
+            ans = json.loads(m.group(0)) if m else {}
+        except Exception:                                   # noqa: BLE001 — AI bo'lmasa lug'at natijasi qoladi
+            return
+        for e in unknown:
+            a = ans.get(e["name"]) if isinstance(ans, dict) else None
+            ent = (a or {}).get("entity")
+            if ent not in M.MODEL:
+                continue
+            fields = {f: t for f, t in ((a or {}).get("fields") or {}).items() if f in e["fields"] and t in M.MODEL[ent]}
+            if not fields:
+                continue
+            sugg[e["name"]] = {"entity": ent, "fields": fields, "unmapped": [f for f in e["fields"] if f not in fields],
+                               "confidence": 0.6, "status": "ai_suggested"}
 
     def confirm_mapping(self, cid: int, source_entity: str, entity: str | None, fields: dict) -> dict:
         c = self.get(cid)

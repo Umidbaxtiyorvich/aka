@@ -218,6 +218,9 @@ class OfficeLive:
     def _r_pos_refresh(self):
         c, out = self.core, []
         for x in c.integrations.list():
+            if x["status"] == "connected" and x["adapter"] == "website" and c.integrations.needs_learning(c.integrations.get(x["id"])):
+                out.append(f"{x['name']}: {c.integrations.auto_learn_start(x['id'])['note']}")   # o'zi qayta o'rganadi (kuniga bir marta)
+                continue
             if x["status"] == "connected" and x.get("entities") and x["system_type"] in ("pos", "erp", "shop", "website", "crm"):
                 try:
                     r = c.integrations.sync(x["id"], trigger="office")

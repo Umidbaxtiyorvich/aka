@@ -255,6 +255,10 @@ async function ccDetail(el, id, v) {
           <td>${Math.round((mp.confidence || 0) * 100)}%</td><td>${esc(mp.status || "—")}</td><td><button class="ghost" data-mc="${i}">Tasdiqlash</button></td></tr>
           ${Object.keys(mp.fields || {}).length || (mp.unmapped || []).length ? `<tr><td colspan="6" class="small muted">Maydonlar: ${esc(Object.entries(mp.fields || {}).map(([a, b]) => `${a}→${b}`).join(", "))}${(mp.unmapped || []).length ? ` · mos kelmadi: ${esc(mp.unmapped.join(", "))}` : ""}</td></tr>` : ""}`;
       }).join("")}</table><p class="small muted">Moslik taxminiy: tekshirib "Tasdiqlash"ni bosing. Tahlilda tasdiqlangan yoki ishonchi yuqori xaritalar ishlatiladi; noma'lum maydonlar to'ldirilmaydi.</p>` : ""}
+      ${((c.learning || {}).extra || {}).network ? `<details><summary class="small"><b>O'rganish hisoboti: sayt yuborgan so'rovlar (${c.learning.extra.network.length})</b></summary>
+        <table class="small"><tr><th>Usul</th><th>Server</th><th>Yo'l</th><th>Holat</th><th>Turi</th><th>Tuzilma</th><th>Ro'yxat</th></tr>${c.learning.extra.network.map((n) => `<tr>
+        <td>${esc(n.method)}</td><td>${esc(n.host)}</td><td style="word-break:break-all">${esc(n.path)}</td><td>${esc(n.status)}</td><td>${esc(n.type)}</td><td>${esc(n.shape || "")}</td>
+        <td>${n.rows ? `<b>${n.rows}</b>` : ""}</td></tr>`).join("")}</table><p class="small muted">Shu jadvalning rasmini yuborsangiz, nima uchun ma'lumot topilmaganini aniq aytish mumkin (parol yoki ma'lumot qiymatlari bu yerda ko'rsatilmaydi).</p></details>` : ""}
       <div id="mmsg"></div></div>
     <div class="card"><h3>Ma'lumotlar (sinxronlangan nusxa)</h3>
       <div class="row"><select id="rent"><option value="">hammasi</option>${[...new Set(ents.map((e) => e.name))].map((n) => `<option>${esc(n)}</option>`).join("")}</select><button class="ghost" id="rgo">Ko'rish</button></div><div id="rres" style="max-height:340px;overflow:auto"></div>
