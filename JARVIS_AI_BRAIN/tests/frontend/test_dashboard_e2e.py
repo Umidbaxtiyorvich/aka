@@ -384,7 +384,7 @@ def test_jarvis3_pages_guardian_simlab_skills(server, page, core):
     page.wait_for_selector("[data-skt=sozlar_soni]")
     page.click("[data-skt=sozlar_soni]")
     page.wait_for_selector("#skx_sozlar_soni:has-text('testlar o')")
-    page.goto(server + "#office")
+    page.goto(server + "#officerooms")
     page.wait_for_selector("[data-room=qa]")
     page.click("[data-room=qa]")
     page.wait_for_selector("#odet:has-text('xonasi')")
@@ -529,4 +529,21 @@ def test_agent_chat_shows_steps_and_approval_buttons(server, page, core, monkeyp
     assert sent == ["Bugungi hisobot tayyor"]
     page.goto(server + "#siteskills")
     page.wait_for_selector("text=Saytda amalni o'rgatish")
+    assert not page.errors, page.errors
+
+
+def test_office_live_and_selfdev_pages(server, page, core):
+    """Jonli ofis: 8 xodim stoli, jadval, lenta; "hozir" bajarish lentada ko'rinadi. Rivojlanish: g'oya qo'shish."""
+    page.goto(server + "#office")
+    page.wait_for_selector(".desk[data-role=dasturchi]")
+    assert page.locator(".desk").count() == 8
+    rid = core.db.one("SELECT id FROM office_routines WHERE action='morning_brief'")["id"]
+    page.click(f"[data-rrun='{rid}']")
+    page.wait_for_selector("#offeed .fi:has-text('Ertalabki hisobot')")
+    page.goto(server + "#selfdev")
+    page.wait_for_selector("#sdq")
+    page.fill("#sdq", "Excel fayldan grafik chizib bera oladigan bo'l")
+    page.click("#sdreq")
+    page.wait_for_selector("text=Excel fayldan grafik")
+    assert page.locator("[data-dev]").count() >= 1
     assert not page.errors, page.errors

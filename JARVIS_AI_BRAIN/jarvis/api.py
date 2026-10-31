@@ -42,6 +42,8 @@ from .documents import DocError
 from .computer_use import ComputerUseError
 from .site_actions import SiteSkillError
 from .site_tasks import SiteTaskError
+from .selfdev import SelfDevError
+from .office_live import OfficeError
 from .integrations.base import ConnectorError
 from .memory_import import MAX_UPLOAD as MI_MAX, ImportError_ as MIError
 from .voice_pro import VoiceProError
@@ -60,7 +62,7 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError, MissionError, AssetError, SimError, WorkspaceError, ToolError, SwarmError, SemanticError, DocError, ComputerUseError, ConnectorError, SiteSkillError, SiteTaskError)
+               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError, MissionError, AssetError, SimError, WorkspaceError, ToolError, SwarmError, SemanticError, DocError, ComputerUseError, ConnectorError, SiteSkillError, SiteTaskError, SelfDevError, OfficeError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
@@ -372,6 +374,26 @@ class TaskFinalIn(BaseModel):
 
 class TaskRunIn(BaseModel):
     params: dict = {}
+
+
+class OfficeAskIn(BaseModel):
+    role: str
+    text: str
+
+
+class RoutineIn(BaseModel):
+    role: str
+    title: str = ""
+    prompt: str = ""
+    schedule: str
+    enabled: bool = True
+    rid: int | None = None
+
+
+class IdeaIn(BaseModel):
+    description: str = ""
+    confirm: bool = False
+    note: str = ""
 
 
 class DoIn(BaseModel):
@@ -815,6 +837,61 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.post("/api/site-tasks/{tid}/propose")
     def st_propose(tid: int, body: TaskRunIn):
         return guard(C().site_tasks.propose, tid, body.params)
+
+    # Jonli ofis
+    @app.get("/api/office/live")
+    def office_live():
+        return C().office_live.overview()
+
+    @app.get("/api/office/feed")
+    def office_feed(after: int = 0):
+        return C().office_live.feed(60, after)
+
+    @app.post("/api/office/ask")
+    def office_ask(body: OfficeAskIn):
+        return guard(C().office_live.ask, body.role, body.text)
+
+    @app.post("/api/office/routines")
+    def office_routine_save(body: RoutineIn):
+        return guard(C().office_live.save_routine, body.role, body.title, body.prompt, body.schedule, body.rid, body.enabled)
+
+    @app.delete("/api/office/routines/{rid}")
+    def office_routine_del(rid: int):
+        return guard(C().office_live.delete_routine, rid)
+
+    @app.post("/api/office/routines/{rid}/run")
+    def office_routine_run(rid: int):
+        return guard(C().office_live.run_routine, rid)
+
+    # Self-Dev — o'zini rivojlantirish
+    @app.get("/api/selfdev")
+    def selfdev_get():
+        c = C()
+        return {"status": c.selfdev.status(), "ideas": c.selfdev.list()}
+
+    @app.post("/api/selfdev/collect")
+    def selfdev_collect():
+        return guard(C().selfdev.collect)
+
+    @app.post("/api/selfdev/request")
+    def selfdev_request(body: IdeaIn):
+        return guard(C().selfdev.request, body.description)
+
+    @app.post("/api/selfdev/{iid}/develop")
+    def selfdev_develop(iid: int):
+        return guard(C().selfdev.develop, iid)
+
+    @app.post("/api/selfdev/{iid}/accept")
+    def selfdev_accept(iid: int, body: IdeaIn):
+        return guard(C().selfdev.accept, iid, body.confirm)
+
+    @app.post("/api/selfdev/{iid}/reject")
+    def selfdev_reject(iid: int, body: IdeaIn):
+        return guard(C().selfdev.reject, iid, body.note)
+
+    @app.post("/api/selfdev/{iid}/rollback")
+    def selfdev_rollback(iid: int):
+        return guard(C().selfdev.rollback, iid)
 
     @app.post("/api/approvals/{aid}/run")
     def appr_run(aid: int):
@@ -2311,7 +2388,16 @@ def main():
     ap = argparse.ArgumentParser(description="JARVIS AI BRAIN serveri")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--wait-port", action="store_true", help="eski jarayon portni bo'shatishini kutish (o'zini yangilagandan keyin)")
     a = ap.parse_args()
+    if a.wait_port:
+        import socket
+        import time as _t
+        for _ in range(60):
+            with socket.socket() as sk:
+                if sk.connect_ex((a.host, a.port)) != 0:
+                    break
+            _t.sleep(0.5)
     if sys.stdout is None or sys.stderr is None:
         # pythonw.exe (oynasiz) ostida stdout/stderr yo'q — uvicorn yiqilmasligi va xatolar ko'rinishi uchun log faylga yo'naltiriladi
         from .config import jarvis_home
@@ -2329,6 +2415,7 @@ def main():
     app.state.core.pos_sync.start()           # POS hisobotlarini jadval bo'yicha o'qish (yoqilgan bo'lsa)
     app.state.core.missions.recover(resume=app.state.core.settings.mission_auto_resume)   # uzilgan missiyalar — checkpointdan
     core = app.state.core
+    core.port = a.port
     if core.settings.telegram_autostart and core.telegram.token():
         try:
             core.telegram.start()

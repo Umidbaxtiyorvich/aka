@@ -123,6 +123,9 @@ def register_tools(core):
            lambda a: c.instagram.draft_dm(a["account"], a["conversation_id"], a.get("reply", "")), agents=["user"], idempotent=False))
     R(Tool("instagram.request_dm", "Direct yuborish (tasdiq)", "Direct javobni yuborish uchun TASDIQ so'rovi", "D",
            {"draft_id": S("integer", True, "loyiha id")}, "tasdiq so'rovi", ig_dm, agents=["user"], idempotent=False, approval=True, rate_per_min=5))
+    R(Tool("selfdev.request", "O'zini rivojlantirish", "JARVIS'ga yangi imkoniyat qo'shish g'oyasi: dasturchi agent kod yozadi, sinaydi va foydalanuvchiga taqdim etadi "
+           "(asosiy kodga faqat foydalanuvchi 'Qabul qilish'idan keyin)", "B", {"description": S("string", True, "nima qila oladigan bo'lsin")}, "g'oya",
+           lambda a: c.selfdev.request(a["description"], source="chat"), agents=["user", "manager"], idempotent=False, rate_per_min=5))
     R(Tool("telegram.send", "Telegram xabar (tasdiq)", "Sizning Telegram'ingizga xabar yuborish — TASDIQ so'rovi", "D",
            {"text": S("string", True, "matn")}, "tasdiq so'rovi", tg_send, agents=["user"], idempotent=False, approval=True, rate_per_min=5))
 
@@ -164,21 +167,38 @@ class AgentLoop:
             return False
         return any(p["kind"] != "offline" and p["available"] for p in self.core.ai.status())
 
-    def _system(self) -> str:
+    def _system(self, role: str | None = None) -> str:
         c = self.core
+        allowed = None
+        persona = ""
+        if role:
+            from .office_live import STAFF
+            st = next((s for s in STAFF if s["key"] == role), None)
+            if st:
+                allowed = set(st["tools"]) if st["tools"] else None
+                persona = f"\nHozir sen ofisdagi «{st['name']}» xodimisan: {st['role']}. Faqat o'z vositalaringdan foydalan.\n"
         tools = "\n".join(f"- {t['id']} ({t['level']}{', TASDIQ' if t['approval'] else ''}): {t['description']}. args: "
                           + json.dumps({k: v["type"] + ("*" if v.get("required") else "") for k, v in t["inputs"].items()}, ensure_ascii=False)
-                          for t in c.tools.catalog("user"))
+                          for t in c.tools.catalog("user") if allowed is None or t["id"] in allowed)
         conns = "\n".join(f"- #{x['id']} {x['name']} ({x['system_type']}, {x['status']}, oxirgi sinxron: {x.get('last_sync') or 'yo`q'})"
                           for x in c.integrations.list()) or "- yo'q"
         tasks = "\n".join(f"- task_id={t['id']} «{t['name']}» ({t['conn_name']}): parametrlar " + ", ".join(f"{p['name']} ({p['label']}, misol: {p.get('example', '')})" for p in t["params"])
                           for t in c.site_tasks.ready()) or "- yo'q"
-        return SYSTEM.replace("{tools}", tools).replace("{conns}", conns).replace("{tasks}", tasks)
+        return (SYSTEM + persona).replace("{tools}", tools).replace("{conns}", conns).replace("{tasks}", tasks)
 
-    def run(self, text: str, allow_paid: bool = False) -> dict | None:
+    def run(self, text: str, allow_paid: bool = False, role: str | None = None) -> dict | None:
+        res = self._run(text, allow_paid, role)
+        if res is not None:
+            try:
+                self.core.selfdev.log_agent_run(text, res.get("text", ""), res.get("steps", []))
+            except Exception:                            # noqa: BLE001 — jurnal xatosi javobni buzmaydi
+                pass
+        return res
+
+    def _run(self, text: str, allow_paid: bool = False, role: str | None = None) -> dict | None:
         c = self.core
         hist = list(reversed(c.db.query("SELECT role, content FROM conversations ORDER BY id DESC LIMIT 9")))[:-1]
-        msgs = [{"role": "system", "content": self._system()}]
+        msgs = [{"role": "system", "content": self._system(role)}]
         msgs += [{"role": h["role"], "content": h["content"][:1500]} for h in hist[-8:] if h["role"] in ("user", "assistant")]
         msgs.append({"role": "user", "content": text})
         steps, approvals, seen, route = [], [], set(), None
@@ -193,6 +213,12 @@ class AgentLoop:
                 return {"text": answer, "steps": steps, "approvals": approvals, "intent": "agent", "route": route}
             tid, args = str(obj.get("tool", "")), obj.get("args") or {}
             key = tid + json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)
+            if role:
+                from .office_live import STAFF
+                st = next((s for s in STAFF if s["key"] == role), None)
+                if st and st["tools"] and tid not in st["tools"]:
+                    msgs.append({"role": "user", "content": f"'{tid}' sening vositang emas. Boshqasini tanla yoki javob ber."})
+                    continue
             if key in seen:
                 msgs.append({"role": "user", "content": "Bu chaqiruv allaqachon bajarildi. Endi yakuniy javob ber (answer)."})
                 continue
@@ -209,6 +235,9 @@ class AgentLoop:
             except Exception as e:                       # noqa: BLE001 — xato modelga ko'rsatiladi, u boshqa yo'l tanlaydi
                 step["status"], out = "error", {"xato": str(e)[:300]}
             step["result"] = _short(out, 600)
+            off = getattr(c, "office_live", None)
+            if off:
+                off.log_tool(tid, step["status"])
             steps.append(step)
             msgs.append({"role": "assistant", "content": json.dumps({"tool": tid, "args": args}, ensure_ascii=False, default=str)[:1500]})
             msgs.append({"role": "user", "content": f"Vosita natijasi ({tid}): {_short(out)}\nKeyingi qadam yoki yakuniy javob (faqat JSON)."})

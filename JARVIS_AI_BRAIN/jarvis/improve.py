@@ -22,6 +22,8 @@ from pathlib import Path
 
 from .config import PROJECT_ROOT
 
+ALWAYS_PROTECTED = {"jarvis/improve.py", "jarvis/selfdev.py", "jarvis/agent_loop.py", "jarvis/approval.py", "jarvis/policy.py",
+                    "jarvis/security.py", "jarvis/secrets.py", "jarvis/config.py", "jarvis/auth.py", "jarvis/permissions.py"}
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS proposals (
     id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, description TEXT, diff TEXT NOT NULL,
@@ -50,6 +52,10 @@ class Improver:
         self.core = core
         self.project = Path(project_root or PROJECT_ROOT).resolve()
         core.db.conn.executescript(SCHEMA)
+
+    def _protected(self) -> set[str]:
+        """Himoyalangan fayllar: sozlamadagilar + HAR DOIM himoyalangan (o'zini rivojlantirish va tasdiq zanjiri) — JARVIS o'zgartira olmaydi."""
+        return set(self.core.settings.protected_paths) | ALWAYS_PROTECTED
 
     def _git(self, *args, cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
         if not shutil.which("git"):
@@ -92,7 +98,7 @@ class Improver:
         paths = diff_paths(diff)
         if not paths:
             raise ImproveError("Diff'da fayl yo'llari topilmadi (unified diff kerak)")
-        protected = set(self.core.settings.protected_paths)
+        protected = self._protected()
         bad = sorted(p for p in paths if p in protected or p.startswith((".github/", "../")) or ".." in Path(p).parts)
         if bad:
             raise ImproveError(f"Himoyalangan fayllarni o'zgartirish taqiqlangan: {bad}")
@@ -119,7 +125,7 @@ class Improver:
             cand = {"pos": "pos.py", "bi": "bi.py", "telegram": "telegram_bot.py", "computer": "computer.py", "studio": "studio.py",
                     "ai_router": "router.py", "ai_engine": "ai_engine.py", "research": "research.py", "instagram": "instagram.py"}.get(mod, f"{mod}.py")
             file = f"jarvis/{cand}"
-        if file in self.core.settings.protected_paths:
+        if file in self._protected():
             raise ImproveError(f"{file} himoyalangan — AI uni o'zgartira olmaydi")
         fp = (self.project / file).resolve()
         if self.project not in fp.parents or not fp.exists():
@@ -160,7 +166,7 @@ class Improver:
             raise ImproveError("Funksiyani batafsilroq tasvirlang (kamida 10 belgi)")
         if self.core.ai.name == "offline":
             raise ImproveError("AI modeli ulanmagan — yangi funksiya uchun Ollama yoki boshqa model kerak")
-        protected = set(self.core.settings.protected_paths)
+        protected = self._protected()
         known = self._project_files()
         files = [f.strip() for f in (files or []) if f and f.strip()]
         if not files:
@@ -329,7 +335,7 @@ class Improver:
         extra = [c for c in changed if c not in expected]
         if extra:
             raise ImproveError(f"Branch'da taklifdan tashqari o'zgarishlar bor — merge rad etildi: {extra}")
-        protected = set(self.core.settings.protected_paths)
+        protected = self._protected()
         if any(c in protected for c in changed):
             raise ImproveError("Branch himoyalangan fayllarni o'zgartiradi — merge rad etildi")
         return {"proposal": prop["id"], "branch": prop["branch"], "branch_sha": tip, "base_sha": head,

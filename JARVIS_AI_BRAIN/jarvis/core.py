@@ -51,6 +51,8 @@ from .telephony import Telephony
 from .voice import Voice
 from .site_actions import SiteSkills
 from .site_tasks import SiteTasks
+from .selfdev import SelfDev
+from .office_live import OfficeLive
 from .agent_loop import AgentLoop, register_tools as register_agent_tools
 from .security import contains_secret, redact
 
@@ -151,6 +153,8 @@ class JarvisCore:
         self.tools = ToolRegistry(self)
         register_agent_tools(self)
         self.agent = AgentLoop(self)
+        self.selfdev = SelfDev(self)
+        self.office_live = OfficeLive(self)
         from .swarm import Swarm
         self.swarm = Swarm(self)
         from .semantic import SemanticMemory
@@ -180,6 +184,10 @@ class JarvisCore:
                     self.instagram.due_scheduled()
                 except Exception as e:  # jadval xatosi serverni to'xtatmasin
                     self.audit.error("scheduler", str(e))
+                try:
+                    self.office_live.tick()             # jonli ofis: xodimlarning ish jadvali + yangi versiya kuzatuvi
+                except Exception as e:
+                    self.audit.error("scheduler", f"office: {e}")
                 try:
                     self.health_watch()
                 except Exception as e:
@@ -318,6 +326,20 @@ class JarvisCore:
         if STOP_RX.match(text.strip()) or STATUS_RX.match(text.strip()):      # ovoz/chat: "jarvis to'xtat", "missiya holati"
             r = self.command.run(text, source="chat")
             return out | {"text": r["text"], "intent": f"command_{r['kind']}"}
+        sd = re.match(r"(?is)^\s*(?:jarvis[,\s]+)?(?:o'?zingni rivojlantir|o'?zingga qo'?sh|yangi imkoniyat qo'?sh|shuni o'?rgan)\s*[:\-]\s*(.+)$", text)
+        if sd:                                           # Self-Dev: dasturchi agent kod yozadi → sinaydi → sizga taqdim etadi
+            try:
+                idea = self.selfdev.request(sd.group(1), source="chat")
+                st = self.selfdev.status()
+                if st["ready"] and not st["busy"]:
+                    self.selfdev.develop(idea["id"])
+                    msg = ("👨‍💻 Qabul qildim. Dasturchi agent kod yozib, alohida nusxada sinayapti. Tayyor bo'lgach "
+                           "'Rivojlanish' bo'limida ko'rasiz va 'Qabul qilish' bilan tasdiqlaysiz — asosiy kod sizsiz o'zgarmaydi.")
+                else:
+                    msg = f"G'oya ro'yxatga yozildi (#{idea['id']}). Hozir ishlab chiqa olmayman: {st['note'] or 'dasturchi band'}."
+            except Exception as e:                       # noqa: BLE001
+                msg = f"Qabul qilinmadi: {e}"
+            return out | {"text": msg, "intent": "selfdev"}
         mm = re.match(r"(?is)^\s*(?:jarvis[,\s]+)?(?:missiya|mission)\s*[:\-]\s*(.+)$", text)
         if mm:                                           # Mission Engine: reja → (xavfsiz bo'lsa) avtomatik boshlash
             m = self.missions.create(mm.group(1), auto_start=True)

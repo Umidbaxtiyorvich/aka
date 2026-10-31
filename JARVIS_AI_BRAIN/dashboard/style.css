@@ -217,3 +217,14 @@ svg text{font-family:inherit}
 .tres-img { max-width: 100%; max-height: 320px; border-radius: 8px; border: 1px solid var(--line2); }
 .tkopt { display: block; padding: 8px 10px; margin: 6px 0; border: 1px solid var(--line2); border-radius: 8px; cursor: pointer; }
 .tkopt.muted { cursor: not-allowed; opacity: .65; }
+.office-floor { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 10px; }
+.desk { display: flex; gap: 10px; padding: 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); transition: box-shadow .3s, border-color .3s; }
+.desk-av { font-size: 30px; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; background: var(--panel2); flex: none; }
+.desk.working { border-color: #22c55e; box-shadow: 0 0 0 2px rgba(34,197,94,.25); }
+.desk.working .desk-av { animation: deskpulse 1.2s ease-in-out infinite; }
+.desk.waiting { border-color: #f59e0b; }
+@keyframes deskpulse { 50% { transform: scale(1.08); } }
+.offeed { max-height: 360px; overflow: auto; font-size: 13px; }
+.offeed .fi { padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.offeed .fi.error { color: #dc2626; } .offeed .fi.done { color: inherit; } .offeed .fi.approval { color: #b45309; }
+pre.diff { max-height: 320px; overflow: auto; font-size: 12px; }
