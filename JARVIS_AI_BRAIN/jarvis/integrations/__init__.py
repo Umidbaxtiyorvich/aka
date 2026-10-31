@@ -293,7 +293,11 @@ class IntegrationHub:
             raise IntegrationError("Rejim: incremental yoki full")
         targets = {k: v for k, v in (c["mapping"] or {}).items() if v.get("entity") and (v.get("status") == "confirmed" or v.get("confidence", 0) >= 0.5)}
         if not targets:
-            raise IntegrationError("Sinxronlash uchun xaritalangan obyekt yo'q — avval 'O'rganish' va xaritani tasdiqlang")
+            if not c["entities"]:
+                raise IntegrationError("Bu saytdan hali o'qiladigan ma'lumot topilmagan — avval 'O'rganish'ni bosing. Topilmasa: sayt sozlamalarida "
+                                       "'O'qiladigan sahifalar'ga tovarlar/savdolar sahifasi manzilini yozing.")
+            raise IntegrationError(f"{len(c['entities'])} ta ma'lumot manbai topildi, lekin qaysi biri tovar, savdo yoki mijoz ekanini aniqlab bo'lmadi — "
+                                   "'Batafsil' → maydonlar xaritasida belgilang.")
         run = self.core.db.execute("INSERT INTO sync_runs(conn_id, mode, started_at, status, trigger) VALUES (?,?,?,?,?)",
                                    (cid, mode, _now(), "running", trigger)).lastrowid
         self._status(cid, "syncing", f"{mode} sinxronlash")

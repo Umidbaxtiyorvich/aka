@@ -53,6 +53,41 @@ IMGS_JS = """() => [...document.images].filter(i => i.complete && i.naturalWidth
   .map(v => v.src || v.href)).filter(Boolean)"""
 PAYWALL_JS = """() => /(out of credits|not enough credits|insufficient credits|upgrade to (pro|premium|continue)|buy credits|subscribe to continue|kredit (tugadi|yetarli emas)|пополните баланс|недостаточно кредитов)/i
   .test(document.body ? document.body.innerText.slice(-6000) : '')"""
+NAV_JS = """() => [...document.querySelectorAll('nav a, nav button, aside a, aside button, [role=navigation] a, [role=menuitem], .menu a, .sidebar a, .sidebar button, '
+  + '[class*=sidebar] a, [class*=menu] a, [class*=nav] a, [class*=sidebar] li, [class*=menu] li')]
+  .filter(e => e.offsetParent !== null).map(e => (e.innerText || '').trim().split('\\n')[0]).filter(t => t && t.length < 40)
+  .filter((t, i, a) => a.indexOf(t) === i).slice(0, 40)"""
+SKIP_NAV = re.compile(r"(?i)log ?out|sign ?out|chiqish|выход|выйти|delete|o'?chir|удал|remove|tozala|очист|sotish|sell|касса|kassa|оплат|to'?lov|pay|"
+                      r"yangi|new|create|добав|создать|qo'?shish|add|import|export|eksport|sozlama|settings|настройк|profil|profile")
+
+
+def _json_rows(obj, depth: int = 0):
+    """JSON ichidan eng katta "obyektlar ro'yxati"ni topish (API javobi: {data: [...]}, {items: [...]}, [...])."""
+    best = obj if isinstance(obj, list) and obj and all(isinstance(x, dict) for x in obj[:20]) else None
+    if depth < 3:
+        kids = obj.values() if isinstance(obj, dict) else (obj[:3] if isinstance(obj, list) and best is None else [])
+        for v in kids:
+            r = _json_rows(v, depth + 1)
+            if r and (best is None or len(r) > len(best)):
+                best = r
+    return best
+
+
+def _flat(row: dict) -> dict:
+    out = {}
+    for k, v in row.items():
+        if isinstance(v, dict):
+            out.update({f"{k}.{k2}": v2 for k2, v2 in v.items() if not isinstance(v2, (dict, list))})
+        elif not isinstance(v, list):
+            out[k] = v
+    return out
+
+
+def _site(host: str) -> str:
+    parts = (host or "").lower().split(".")
+    return ".".join(parts[-3:] if len(parts) > 2 and parts[-2] in ("co", "com", "org", "net") else parts[-2:])
+
+
 MAGIC = {b"\x89PNG": ".png", b"\xff\xd8\xff": ".jpg", b"GIF8": ".gif", b"RIFF": ".webp", b"ID3": ".mp3", b"\xff\xfb": ".mp3", b"OggS": ".ogg"}
 
 
@@ -200,11 +235,34 @@ class WebsiteConnector(BaseConnector):
             b.close()
         return {"status": "connected", "note": "Sessiya shifrlangan holda saqlandi"}
 
+    def _api_ok(self, url: str) -> bool:
+        return _site(urlparse(url).hostname) == _site(urlparse(self.base()).hostname)
+
     def discover(self):
         maxp = max(1, min(int(self.cfg.get("max_pages") or 20), 60))
 
         def crawl(page):
             seen, queue, pages, modules = set(), [page.url], [], []
+            apis: dict = {}
+
+            def on_resp(resp):                          # SPA saytlar ma'lumotni API (JSON) orqali yuklaydi — shu javoblar o'qiladi
+                try:
+                    if resp.request.method != "GET" or "json" not in (resp.headers.get("content-type") or "") or not self._api_ok(resp.url):
+                        return
+                    rows = _json_rows(resp.json())
+                    if rows:
+                        key = urlparse(resp.url).path
+                        fields = sorted({k for r in rows[:20] for k in _flat(r)})
+                        if key not in apis or len(rows) > apis[key]["count"]:
+                            apis[key] = {"url": resp.url, "page": page.url, "fields": fields, "count": len(rows)}
+                except Exception:                           # noqa: BLE001 — bitta javob o'qilmasa ham davom etadi
+                    pass
+            page.on("response", on_resp)
+            try:
+                page.reload(wait_until="domcontentloaded", timeout=30000)
+                page.wait_for_load_state("networkidle", timeout=10000)
+            except Exception:
+                pass
             explicit = [u.strip() for u in (self.cfg.get("pages") or "").splitlines() if u.strip()]
             queue = explicit + queue
             while queue and len(pages) < maxp:
@@ -227,12 +285,45 @@ class WebsiteConnector(BaseConnector):
                 for href, _ in info["links"]:
                     if self._same_origin(href) and href.split("#")[0] not in seen:
                         queue.append(href)
-            return pages, modules
-        pages, modules = self._session(crawl)
+            # Menyu bo'limlarini bosib ko'rish (SPA: havolasiz menyular). Faqat navigatsiya — xavfli so'zli tugmalar bosilmaydi.
+            clicked = 0
+            for text in page.evaluate(NAV_JS) if pages else []:
+                if clicked >= maxp or SKIP_NAV.search(text):
+                    continue
+                try:
+                    if not self._same_origin(page.url):
+                        page.goto(self.base(), wait_until="domcontentloaded", timeout=30000)
+                    page.get_by_text(text, exact=True).first.click(timeout=5000)
+                    clicked += 1
+                    time.sleep(self.delay)
+                    try:
+                        page.wait_for_load_state("networkidle", timeout=8000)
+                    except Exception:
+                        pass
+                    if page.url.split("#")[0] not in seen and self._same_origin(page.url):
+                        seen.add(page.url.split("#")[0])
+                        info = page.evaluate(PAGE_JS)
+                        tables = page.evaluate(TABLES_JS, 3)
+                        pages.append({"url": page.url, "title": info["title"] or text, "tables": [{"columns": t[0], "sample_rows": len(t) - 1} for t in tables],
+                                      "forms": info["forms"], "prompts": info.get("prompts", []), "buttons": info.get("buttons", [])})
+                except Exception:                           # noqa: BLE001
+                    continue
+            return pages, modules, apis
+        pages, modules, apis = self._session(crawl)
         ents = [{"name": f"{p['title'] or p['url']} #{i + 1}" if len(p["tables"]) > 1 else (p["title"] or p["url"]), "source": p["url"],
                  "table_index": i, "fields": t["columns"], "readable": True} for p in pages for i, t in enumerate(p["tables"])]
+        names = {e["name"] for e in ents}
+        for path, a in apis.items():
+            seg = next((s for s in reversed(path.strip("/").split("/")) if s and not s.isdigit() and not re.fullmatch(r"v\d+|api|list|index", s)), path)
+            name = f"{seg} (API)"
+            while name in names:
+                name += "+"
+            names.add(name)
+            ents.append({"name": name, "source": "json:" + a["url"], "page": a["page"], "fields": a["fields"], "readable": True, "kind": "api", "rows_seen": a["count"]})
+        n_api = len(apis)
         return {"modules": sorted(set(m for m in modules if len(m) < 40))[:60], "entities": ents, "pages": pages,
-                "note": f"{len(pages)} sahifa o'rganildi, {len(ents)} jadval topildi (faqat o'qildi)"}
+                "note": f"{len(pages)} sahifa o'rganildi: {len(ents) - n_api} jadval va {n_api} ta API ma'lumot manbai topildi (faqat o'qildi)"
+                        + ("" if ents else " — o'qiladigan ma'lumot topilmadi. Kerakli bo'lim manzillarini sozlamalarda 'O'qiladigan sahifalar'ga yozing.")}
 
     def perform(self, skill: dict, prompt: str, out_dir, run_id: int, timeout_s: int = 180) -> dict:
         """Tasdiqlangan topshiriqni saytda bajarish: so'rovni yozish, tugmani bosish, yangi natijani olish (faqat shu domen)."""
@@ -331,9 +422,49 @@ class WebsiteConnector(BaseConnector):
             return {"outputs": files, "text": text[:8000], "screenshot": str(shot) if shot else None, "page": page.url}
         return self._session(act)
 
+    def _fetch_json(self, api: str, page_url: str, limit: int) -> dict:
+        if not self._api_ok(api) or not self._same_origin(page_url):
+            raise ConnectorError("Boshqa domen o'qilmaydi", "permission_denied")
+
+        def read(page):
+            got = {}
+
+            def on(resp):
+                try:
+                    if urlparse(resp.url).path == urlparse(api).path and "json" in (resp.headers.get("content-type") or ""):
+                        rows = _json_rows(resp.json())
+                        if rows is not None:
+                            got["rows"] = rows
+                except Exception:                           # noqa: BLE001
+                    pass
+            try:                                            # 1) to'g'ridan-to'g'ri (cookie sessiyasi bilan)
+                r = page.context.request.get(api, timeout=30000)
+                if r.ok and "json" in (r.headers.get("content-type") or ""):
+                    rows = _json_rows(r.json())
+                    if rows is not None:
+                        got["rows"] = rows
+            except Exception:                               # noqa: BLE001
+                pass
+            if "rows" not in got:                           # 2) sahifani ochib, sayt o'zi yuklagan javobni olish (token bilan ishlaydigan saytlar)
+                page.on("response", on)
+                page.goto(page_url, wait_until="domcontentloaded", timeout=45000)
+                try:
+                    page.wait_for_load_state("networkidle", timeout=15000)
+                except Exception:
+                    pass
+                if page.query_selector("input[type=password]"):
+                    raise ConnectorError("Sessiya tugagan — qayta kirish kerak", "auth_expired")
+            if "rows" not in got:
+                raise ConnectorError("Sayt bu ma'lumotni bermadi (API javobi kelmadi) — 'O'rganish'ni qayta bosing", "error")
+            return got["rows"]
+        rows = self._session(read)
+        return {"records": [_flat(r) for r in rows[:limit]], "next": None}
+
     def fetch_data(self, entity, *, since=None, cursor=None, limit=5000):
         ent = next((e for e in (self.conn.get("entities") or []) if e["name"] == entity), None)
         url = ent["source"] if ent else entity
+        if url.startswith("json:"):
+            return self._fetch_json(url[5:], (ent or {}).get("page") or self.base(), limit)
         if not url.startswith("http"):
             url = urljoin(self.base() + "/", url)
         if not self._same_origin(url):

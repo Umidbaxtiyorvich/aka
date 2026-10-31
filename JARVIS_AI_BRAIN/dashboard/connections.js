@@ -171,6 +171,11 @@ function openConnectModal(url, onDone) {
   (async () => {
     let r;
     try { r = await post("/api/integrations/probe-login", { url }); } catch (e) { body.innerHTML = `<p class="bad">${esc(e.message)}</p><p class="small muted">Havolani tekshiring (https:// bilan boshlanishi kerak).</p>`; return; }
+    if (r.service_link) {
+      body.innerHTML = `<p class="warn">ℹ ${esc(r.notes[0])}</p><div class="row"><a href="${r.service_link}" id="cmsvc"><button>→ ${esc(r.service)} bo'limini ochish</button></a></div>`;
+      m.querySelector("#cmsvc").onclick = () => m.remove();
+      return;
+    }
     const store = r.fields.filter((f) => f.store), cat = CC.catalog || (CC.catalog = await api("/api/integrations/catalog"));
     const needUser = r.captcha || r.otp || r.sso.length;
     body.innerHTML = `${step(`✅ Sayt ochildi: <b>${esc(r.domain)}</b>`)}

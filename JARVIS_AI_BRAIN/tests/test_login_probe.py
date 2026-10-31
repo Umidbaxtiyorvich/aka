@@ -74,3 +74,8 @@ def test_probe_api_and_save_with_detected_fields(client, core, monkeypatch):
     assert client.post("/api/integrations", json={"name": "x", "system_type": "pos", "adapter": "website", "config": {"base_url": "https://pos.uz"},
                                                   "secrets": {"bad key": "1"}}).status_code == 400
     assert client.post("/api/integrations/probe-login", json={"url": "ftp://x"}).status_code == 400
+
+
+def test_probe_redirects_official_services():
+    r = probe("https://www.instagram.com/accounts/login/", use_browser=False)   # tarmoqqa chiqmaydi
+    assert r["service_link"] == "#instagram" and not r["fields"] and "rasmiy API" in r["notes"][0]

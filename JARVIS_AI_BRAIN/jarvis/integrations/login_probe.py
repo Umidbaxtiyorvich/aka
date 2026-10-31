@@ -19,6 +19,9 @@ from .base import ConnectorError, check_url
 
 LOGIN_LINK = re.compile(r"(?i)\b(kirish|tizimga kirish|login|log in|sign in|signin|войти|вход|авторизац|kabinet|кабинет)\b")
 SSO = {"Google": r"(?i)google", "Telegram": r"(?i)telegram", "OneID": r"(?i)one\s?id|id\.egov", "Facebook": r"(?i)facebook", "Apple": r"(?i)apple id|sign in with apple"}
+SERVICES = {  # bu xizmatlar uchun rasmiy (API) bo'lim bor — sayt orqali avtomatik kirish bloklanadi yoki qoidaga zid
+    "instagram.com": ("#instagram", "Instagram"), "facebook.com": ("#instagram", "Facebook / Meta"), "t.me": ("#telegram", "Telegram"),
+    "telegram.org": ("#telegram", "Telegram"), "web.telegram.org": ("#telegram", "Telegram")}
 CAPTCHA = re.compile(r"(?i)g-recaptcha|recaptcha|hcaptcha|cf-turnstile|captcha")
 KINDS = [  # (tur, o'zbekcha nom, regex: name/id/placeholder/autocomplete/label)
     ("otp", "SMS / tasdiqlash kodi", r"otp|sms|one.?time|2fa|verification|tasdiqlash kod|код подтверж|confirm.?code|\bcode\b"),
@@ -146,6 +149,13 @@ def _browser_inputs(url: str) -> tuple[list[dict], dict, str]:
 
 def probe(url: str, use_browser: bool = True) -> dict:
     base = check_url(url, "Sayt manzili")
+    host = (urlparse(base).hostname or "").lower().removeprefix("www.")
+    svc = next((v for d, v in SERVICES.items() if host == d or host.endswith("." + d)), None)
+    if svc:
+        return {"url": base, "login_url": base, "method": "service", "fields": [], "guessed": False, "captcha": False, "otp": False, "sso": [],
+                "notes": [f"{svc[1]} sayt sifatida ulanmaydi: u avtomatik kirishni bloklaydi va akkauntni vaqtincha muzlatishi mumkin. "
+                          f"JARVIS'da {svc[1]} uchun rasmiy API orqali ishlaydigan alohida bo'lim bor."],
+                "domain": host, "service_link": svc[0], "service": svc[1], "summary": f"{svc[1]} — maxsus bo'lim orqali ulanadi"}
     notes, method = [], "static"
     try:
         st, html = net.request("GET", base, timeout=20, headers={"Accept": "text/html"})

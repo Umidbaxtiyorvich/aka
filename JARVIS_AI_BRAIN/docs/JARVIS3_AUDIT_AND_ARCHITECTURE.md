@@ -309,3 +309,13 @@ Halol cheklovlar: agent sifati ulangan modelga bog'liq — 8 GB RAM'dagi kichik 
 Hammasi favqulodda to'xtatish va avtonomlik darajasiga bo'ysunadi (Level 0 — faqat tizim nazorati). Jadvaldagi ishlar faqat o'qiydi yoki loyiha tayyorlaydi; nashr, xabar, kirim — tasdiq bilan.
 
 Halol cheklovlar: kod yozish sifati ulangan AI modeliga bog'liq (kichik mahalliy model oddiy tuzatishlarni, kuchli model — katta funksiyalarni yoza oladi); testdan o'tgan kod ham har doim to'g'ri bo'lavermaydi — shuning uchun qabul qilish sizda va kuzatuv/qaytarish bor. O'zini o'zi rivojlantirish uchun o'rnatish papkasi git repo bo'lishi kerak (o'rnatuvchi shunday o'rnatadi). Model o'zini qayta o'qitmaydi.
+
+## 16. v1.7.1 — zamonaviy (SPA) POS saytlaridan ma'lumot olish
+Muammo: cloudshop, YesPOS kabi saytlar ma'lumotni HTML jadvalda emas, orqa fonda API (JSON) orqali yuklaydi; menyulari havolasiz tugmalar.
+Natijada "1 sahifa, 0 jadval" va "Sinxronlash uchun xaritalangan obyekt yo'q" chiqardi.
+Tuzatish (`integrations/website.py`): o'rganishda sayt yuklagan JSON javoblar ushlanadi (shu sayt domeni, faqat GET), menyu bo'limlari
+bosib ko'riladi (chiqish/o'chirish/sotish/to'lov/yangi/sozlama kabi tugmalar bosilmaydi), har bir API ro'yxati obyekt bo'ladi
+("products (API)", "sales (API)") va avtomatik xaritalanadi. Sinxronlashda avval sessiya cookie bilan to'g'ridan-to'g'ri, bo'lmasa sahifani
+ochib sayt o'zi yuborgan (token bilan) javob olinadi. Xato xabarlari aniq: nima topildi va nima qilish kerak.
+Instagram/Facebook/Telegram havolasi sayt sifatida ulanmaydi — rasmiy API bo'limiga yo'naltiriladi (avtomatik kirish akkauntni muzlatishi mumkin).
+Cheklov: sahifalash (pagination) bo'lsa, hozircha sayt birinchi sahifada ko'rsatgan qism olinadi.
