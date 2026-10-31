@@ -41,7 +41,7 @@ class Vault:
 
     @staticmethod
     def _name(cid: int, field: str) -> str:
-        if field not in FIELDS:
+        if field not in FIELDS and not re.fullmatch(r"f_[a-z0-9_]{1,30}", field):      # f_* — saytdan aniqlangan kirish maydonlari
             raise VaultError(f"Ruxsat etilmagan maxfiy maydon: {field}")
         return f"conn{int(cid)}.{field}"
 

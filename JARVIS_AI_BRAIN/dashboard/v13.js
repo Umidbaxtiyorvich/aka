@@ -3,8 +3,8 @@
 
 async function renderSwarm(v) {
   const [d, agents] = await Promise.all([api("/api/swarm"), api("/api/agents")]);
-  v.innerHTML = `<div class="card"><h3>🐝 Agent Swarm</h3><p class="small muted">Agentlar bir-biriga faqat Tool Registry orqali topshiriq beradi. Topshiriq QABUL QILUVCHI agentning
-      ruxsati bilan bajariladi; yuboruvchi o'zi qila olmaydigan ishni boshqasiga topshira olmaydi. Supervisor har natijani tekshiradi.
+  v.innerHTML = `<div class="card"><h3>🐝 Agentlar jamoasi</h3><p class="small muted">Agentlar bir-biriga faqat vositalar ro'yxati orqali topshiriq beradi. Topshiriq QABUL QILUVCHI agentning
+      ruxsati bilan bajariladi; yuboruvchi o'zi qila olmaydigan ishni boshqasiga topshira olmaydi. Nazoratchi har natijani tekshiradi.
       Missiyada: "xotiradan qidir: …", "fayl qidir: …", "prognoz", "biznes savol: …", "matnni tekshir: …", "dry-run: …".</p>
     <div class="row"><select id="sfrom">${agents.map((a) => `<option ${a.key === "manager" ? "selected" : ""}>${esc(a.key)}</option>`).join("")}</select> →
       <select id="sto">${agents.map((a) => `<option>${esc(a.key)}</option>`).join("")}</select>
@@ -43,7 +43,7 @@ async function renderSemantic(v) {
 async function renderDocIntel(v) {
   const f = await api("/api/docs/formats");
   v.innerHTML = `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(380px,1fr))">
-    <div class="card"><h3>📄 File Intelligence</h3><p class="small muted">Asl fayl HECH QACHON o'zgarmaydi — tahrir va yangi fayllar <code>workspace/exports</code> da.
+    <div class="card"><h3>📄 Hujjatlar tahlili</h3><p class="small muted">Asl fayl HECH QACHON o'zgarmaydi — tahrir va yangi fayllar <code>workspace/exports</code> da.
         O'qiladi: ${esc(f.read.join(" "))}. OCR: ${f.ocr.available ? "tayyor" : esc(f.ocr.note)}</p>
       <p class="small warn">Qo'llab-quvvatlanmaydi: ${esc(f.not_supported.join(", "))}. ${esc(f.note)}</p>
       <div class="row"><input type="file" id="dfile"><button id="dup">Yuklash va o'qish</button></div>
@@ -81,7 +81,7 @@ async function renderDocIntel(v) {
 async function renderComputerUse(v) {
   const s = await api("/api/computer-use");
   v.innerHTML = `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(380px,1fr))">
-    <div class="card"><h3>🖱 Computer Control</h3><div class="kv"><span>Holat</span>${statusPill(s.available, "tayyor", "ishlamaydi")}</div>
+    <div class="card"><h3>🖱 Sichqoncha va klaviatura</h3><div class="kv"><span>Holat</span>${statusPill(s.available, "tayyor", "ishlamaydi")}</div>
       ${s.available ? `<div class="kv"><span>Ekran</span><b>${esc(s.screen.join("×"))}</b></div><div class="kv"><span>Faol oyna</span><b class="small">${esc(s.active_window)}</b></div>` : `<p class="small warn">${esc(s.note)}</p>`}
       <div class="kv"><span>UI Automation (pywinauto)</span>${statusPill(s.ui_automation, "bor", "yo'q")}</div>
       <ul class="small">${s.rules.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>

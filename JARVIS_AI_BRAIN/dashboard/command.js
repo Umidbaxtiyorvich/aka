@@ -23,6 +23,7 @@
     if (e.key === "Escape") { hide(); inp.blur(); return; }
     if (e.key !== "Enter") return;
     const text = inp.value.trim(); if (!text) return;
+    if (/^https?:\/\/\S+$/i.test(text)) { inp.value = ""; hide(); openConnectModal(text); return; }   // havola — sayt/POS ulash oynasi
     showHtml('<span class="muted small">bajarilmoqda…</span>');
     try {
       const r = await api("/api/command", { method: "POST", body: { text } });
@@ -31,6 +32,7 @@
       inp.value = "";
     } catch (er) { showHtml(`<span class="bad small">${esc(er.message)}</span>`); }
   });
+  inp.addEventListener("paste", () => setTimeout(() => { const t = inp.value.trim(); if (/^https?:\/\/\S+$/i.test(t)) { inp.value = ""; hide(); openConnectModal(t); } }, 50));
   document.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); inp.focus(); } });
   document.addEventListener("click", (e) => { if (!document.getElementById("cmdbar").contains(e.target)) hide(); });
   window.addEventListener("hashchange", hide);
@@ -39,7 +41,7 @@
 async function renderTools(v) {
   const [tools, calls] = await Promise.all([api("/api/tools"), api("/api/tools/calls?limit=40")]);
   const RC = { LOW: "ok", MEDIUM: "warn", HIGH: "bad", CRITICAL: "bad" };
-  v.innerHTML = `<div class="card"><h3>🧰 Tool Registry</h3><p class="small muted">JARVIS va agentlar ishlatadigan barcha vositalar: kirish sxemasi, xavf darajasi, kim chaqira oladi,
+  v.innerHTML = `<div class="card"><h3>🧰 Vositalar ro'yxati</h3><p class="small muted">JARVIS va agentlar ishlatadigan barcha vositalar: kirish sxemasi, xavf darajasi, kim chaqira oladi,
       timeout va qayta urinish. Ro'yxatda yo'q vosita chaqirilmaydi. Tashqi ta'sirli vositalar faqat tasdiq so'rovini yaratadi.</p>
     ${tools.map((t) => `<details class="card" style="margin:8px 0"><summary><b>${esc(t.name)}</b> <code class="small">${esc(t.id)}</code> <span class="pill ${RC[t.risk]}">${esc(t.risk)} (${esc(t.level)})</span>
       ${t.approval ? '<span class="pill warn">tasdiq orqali</span>' : ""}</summary>

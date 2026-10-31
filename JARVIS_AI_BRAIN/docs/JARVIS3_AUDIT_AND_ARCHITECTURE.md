@@ -265,3 +265,13 @@ Cheklov: agentlar hozircha o'z handlerlari orqali ishlaydi; Tool Registry orqali
 | Computer Use | `computer_use.py` | oynalar, skrinshot (+vision/OCR), UI Automation daraxti, sichqoncha/klaviatura ketma-ketligi — **har biri aniq tasdiq bilan**, maxfiy oynalar (parol/bank/login/CAPTCHA) bloklanadi, maxfiy matn yozilmaydi, xavfli tugmalar taqiqlangan, xato — darhol to'xtash, makrolar (qayta ijro — yangi tasdiq), jurnal | haqiqiy drayver (pyautogui/pywinauto) faqat Windows'da; bulutda faqat soxta drayver bilan sinalgan |
 
 O'rnatuvchi: ixtiyoriy "Kompyuterni boshqarish" (pyautogui, pygetwindow, pywinauto) va "OCR" (Tesseract, PATH o'zgartirilmaydi).
+
+## 12. v1.4.0 — to'liq o'zbekcha interfeys, tartiblangan bosh sahifa, havola orqali ulanish
+| O'zgarish | Fayl | Nima |
+|---|---|---|
+| Menyu guruhlari | `dashboard/app.js` | bo'limlar 7 guruhda (Asosiy, Miya va xotira, Agentlar va AI, Ulanishlar va biznes, Fayllar va media, Kompyuter, Tizim va xavfsizlik); bir xil ma'lumotni takrorlovchi bo'limlar menyudan olindi (havola orqali ochiladi) |
+| Bosh sahifa | `dashboard/app.js` | 6 ta asosiy ko'rsatkich (tizim, AI, faol topshiriqlar, tasdiq, AI xarajati, xotira) + "Nima qilish kerak" + "Oxirgi faollik"; xatolar kartasi faqat xato bo'lsa |
+| Havola → ulash oynasi | `integrations/login_probe.py`, `dashboard/connections.js`, `command.js` | havola kiritilsa/tashlansa (Ulanishlar yoki buyruq satri) oyna o'zi ochiladi; JARVIS saytni ochib (faqat o'qish) kirish sahifasini topadi va kerakli maydonlarni aniqlaydi: login, parol, email, telefon, tashkilot/do'kon ID, SMS kod; faqat shular so'raladi; qiymatlar shifrlangan omborda (`f_<maydon>`); so'ng kirib ko'riladi → ulansa o'zi o'rganadi (discover) va ma'lumot oladi (sync) |
+| O'zbekcha | `dashboard/*.js`, `core.py`, `mission.py`, `agents.py`, `swarm.py` | inglizcha sarlavha va xabarlar o'zbekchaga o'tkazildi |
+
+Halol cheklovlar: CAPTCHA, SMS/2FA va Google/Telegram/OneID orqali kirish chetlab o'tilmaydi — "Brauzerda kirish" oynasida foydalanuvchi o'zi bajaradi; SMS kod saqlanmaydi. JavaScript bilan chiziladigan saytlarda maydonlar brauzer agenti (Playwright) bo'lsa aniqlanadi, bo'lmasa "login + parol" taxmin qilinadi va shunday deb ko'rsatiladi. Real POS hisobi bilan sinalmagan — testlar shu kompyuterdagi sinov sayti va soxta (mock) sahifalar bilan.

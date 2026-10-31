@@ -36,7 +36,8 @@ class WebsiteConnector(BaseConnector):
               field("password", "Parol", "password", secret=True),
               field("pages", "O'qiladigan sahifalar (har qatorda bitta URL, ixtiyoriy)", "textarea"),
               field("username_selector", "Login maydoni selektori (ixtiyoriy)"), field("password_selector", "Parol maydoni selektori (ixtiyoriy)"),
-              field("max_pages", "Aniqlashda ko'pi bilan sahifalar", "number", default=20)]
+              field("max_pages", "Aniqlashda ko'pi bilan sahifalar", "number", default=20),
+              field("login_fields", "Kirish maydonlari (sayt tekshiruvidan avtomatik)", "json")]
     delay = 1.0                  # sahifalar orasidagi pauza (saytga yuk bermaslik uchun); testlarda 0
 
     def base(self):
@@ -73,6 +74,32 @@ class WebsiteConnector(BaseConnector):
             return "user_action_required:CAPTCHA"
         if not page.query_selector("input[type=password]"):
             return "connected"
+        lf = self.cfg.get("login_fields") or []
+        if lf:                                        # sayt tekshiruvi aniqlagan maydonlar (login, email, telefon, tashkilot ID ...)
+            if any(f.get("kind") == "otp" for f in lf):
+                return "user_action_required:MFA"
+            for f in lf:
+                if not f.get("store", True) or not f.get("selector"):
+                    continue
+                val = self.secret(f"f_{f['key']}")
+                if not val:
+                    raise ConnectorError(f"'{f.get('label', f['key'])}' kiritilmagan", "auth_failed")
+                if not page.query_selector(f["selector"]):
+                    raise ConnectorError(f"Saytda '{f.get('label')}' maydoni topilmadi (sayt o'zgargan bo'lishi mumkin) — 'Saytni qayta tekshirish'", "auth_failed")
+                page.fill(f["selector"], val)
+            psel = next((f["selector"] for f in lf if f.get("kind") == "password" and f.get("selector")), "input[type=password]")
+            btn = page.query_selector("button[type=submit], input[type=submit], form button")
+            (btn.click() if btn else page.press(psel, "Enter"))
+            try:
+                page.wait_for_load_state("networkidle", timeout=15000)
+            except Exception:
+                pass
+            page.wait_for_timeout(800)
+            if page.evaluate(CAPTCHA_JS):
+                return "user_action_required:CAPTCHA"
+            if page.evaluate(MFA_JS):
+                return "user_action_required:MFA"
+            return "auth_failed" if page.query_selector("input[type=password]") else "connected"
         user, pwd = self.secret("username"), self.secret("password")
         if not (user and pwd):
             raise ConnectorError("Login yoki parol kiritilmagan", "auth_failed")

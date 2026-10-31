@@ -9,7 +9,7 @@ const fmtSize = (b) => (b > 2 ** 30 ? `${(b / 2 ** 30).toFixed(1)} GB` : b > 2 *
 async function renderTwin(v) {
   const d = await api("/api/twin");
   const secs = d.profile.sections;
-  v.innerHTML = `<div class="card"><h3>🪞 Digital Twin</h3><p class="small muted">${esc(d.profile.note)} JARVIS bu profil asosida faqat TAKLIF beradi — sizning nomingizdan qaror qabul qilmaydi
+  v.innerHTML = `<div class="card"><h3>🪞 Raqamli egizak</h3><p class="small muted">${esc(d.profile.note)} JARVIS bu profil asosida faqat TAKLIF beradi — sizning nomingizdan qaror qabul qilmaydi
       va profil tashqi AI'ga avtomatik yuborilmaydi.</p>
     <h3>Takliflar</h3>${d.suggestions.length ? d.suggestions.map((s) => `<div class="kv"><span>${esc(s.text)}</span>${s.link ? `<a href="${s.link}">ochish</a>` : ""}</div>`).join("") : '<p class="muted">Hozircha taklif yo\'q.</p>'}</div>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr))">${Object.entries(secs).map(([k, s]) => `<div class="card"><h3>${esc(s.title)} (${s.items.length})</h3>
@@ -24,12 +24,12 @@ async function renderTwin(v) {
 async function renderGuardian(v) {
   const [g, p, set] = await Promise.all([api("/api/guardian"), api("/api/proactive"), api("/api/settings")]);
   v.innerHTML = `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr))">
-    <div class="card"><h3>🛡 Guardian <span class="pill ${GST[g.overall]}">${esc(g.overall)}</span></h3>
+    <div class="card"><h3>🛡 Tizim qo'riqchisi <span class="pill ${GST[g.overall]}">${esc(g.overall)}</span></h3>
       ${g.checks.map((c) => `<div class="kv"><span>${esc(c.title)}${c.note ? `<div class="small muted">${esc(c.note)}</div>` : ""}</span><span>
         <span class="pill ${GST[c.status]}">${esc(c.value)}</span>${c.action ? ` <button class="ghost" data-ga="${c.action}">${esc(g.actions[c.action].split(" (")[0])}</button>` : ""}</span></div>`).join("")}
       <div class="row" style="margin-top:10px"><button class="bad" data-ga="emergency_stop">⛔ Favqulodda to'xtatish</button><button class="ghost" data-ga="backup_now">Zaxira yaratish</button>
         <button class="ghost" id="gupd">🔄 JARVIS'ni yangilash</button></div>
-      <div id="gmsg"></div><details class="small"><summary>Guardian amallari tarixi</summary>${table(g.events, ["ts", "action", "auto", "result"])}</details></div>
+      <div id="gmsg"></div><details class="small"><summary>Qo'riqchi amallari tarixi</summary>${table(g.events, ["ts", "action", "auto", "result"])}</details></div>
     <div class="card"><h3>🎚 Avtonomlik darajasi</h3>
       ${LVL.map((t, i) => `<label class="small" style="display:block"><input type="radio" name="alvl" value="${i}" ${+set.autonomy_level === i ? "checked" : ""}> Level ${esc(t)}</label>`).join("")}
       <p class="small muted">Daraja barcha agent va ulanishlarga bir xil qo'llanadi. HIGH (tashqi xabar, POS yozuvi, pullik xizmat) va CRITICAL (to'lov, o'chirish)
@@ -55,7 +55,7 @@ async function renderGuardian(v) {
 async function renderAssets(v) {
   const [st, dup] = await Promise.all([api("/api/assets"), api("/api/assets/duplicates")]);
   v.innerHTML = `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr))">
-    <div class="card"><h3>🗂 Digital Asset Manager</h3><p class="small muted">Faqat ruxsat berilgan papkalar: ${esc(st.roots.join(", "))}. Maxfiy fayllar (.env, kalitlar) o'tkaziladi.
+    <div class="card"><h3>🗂 Fayllarni tartiblash</h3><p class="small muted">Faqat ruxsat berilgan papkalar: ${esc(st.roots.join(", "))}. Maxfiy fayllar (.env, kalitlar) o'tkaziladi.
       Hech narsa o'chirilmaydi yoki ko'chirilmaydi. Qidiruv hozircha nom va matn bo'yicha (semantik qidiruv — Memory Brain bosqichida).</p>
       <div class="kv"><span>Indekslangan fayllar</span><b>${st.total}</b></div>${st.categories.map((c) => `<div class="kv"><span>${esc(c.category)}</span><b>${c.n} · ${fmtSize(c.size)}</b></div>`).join("")}
       <div class="kv"><span>Oxirgi indeks</span><b class="small">${esc(st.state.last ? `${st.state.last.at} (+${st.state.last.new}, ~${st.state.last.updated}, -${st.state.last.removed})` : "hali yo'q")}</b></div>
@@ -77,7 +77,7 @@ async function renderAssets(v) {
 async function renderSimLab(v) {
   const [hist, conns] = await Promise.all([api("/api/simlab/history"), api("/api/integrations")]);
   const dbs = conns.filter((c) => c.adapter === "database"), writable = conns.filter((c) => c.mode !== "read_only");
-  v.innerHTML = `<div class="card"><h3>🧪 Simulation Lab</h3><p class="small muted">O'zgarish avval NUSXADA sinaladi: production'ga hech narsa yozilmaydi.
+  v.innerHTML = `<div class="card"><h3>🧪 Sinov laboratoriyasi</h3><p class="small muted">O'zgarish avval NUSXADA sinaladi: production'ga hech narsa yozilmaydi.
       Natija yaxshi bo'lsa ham, haqiqiy tatbiq uchun odatdagi tasdiq (va oldindan zaxira) kerak.</p></div>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(380px,1fr))">
     <div class="card"><h3>Baza o'zgarishi (SQL, nusxada)</h3><select id="stgt"><option value="jarvis">JARVIS bazasi (nusxa)</option>${dbs.map((c) => `<option value="conn:${c.id}">${esc(c.name)}</option>`).join("")}</select>
@@ -108,7 +108,7 @@ async function renderSimLab(v) {
 
 async function renderResearcher(v) {
   const fs = await api("/api/researcher/findings");
-  v.innerHTML = `<div class="card"><h3>🔎 Knowledge Researcher</h3><p class="small muted">Bir nechta manbani o'qiydi, solishtiradi (mustaqil domenlar, umumiy faktlar, xavfli matn belgilari),
+  v.innerHTML = `<div class="card"><h3>🔎 Manbalarni solishtirib o'rganish</h3><p class="small muted">Bir nechta manbani o'qiydi, solishtiradi (mustaqil domenlar, umumiy faktlar, xavfli matn belgilari),
       manba va sanani saqlaydi. Xulosa xotiraga faqat siz tasdiqlasangiz yoziladi. Internet Sozlamalarda yoqilgan bo'lishi kerak.</p>
     <div class="row"><input id="rq" placeholder="Savol"><button id="rgo">Tadqiq qilish</button></div><div id="rres"></div></div>
     <div class="card"><h3>Tasdiq kutayotgan xulosalar (${fs.length})</h3>${fs.map((f) => `<div class="kv"><span><b>${esc(f.query)}</b><div class="small">${esc(f.summary.slice(0, 300))}</div>
@@ -131,8 +131,8 @@ async function renderBusiness(v) {
   const [ov, fc] = await Promise.all([api("/api/business/overview"), api("/api/business/forecast")]);
   const f = fc.forecast, an = fc.anomalies, series = fc.daily.series.slice(-30);
   const max = Math.max(1, ...series.map((x) => x.amount), ...f.forecast.map((x) => x.amount));
-  v.innerHTML = `<div class="card"><h3>📊 Business Command Center</h3><p class="small muted">${esc(ov.mode_note)}</p>
-      <div class="kv"><span>Ulangan biznes manbalari</span><b>${ov.connections.length ? esc(ov.connections.map((c) => `${c.name} (${c.status})`).join(", ")) : "yo'q — Universal Connection Center'da ulang"}</b></div></div>
+  v.innerHTML = `<div class="card"><h3>📊 Biznes markazi</h3><p class="small muted">${esc(ov.mode_note)}</p>
+      <div class="kv"><span>Ulangan biznes manbalari</span><b>${ov.connections.length ? esc(ov.connections.map((c) => `${c.name} (${c.status})`).join(", ")) : "yo'q — Ulanishlar'da ulang"}</b></div></div>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">${Object.entries({ today: "Bugungi savdo", top: "Ko'p sotilgan", low_stock: "Qoldig'i kam", debts: "Qarzlar", stores: "Do'konlar" }).map(([k, t]) => {
       const a = ov.answers[k]; return `<div class="card"><h3>${t}</h3><p class="small" style="white-space:pre-wrap">${esc(a.text)}</p>${(a.sources || []).length ? `<div class="small muted">Manba: ${esc(a.sources.join(", "))}</div>` : ""}</div>`; }).join("")}</div>
     <div class="card"><h3>Savdo dinamikasi va prognoz</h3>${series.length ? `<div style="display:flex;align-items:flex-end;gap:2px;height:160px">
@@ -146,7 +146,7 @@ async function renderCreative(v) {
   const c = await api("/api/creative/capabilities");
   const S = { ready: ["ok", "tayyor"], missing: ["bad", "o'rnatilmagan"], not_configured: ["warn", "sozlanmagan"], not_connected: ["warn", "ulanmagan"],
     model_only: ["warn", "model bor, adapter yo'q"], browser_only: ["warn", "faqat brauzer"], not_implemented: ["bad", "hali yo'q"] };
-  v.innerHTML = `<div class="card"><h3>🎬 Creative Factory — haqiqiy imkoniyatlar</h3><p class="small muted">Har bir xizmatning hozirgi real holati. Ulanmagan yoki adapteri yo'q xizmat ishlaydigandek ko'rsatilmaydi.</p>
+  v.innerHTML = `<div class="card"><h3>🎨 Media imkoniyatlari — haqiqiy holat</h3><p class="small muted">Har bir xizmatning hozirgi real holati. Ulanmagan yoki adapteri yo'q xizmat ishlaydigandek ko'rsatilmaydi.</p>
     ${c.services.map((s) => `<div class="kv"><span>${esc(s.service)}${s.note ? `<div class="small muted">${esc(s.note)}</div>` : ""}</span><span><span class="pill ${S[s.status]?.[0] || ""}">${esc(S[s.status]?.[1] || s.status)}</span>
       ${s.where ? ` <a href="${s.where}">ochish</a>` : ""}</span></div>`).join("")}
     <h3 style="margin-top:12px">Media pipeline</h3><p class="small">${c.pipeline.map(esc).join(" → ")}</p></div>`;
@@ -154,7 +154,7 @@ async function renderCreative(v) {
 
 async function renderSkills(v) {
   const list = await api("/api/plugins");
-  v.innerHTML = `<div class="card"><h3>🧩 Skills Factory</h3><p class="small muted">Yangi skill: JARVIS qoralama yozadi (AI yoki shablon) → xavfsizlik tekshiruvi → sandbox testlari → siz tasdiqlaysiz → yoqiladi.
+  v.innerHTML = `<div class="card"><h3>🧩 Ko'nikmalar fabrikasi</h3><p class="small muted">Yangi skill: JARVIS qoralama yozadi (AI yoki shablon) → xavfsizlik tekshiruvi → sandbox testlari → siz tasdiqlaysiz → yoqiladi.
       Har yoqilgan versiya saqlanadi va rollback qilish mumkin. Skill JARVIS xavfsizlik kodini o'zgartira olmaydi.</p>
     <div class="row"><input id="skn" placeholder="nomi (masalan: excel_yordamchi)"><input id="skd" placeholder="nima qiladi?"></div>
     <div class="row"><label class="small"><input type="checkbox" id="skai"> AI kod yozsin (AI Router orqali)</label><button id="skgo">Qoralama yaratish</button></div><div id="skmsg"></div></div>
@@ -178,7 +178,7 @@ async function renderSkills(v) {
 
 async function renderDevices(v) {
   const d = await api("/api/devices");
-  v.innerHTML = `<div class="card"><h3>📱 Everywhere JARVIS — qurilmalar</h3><p class="small muted">${esc(d.note)}</p>
+  v.innerHTML = `<div class="card"><h3>📱 Qurilmalar — telefon va boshqa kompyuterlardan kirish</h3><p class="small muted">${esc(d.note)}</p>
     <div class="kv"><span>PIN himoyasi</span>${statusPill(d.auth_enabled, "yoqilgan", "o'chirilgan")}</div><div class="kv"><span>Ruxsat berilgan manzillar</span><b class="small">${esc(d.hosts.join(", "))}</b></div>
     <h3>Faol sessiyalar</h3>${d.sessions.length ? d.sessions.map((s) => `<div class="kv"><span>${esc(s.client)} ${s.local ? "(shu kompyuter)" : "(tarmoqdan)"}${s.current ? " — <b>siz</b>" : ""}
       <div class="small muted">kirgan: ${new Date((s.created || 0) * 1000).toLocaleString()} · tugaydi: ${new Date(s.expires * 1000).toLocaleString()}</div></span>

@@ -65,7 +65,7 @@ class AgentManager:
         A("business_analyst", "Business Analyst", "Savdo, foyda, qoldiq, qarz va do'konlarni manba bilan tahlil qiladi", ["analyst"], "A", self._h_analyst)
         A("database_expert", "Database Expert", "Ulangan bazalar sxemasi; faqat parametrli SELECT", ["database connector"], "A", self._h_db_expert)
         A("integration", "Integration Agent", "Tashqi tizimlar holati, sinxronlash; yozish faqat tasdiq bilan", ["integrations"], "D", self._h_integration)
-        A("swarm", "Swarm dispetcheri", "Main Brain topshirig'ini Tool Registry orqali mutaxassis agentga beradi; Supervisor tekshiradi", ["tool registry", "supervisor"], "B", self._h_swarm)
+        A("swarm", "Swarm dispetcheri", "Main Brain topshirig'ini vositalar ro'yxati orqali mutaxassis agentga beradi; Supervisor tekshiradi", ["tool registry", "supervisor"], "B", self._h_swarm)
         A("memory_agent", "Memory Agent", "Xotira, takrorlar va aloqalar (Connection Engine)", ["memory", "kgraph"], "B", self._h_memory)
 
     def _h_pos_expert(self, p):
@@ -86,7 +86,7 @@ class AgentManager:
     def _h_swarm(self, p):
         r = self.core.swarm.delegate("manager", p["to"], p["tool"], p.get("args") or {})
         if not r["supervisor"]["ok"]:
-            return {"error": f"Supervisor rad etdi: {r['supervisor']['note']}", "delegation": r}
+            return {"error": f"Nazoratchi rad etdi: {r['supervisor']['note']}", "delegation": r}
         return r
 
     def _add(self, key, title, role, tools, perm, handler, status="idle"):

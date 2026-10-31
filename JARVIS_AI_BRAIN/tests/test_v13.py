@@ -47,7 +47,7 @@ def test_mission_with_swarm_steps(core):
     assert all(s["verified"] == 1 for s in m["report"]["steps"])
     assert len(core.swarm.history()) == 2
     bad = core.missions.start(core.missions.create("xotiradan qidir: mutlaqoyoqsoz", use_ai=False)["id"], background=False)
-    assert bad["status"] == "failed" and "Supervisor" in (bad["report"]["steps"][0]["error"] or "")
+    assert bad["status"] == "failed" and "Nazoratchi" in (bad["report"]["steps"][0]["error"] or "")
 
 
 # ---------------- Semantik xotira ----------------

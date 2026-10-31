@@ -8,7 +8,7 @@ const GUIDES = {
     steps: [
       "Maqsadni yozing. Bosqichlarni \"keyin\" (ketma-ket) va \"hamda\" (parallel) bilan ajratish mumkin.",
       "JARVIS reja tuzadi va har bosqich xavfini ko'rsatadi: LOW — avtomatik, MEDIUM/HIGH/CRITICAL — tasdiq bilan.",
-      "Bajarish davomida har tugagan bosqich saqlanadi (checkpoint). Kompyuter o'chsa ham keyin shu joydan davom etadi.",
+      "Bajarish davomida har tugagan bosqich saqlanadi (saqlangan nuqta). Kompyuter o'chsa ham keyin shu joydan davom etadi.",
       "Oxirida hisobot: nima bajarildi, nima bajarilmadi, qaysi model ishlatildi, xarajat. Xulosalarni tasdiqlasangiz — JARVIS eslab qoladi.",
     ],
     note: "Maxsus agenti yo'q bosqichlar (masalan, sayt dizayni) hozircha faqat AI maslahati sifatida bajariladi — hisobotda shunday yoziladi.",
@@ -19,7 +19,7 @@ const GUIDES = {
       "Pastdagi katalogdan provayderni tanlang (OpenAI, Gemini, Claude, OpenRouter, Groq, DeepSeek, Ollama ...).",
       "Provayder saytidan API kalitni oling va formaga qo'ying — u Windows Credential Manager'ga yoziladi, ekranda qayta ko'rinmaydi.",
       "<b>Saqlash va tekshirish</b> — ulanish, kalit, modellar ro'yxati va (ruxsat bo'lsa) kichik test so'rovi bajariladi.",
-      "Pullik provayder ishlashi uchun <a href=\"#smartrouter\">Smart AI Router</a>da \"Pullik AI'ga ruxsat\" va kunlik/oylik limitni o'zingiz belgilang.",
+      "Pullik provayder ishlashi uchun <a href=\"#smartrouter\">AI tanlash va xarajat</a>da \"Pullik AI'ga ruxsat\" va kunlik/oylik limitni o'zingiz belgilang.",
     ],
     note: "Kalit borligi xizmat bepul yoki cheksiz degani emas. Maxfiy/shaxsiy savollar baribir faqat mahalliy modelga yuboriladi.",
   },

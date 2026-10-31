@@ -19,9 +19,11 @@ async function renderConnections(v) {
       <div><b>${list.length}</b> ta ulanish · <span class="pill ok">${count((c) => c.status === "connected")} ulangan</span>
         <span class="pill warn">${count((c) => ["user_action_required", "auth_expired", "new"].includes(c.status))} e'tibor kerak</span>
         <span class="pill bad">${count((c) => ["error", "auth_failed", "permission_denied"].includes(c.status))} xato</span></div>
+      <button id="ccquick">+ Sayt / POS ulash</button>
       <span class="muted small">🔒 Parollar shifrlangan vault'da. Ulanish faqat "Tekshirish" muvaffaqiyatli bo'lsa "ulangan" deb ko'rsatiladi.</span></div>
     <div class="tabs">${CC_TABS.map(([k, t]) => `<a data-t="${k}" class="${CC.tab === k ? "active" : ""}">${t}</a>`).join("")}</div></div>
     <div id="ccbody"></div><div id="ccdetail"></div>`;
+  $("#ccquick").onclick = () => { const u = prompt("Sayt yoki POS havolasini kiriting (https://...)"); if (u && u.trim()) openConnectModal(u.trim(), () => renderConnections(v)); };
   $(".tabs", v).onclick = (e) => { const a = e.target.closest("a"); if (a) { CC.tab = a.dataset.t; CC.sel = null; renderConnections(v); } };
   const body = $("#ccbody");
   if (CC.tab === "add") return ccAdd(body, v);
@@ -86,7 +88,13 @@ function ccCollect(root) {
 
 async function ccAdd(body, v) {
   const cat = CC.catalog;
-  body.innerHTML = `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr))">
+  body.innerHTML = `<div class="card"><h3>🌐 Sayt yoki POS'ni ulash (tavsiya etiladi)</h3>
+      <p class="small muted">1) Saytning havolasini kiriting → 2) JARVIS saytni ochib, kirish uchun nima kerakligini (login, parol, email, telefon, ID…) aniqlaydi →
+        3) faqat shu ma'lumotlarni so'raydi. Ma'lumotlar shifrlangan holda faqat shu kompyuterda saqlanadi.</p>
+      <div class="row"><input id="wurl" placeholder="https://app.yespos.uz yoki POS/ERP kabinet havolasi"><button id="wprobe">Saytni tekshirish</button></div>
+      <div id="wres"></div></div>
+    <details class="card"><summary><b>Boshqa ulanish turlari</b> <span class="small muted">— API, 1C (OData), ma'lumotlar bazasi, fayllar, MCP, kompyuter dasturlari</span></summary>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr));margin-top:10px">
     <div class="card"><h3>Yangi ulanish</h3>
       <label>Tizim (andoza)</label><select id="preset">${Object.entries(cat.presets).map(([k, p]) => `<option value="${k}">${esc(p.title)}</option>`).join("")}</select>
       <p id="pnote" class="small warn"></p>
@@ -105,7 +113,8 @@ async function ccAdd(body, v) {
         <li><b>REST / OData / GraphQL</b> — tizimda rasmiy API bo'lsa (eng ishonchli). Token tizim kabinetidan olinadi.</li>
         <li><b>Veb-sayt</b> — API yo'q bo'lsa: login qilib, hisobot jadvallarini o'qiydi (sekinroq, sayt o'zgarsa buzilishi mumkin).</li>
         <li><b>Ma'lumotlar bazasi</b> — administrator bergan <u>read-only</u> foydalanuvchi bilan (faqat SELECT).</li>
-        <li><b>Fayllar</b> — Excel/CSV eksport papkasi (eng oddiy va xavfsiz).</li><li><b>MCP</b> — MCP server manzili orqali vositalar.</li></ul></div></div>`;
+        <li><b>Fayllar</b> — Excel/CSV eksport papkasi (eng oddiy va xavfsiz).</li><li><b>MCP</b> — MCP server manzili orqali vositalar.</li></ul></div></div></details>`;
+  ccSiteWizard(v);
   const applyPreset = () => {
     const p = cat.presets[$("#preset").value];
     $("#pnote").textContent = p.note || ""; $("#ctype").value = p.system_type; $("#cadapter").value = p.adapter;
@@ -134,6 +143,92 @@ async function ccAdd(body, v) {
       CC.tab = "all"; CC.sel = c.id; later(() => renderConnections(v), 1200);
     } catch (e) { fail(m, e); }
   };
+}
+
+function ccSiteWizard(v) {
+  const inp = $("#wurl");
+  const go = () => { const u = inp.value.trim(); if (u) openConnectModal(u, () => renderConnections(v)); };
+  $("#wprobe").onclick = go;
+  inp.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+  inp.addEventListener("paste", () => setTimeout(() => { if (/^https?:\/\//i.test(inp.value.trim())) go(); }, 50));   // havola tashlandi — oyna o'zi ochiladi
+}
+
+// Sayt / POS ulash oynasi: havola → JARVIS saytni ochib kirish usulini aniqlaydi → faqat kerakli maydonlar → kirib ko'radi →
+// ulansa — o'zi o'rganadi (discover) va ma'lumotni oladi (sync). Parol va boshqa qiymatlar shifrlangan saqlanadi.
+function openConnectModal(url, onDone) {
+  let m = document.getElementById("cmodal");
+  if (m) m.remove();
+  m = document.createElement("div");
+  m.id = "cmodal";
+  m.innerHTML = `<div class="card cm-box"><div class="row" style="justify-content:space-between;margin:0"><h3 style="margin:0">🔌 Sayt / POS'ni ulash</h3>
+      <button class="ghost" id="cmx" title="Yopish">✕</button></div><div class="small muted" style="word-break:break-all">${esc(url)}</div><div id="cmbody"></div></div>`;
+  document.body.appendChild(m);
+  const body = m.querySelector("#cmbody"), close = () => { m.remove(); if (onDone) onDone(); };
+  m.querySelector("#cmx").onclick = close;
+  m.addEventListener("click", (e) => { if (e.target === m) close(); });
+  const step = (t) => `<div class="cm-step">${t}</div>`;
+  body.innerHTML = step("⏳ Sayt ochilmoqda va kirish usuli aniqlanmoqda…");
+  (async () => {
+    let r;
+    try { r = await post("/api/integrations/probe-login", { url }); } catch (e) { body.innerHTML = `<p class="bad">${esc(e.message)}</p><p class="small muted">Havolani tekshiring (https:// bilan boshlanishi kerak).</p>`; return; }
+    const store = r.fields.filter((f) => f.store), cat = CC.catalog || (CC.catalog = await api("/api/integrations/catalog"));
+    const needUser = r.captcha || r.otp || r.sso.length;
+    body.innerHTML = `${step(`✅ Sayt ochildi: <b>${esc(r.domain)}</b>`)}
+      ${step(`🔎 Kirish sahifasi: <span class="small">${esc(r.login_url)}</span>`)}
+      ${step(`📝 Kirish uchun kerak: <b>${esc(store.map((f) => f.label).join(", ") || "—")}</b>${r.guessed ? ' <span class="pill warn">taxmin</span>' : ""}`)}
+      ${r.notes.map((n) => `<p class="small warn">ℹ ${esc(n)}</p>`).join("")}
+      <div class="row"><div style="flex:1"><label>Nomi</label><input id="cmname" value="${esc(r.preset ? cat.presets[r.preset].title : r.domain)}"></div>
+        <div style="flex:1"><label>Turi</label><select id="cmtype"><option value="pos">POS</option><option value="erp">ERP</option><option value="crm">CRM</option>
+        <option value="shop">Internet-do'kon</option><option value="website">Boshqa sayt</option></select></div></div>
+      ${store.map((f) => `<label>${esc(f.label)} 🔒${f.hint ? ` <span class="muted small">(${esc(f.hint)})</span>` : ""}</label>
+        <input data-cf="${esc(f.key)}" type="${f.kind === "password" ? "password" : "text"}" autocomplete="off" placeholder="${esc(f.label)}">`).join("")}
+      <p class="small muted">🔒 Kiritgan ma'lumotlaringiz shifrlangan holda faqat shu kompyuterda saqlanadi, ekranda qayta ko'rsatilmaydi va hech qayerga yuborilmaydi (faqat shu saytga kirish uchun).</p>
+      <div class="row"><button id="cmgo">Kirish va ulash</button></div><div id="cmprog"></div>`;
+    $("#cmtype").value = r.preset && cat.presets[r.preset].system_type === "erp" ? "erp" : "pos";
+    const first = body.querySelector("[data-cf]");
+    if (first) first.focus();
+    body.querySelectorAll("[data-cf]").forEach((i) => i.addEventListener("keydown", (e) => { if (e.key === "Enter") $("#cmgo").click(); }));
+    $("#cmgo").onclick = async () => {
+      const prog = $("#cmprog"), secrets = {}, missing = [];
+      body.querySelectorAll("[data-cf]").forEach((i) => { if (i.value) secrets["f_" + i.dataset.cf] = i.value; else missing.push(i.placeholder); });
+      if (missing.length && !r.sso.length) return fail(prog, new Error("To'ldiring: " + missing.join(", ")));
+      $("#cmgo").disabled = true;
+      const say = (t) => { prog.insertAdjacentHTML("beforeend", step(t)); };
+      let c;
+      try {
+        c = await post("/api/integrations", { name: $("#cmname").value.trim() || r.domain, system_type: $("#cmtype").value, adapter: "website",
+          config: { base_url: r.url, login_url: r.login_url, login_fields: r.fields }, secrets });
+        body.querySelectorAll("[data-cf]").forEach((i) => { i.value = ""; });
+        say("💾 Saqlandi (shifrlangan).");
+        if (needUser) {
+          await post(`/api/integrations/${c.id}/login-window`);
+          say(`🧭 Brauzer oynasi ochildi — CAPTCHA / SMS kod / ${esc(r.sso.join(", ") || "tasdiq")} qadamini o'zingiz bajaring, so'ng oynani yoping va pastdagi tugmani bosing.`);
+          prog.insertAdjacentHTML("beforeend", '<div class="row"><button id="cmchk">Kirdim — tekshirish</button></div>');
+          $("#cmchk").onclick = () => finish(c.id);
+          return;
+        }
+        await finish(c.id);
+      } catch (e) { fail(prog, e); $("#cmgo").disabled = false; }
+    };
+    async function finish(cid) {
+      const prog = $("#cmprog"), say = (t) => { prog.insertAdjacentHTML("beforeend", step(t)); };
+      say("🔐 Saytga kirilmoqda…");
+      let t;
+      try { t = await post(`/api/integrations/${cid}/test`); } catch (e) { t = { status: "error", status_note: e.message }; }
+      if (t.status !== "connected") {
+        say(`${stPill(t.status)} ${esc(t.status_note || "")}`);
+        say(t.status === "auth_failed" ? "Login yoki parol noto'g'ri bo'lishi mumkin — Ulanishlar → Batafsil'da qayta kiriting." : "Holatni Ulanishlar bo'limida ko'rishingiz mumkin.");
+        return;
+      }
+      say(`${stPill("connected")} Ulandi!`);
+      say("📚 JARVIS saytni o'rganmoqda (bo'limlar va jadvallar)…");
+      try { const d = await post(`/api/integrations/${cid}/discover`); say(`✅ ${(d.entities || []).length} ta bo'lim/jadval topildi.`); } catch (e) { say(`<span class="warn">O'rganishda muammo: ${esc(e.message)}</span>`); }
+      say("⬇ Ma'lumotlar olinmoqda…");
+      try { const sy = await post(`/api/integrations/${cid}/sync`); say(`✅ Sinxronlash: ${esc(JSON.stringify(sy.counts || sy.result || sy).slice(0, 160))}`); } catch (e) { say(`<span class="warn">Sinxronlashda muammo: ${esc(e.message)}</span>`); }
+      say('🎉 Tayyor. Endi chatda so\'rang: <i>"Bugungi savdo qancha?"</i>');
+      CC.tab = "all"; CC.sel = cid;
+    }
+  })();
 }
 
 async function ccDetail(el, id, v) {
@@ -186,7 +281,7 @@ async function ccDetail(el, id, v) {
 }
 
 function ccCreds(body, list, v) {
-  body.innerHTML = `<div class="card"><h3>Kirish ma'lumotlari (Credential Vault)</h3>
+  body.innerHTML = `<div class="card"><h3>Kirish ma'lumotlari (shifrlangan saqlash)</h3>
     <p class="small muted">Qiymatlar hech qachon ko'rsatilmaydi va GitHub'ga, loglarga yoki AI'ga yuborilmaydi: faqat qaysi maydon kiritilgani. Saqlash joyi — Windows Credential Manager
       (yoki JARVIS_HOME/vault ichidagi shifrlangan fayl). Almashtirish uchun ulanishning "Batafsil" sahifasidan yangi qiymat kiriting.</p>
     ${table(list.map((c) => ({ id: c.id, ulanish: c.name, adapter: c.adapter, maydonlar: c.secrets.join(", ") || "—", holat: ST_LABEL[c.status] || c.status })), ["id", "ulanish", "adapter", "maydonlar", "holat"])}
@@ -203,7 +298,7 @@ async function renderSuperBrain(v) {
   const ids = st.models.map((m) => m.id);
   const pos = st.integrations.filter((c) => ["pos", "erp", "crm"].includes(c.type));
   v.innerHTML = `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr))">
-    <div class="card"><h3>🧠 Super Brain arxitekturasi</h3><ol class="small">${st.architecture.map((a) => `<li>${esc(a)}</li>`).join("")}</ol>
+    <div class="card"><h3>🧠 Miya tuzilishi</h3><ol class="small">${st.architecture.map((a) => `<li>${esc(a)}</li>`).join("")}</ol>
       <p class="small muted">${esc(st.note)}</p>
       <div class="kv"><span>Xotira yozuvlari</span><b>${st.memory.items}</b></div><div class="kv"><span>Knowledge Graph tugunlari</span><b>${st.memory.graph_nodes}</b></div>
       <div class="kv"><span>Oxirgi marshrut</span><b>${esc(st.last_route ? `${st.last_route.provider || st.last_route.chosen || ""} ${st.last_route.reason || ""}` : "—")}</b></div>
@@ -212,11 +307,11 @@ async function renderSuperBrain(v) {
       <div class="kv"><span>Pullik AI ruxsati</span>${statusPill(set.paid_ai_allowed, "yoqilgan", "o'chiq (faqat siz yoqasiz — Sozlamalar)")}</div>
       <h3 style="margin-top:12px">Model qo'shish</h3><div class="row">${Object.entries(pr.presets).filter(([, p]) => !ids.includes(p.id)).map(([k, p]) => `<button class="ghost" data-pp="${k}">${esc(k)} (${esc(p.model)})</button>`).join("") || '<span class="muted small">Barcha andozalar qo\'shilgan</span>'}</div>
       <div id="ppform"></div><div id="ppmsg"></div></div>
-    <div class="card"><h3>Vazifa → model (Model Router)</h3><p class="small muted">Har vazifa uchun afzal model. Maxfiy/shaxsiy ma'lumot bo'lsa baribir faqat mahalliy modelga ketadi.</p>
+    <div class="card"><h3>Vazifa → model</h3><p class="small muted">Har vazifa uchun afzal model. Maxfiy/shaxsiy ma'lumot bo'lsa baribir faqat mahalliy modelga ketadi.</p>
       ${Object.entries(pr.task_types).map(([k, t]) => `<div class="kv"><span>${esc(t)}</span><select data-tr="${k}" style="max-width:180px"><option value="">avtomatik</option>${ids.map((i) => `<option ${pr.routes[k] === i ? "selected" : ""}>${esc(i)}</option>`).join("")}</select></div>`).join("")}
       <div class="row" style="margin-top:8px"><button id="trsave">Saqlash</button></div><div id="trmsg"></div></div>
     <div class="card"><h3>POS / ERP ulanishlari</h3>${pos.length ? table(pos.map((c) => ({ nomi: c.name, "do'kon": c.store, holat: ST_LABEL[c.status] || c.status, sinxron: c.last_sync, yozuvlar: c.records })), ["nomi", "do'kon", "holat", "sinxron", "yozuvlar"]) : '<p class="muted">Hali POS ulanmagan.</p>'}
-      <a href="#connections">→ Universal Connection Center</a></div>
+      <a href="#connections">→ Ulanishlar</a></div>
     <div class="card"><h3>Biznes tahlilchisi (POS savollari)</h3><p class="small muted">Masalan: "Bugungi savdo qancha?", "Qaysi mahsulot ko'p sotildi?", "Qaysi do'konda savdo pasaydi?", "Qarzdorlar". Javob faqat sinxronlangan ma'lumotdan, manba bilan.</p>
       <div class="row"><input id="aq" placeholder="Savol"><button id="ago">So'rash</button></div><div id="ares"></div></div>
     <div class="card"><h3>Ovoz</h3>${voice ? `<div class="kv"><span>Javob ovozi</span><b>${esc(voice.selected.tts)}</b></div><div class="kv"><span>Nutqni tanish</span><b>${esc(voice.selected.stt)}</b></div>

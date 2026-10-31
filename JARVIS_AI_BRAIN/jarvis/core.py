@@ -314,9 +314,9 @@ class JarvisCore:
             if m["questions"]:
                 lines.append("Savollar: " + " ".join(m["questions"]))
             elif risky:
-                lines.append(f"{len(risky)} ta bosqich tasdiq talab qiladi — Mission Control'da rejani ko'rib «Boshlash»ni bosing.")
+                lines.append(f"{len(risky)} ta bosqich tasdiq talab qiladi — Topshiriqlar bo'limida rejani ko'rib «Boshlash»ni bosing.")
             else:
-                lines.append("Barcha bosqichlar xavfsiz (LOW) — avtomatik boshlandi. Holat: Mission Control.")
+                lines.append("Barcha bosqichlar xavfsiz (LOW) — avtomatik boshlandi. Holat: Topshiriqlar bo'limida.")
             return out | {"text": "\n".join(lines), "mission_id": m["id"], "intent": "mission"}
         if intent not in ("memory_save", "memory_query"):
             brain = self.brain_core.think(text)          # POS / biznes / ulanishlar savollari — Brain Core (manba bilan)

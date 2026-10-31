@@ -565,7 +565,7 @@ async function renderBrainHub(v, mode, preset) {
   let gTimer = null; const graphRefreshSoon = () => { clearTimeout(gTimer); gTimer = setTimeout(() => loadGraph(true), 2500); };
   function graphSide() {
     const f = BrainState.filters; side.scrollTop = 0;
-    side.innerHTML = `<h3>Graph Explorer</h3><div class="row"><input id="gq" placeholder="Global qidiruv…" value="${esc(f.q)}"><button id="gsearch">🔍</button></div>
+    side.innerHTML = `<h3>Bilimlar grafi</h3><div class="row"><input id="gq" placeholder="Global qidiruv…" value="${esc(f.q)}"><button id="gsearch">🔍</button></div>
       <div class="cats">${Object.entries(CAT_STYLE).map(([k, [c, ic]]) => `<label class="cat"><input type="checkbox" data-cat="${k}" ${!f.categories.length || f.categories.includes(k) ? "checked" : ""}><i style="background:${c}"></i>${ic} ${esc(k)}</label>`).join("")}</div>
       <div class="row small"><button class="ghost small" id="call">hammasi</button><button class="ghost small" id="cnone">hech biri</button></div>
       <label class="small">Sana: dan</label><input id="gsince" type="date" value="${esc(f.since)}"><label class="small">gacha</label><input id="guntil" type="date" value="${esc(f.until)}">

@@ -40,6 +40,7 @@ from .swarm import SwarmError
 from .semantic import SemanticError
 from .documents import DocError
 from .computer_use import ComputerUseError
+from .integrations.base import ConnectorError
 from .memory_import import MAX_UPLOAD as MI_MAX, ImportError_ as MIError
 from .voice_pro import VoiceProError
 from .kgraph import KGError
@@ -57,7 +58,7 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError, MissionError, AssetError, SimError, WorkspaceError, ToolError, SwarmError, SemanticError, DocError, ComputerUseError)
+               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError, MissionError, AssetError, SimError, WorkspaceError, ToolError, SwarmError, SemanticError, DocError, ComputerUseError, ConnectorError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
@@ -611,6 +612,7 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
                 "ai": {"provider": c.ai.name, "model": getattr(c.ai, "model", None), "available": ok, "note": note},
                 "agents": [a.public() for a in c.agents.agents.values()],
                 "pending_approvals": len(c.approvals.list("pending")),
+                "memory_count": c.db.one("SELECT COUNT(*) n FROM memories")["n"],
                 "recent_errors": c.audit.recent_errors(5), "recent_actions": c.audit.recent(8),
                 "current_tasks": [t for t in c.agents.tasks(20) if t["status"] in ("queued", "running")],
                 "integrations": {
@@ -715,6 +717,10 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
     @app.post("/api/integrations/detect")
     def integ_detect(body: DetectIn):
         return C().integrations.detect(url=body.url, host=body.host, port=body.port)
+
+    @app.post("/api/integrations/probe-login")
+    def integ_probe_login(body: DetectIn):
+        return guard(C().integrations.probe_login, body.url)
 
     @app.get("/api/integrations/health")
     def integ_health():

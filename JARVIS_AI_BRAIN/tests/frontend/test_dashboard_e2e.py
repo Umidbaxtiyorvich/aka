@@ -110,7 +110,7 @@ def test_login_flow(server, page, core):
     page.fill("#pin2", "jarvis-2026-uz")
     page.click("#pinok")
     page.wait_for_selector("#login", state="detached")
-    page.wait_for_selector("text=AI HOLATI")
+    page.wait_for_selector(".tile >> text=Tizim holati")
     page.wait_for_selector("#logout")
     page.click("#logout")
     page.wait_for_selector("#login")
@@ -260,6 +260,8 @@ def test_connection_center_and_super_brain(server, page, core, tmp_path):
     (ws / "savdo.csv").write_text(f"Sana;Mahsulot;Soni;Summa;Do'kon\n{today};Non;2;6000;Chilonzor\n", encoding="utf-8")
     page.goto(server + "#connections")
     page.click(".tabs a[data-t=add]")
+    page.wait_for_selector("#wurl")                                         # birinchi navbatda: sayt havolasi
+    page.click("summary:has-text('Boshqa ulanish turlari')")
     page.wait_for_selector("#preset")
     page.select_option("#preset", "files")
     page.fill("#cname", "POS eksport")
@@ -280,7 +282,7 @@ def test_connection_center_and_super_brain(server, page, core, tmp_path):
     page.click("#rgo")
     page.wait_for_selector("#rres td:has-text('Non')")
     page.click(".tabs a[data-t=credentials]")
-    page.wait_for_selector("text=Credential Vault")
+    page.wait_for_selector("text=shifrlangan saqlash")
     page.click(".tabs a[data-t=history]")
     page.wait_for_selector("text=Sinxronlash tarixi")
     page.goto(server + "#superbrain")
@@ -444,3 +446,40 @@ def test_v13_pages_docs_swarm_computer(server, page, core, tmp_path):
     page.goto(server + "#semantic")
     page.wait_for_selector("text=Semantik xotira")
     assert not page.errors, page.errors
+
+
+def test_site_link_opens_connect_modal_with_detected_fields(server, page):
+    """Havola tashlanadi → oyna o'zi ochiladi → JARVIS saytdan kirish maydonlarini aniqlaydi (bu yerda shu kompyuterdagi sinov sayti)."""
+    import http.server
+    pages = {"/": '<html><body><a href="/kirish">Tizimga kirish</a></body></html>',
+             "/kirish": '<form><label for="org">Do\'kon ID</label><input id="org" name="shop_id"><input name="username" placeholder="Login">'
+                        '<input type="password" name="pw"><button>Kirish</button></form>'}
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            b = pages.get(self.path, "yo'q").encode()
+            self.send_response(200 if self.path in pages else 404)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b)
+
+        def log_message(self, *a): pass
+
+    site = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=site.serve_forever, daemon=True).start()
+    try:
+        page.goto(server + "#connections")
+        page.click(".tabs a[data-t=add]")
+        page.fill("#wurl", f"http://127.0.0.1:{site.server_port}")
+        page.click("#wprobe")
+        page.wait_for_selector("#cmodal [data-cf]")
+        txt = page.text_content("#cmodal")
+        assert "Kirish sahifasi" in txt and "/kirish" in txt
+        assert [page.get_attribute(e, "data-cf") for e in ["#cmodal [data-cf] >> nth=0", "#cmodal [data-cf] >> nth=1", "#cmodal [data-cf] >> nth=2"]] == ["company", "login", "password"]
+        assert page.get_attribute("#cmodal [data-cf=password]", "type") == "password"
+        page.click("#cmgo")                                                  # bo'sh — saqlanmaydi, nima kerakligi aytiladi
+        page.wait_for_selector("#cmprog:has-text('To\\'ldiring')")
+        page.click("#cmx")
+        page.wait_for_selector("#cmodal", state="detached")
+    finally:
+        site.shutdown()

@@ -48,74 +48,78 @@ async function logout() {
   location.reload();
 }
 
+// [id, menyu nomi, chizuvchi, guruh]. Guruh "" — menyuda ko'rinmaydi (takroriy/eski ko'rinish), lekin havola orqali ochiladi.
 const SECTIONS = [
-  ["dashboard", "Brain Dashboard", renderDashboard],
-  ["brain", "🧠 3D Brain Mode", (v) => renderBrainHub(v, "brain")],
-  ["graph", "🌐 Graph Explorer Mode", (v) => renderBrainHub(v, "graph")],
-  ["memx", "Memory Explorer", renderMemoryExplorer],
-  ["semantic", "🧠 Semantik xotira", renderSemantic],
-  ["neural", "Neural Activity", renderNeural],
-  ["agentmap", "Agent Connections", (v) => renderBrainHub(v, "graph", ["agents", "tasks", "skills", "apis"])],
-  ["projmap", "Projects Map", (v) => renderBrainHub(v, "graph", ["projects", "memories", "files", "decisions", "tasks"])],
-  ["mission", "🎯 Mission Control", renderMissionControl],
-  ["agentcmd", "🤝 Agent Command", renderAgentCommand],
-  ["tools", "🧰 Tool Registry", renderTools],
-  ["swarm", "🐝 Agent Swarm", renderSwarm],
-  ["guardian", "🛡 Guardian va Avtonomlik", renderGuardian],
-  ["twin", "🪞 Digital Twin", renderTwin],
-  ["superbrain", "⚡ Super Brain Control", renderSuperBrain],
-  ["aihub", "🤖 AI Provider Center", renderProviderCenter],
-  ["smartrouter", "🚦 Smart AI Router", renderSmartRouter],
-  ["models", "📚 Model Catalog", renderModelCatalog],
-  ["memimport", "📥 Memory Import Center", renderMemoryImport],
-  ["connections", "🔌 Universal Connection Center", renderConnections],
-  ["chat", "AI Chat", renderChat],
-  ["voice", "Voice", renderVoice],
-  ["memory", "Memory", renderMemory],
-  ["knowledge", "Bilim manbalari", renderKnowledge],
-  ["decisions", "Qarorlar jurnali", renderDecisions],
-  ["kg", "Knowledge Graph", renderKG],
-  ["agents", "Agentlar", renderAgents],
-  ["office", "Virtual AI Office", renderOffice],
-  ["dag", "Vazifalar grafi", renderDag],
-  ["router", "AI Router va xarajat", renderRouter],
-  ["files", "Fayllar", renderFiles],
-  ["docintel", "📄 File Intelligence", renderDocIntel],
-  ["assets", "🗂 Asset Manager", renderAssets],
-  ["simlab", "🧪 Simulation Lab", renderSimLab],
-  ["researcher", "🔎 Knowledge Researcher", renderResearcher],
-  ["creative", "🎬 Creative Factory", renderCreative],
-  ["computer", "Kompyuter boshqaruvi", renderComputer],
-  ["computeruse", "🖱 Computer Control", renderComputerUse],
-  ["research", "Internet tadqiqoti", renderResearch],
-  ["browser", "Brauzer agenti", renderBrowser],
-  ["studio", "Rasm va video", renderStudio],
-  ["instagram", "Instagram", renderInstagram],
-  ["telegram", "Telegram", renderTelegram],
-  ["business", "📊 Business Command Center", renderBusiness],
-  ["bi", "Business Intelligence", renderBI],
-  ["pos", "POS ulanishi", renderPOS],
-  ["docs", "Hujjatlar", renderDocs],
-  ["approvals", "Tasdiqlashlar", renderApprovals],
-  ["notifications", "Bildirishnomalar", renderNotifications],
-  ["audit", "Audit jurnali", renderAudit],
-  ["errors", "Xatolar", renderErrors],
-  ["tests", "Testlar va yaxshilash", renderTests],
-  ["diagnostics", "System Health (Diagnostika)", renderDiagnostics],
-  ["sandbox", "Sandbox", renderSandbox],
-  ["skills", "🧩 Skills Factory", renderSkills],
-  ["plugins", "Kengaytmalar", renderPlugins],
-  ["devices", "📱 Qurilmalar (Everywhere)", renderDevices],
-  ["backups", "Zaxira nusxalar", renderBackups],
-  ["security", "Xavfsizlik", renderSecurity],
-  ["policy", "Siyosat (Policy)", renderPolicy],
-  ["settings", "Sozlamalar", renderSettings],
+  ["dashboard", "🏠 Bosh sahifa", renderDashboard, "Asosiy"],
+  ["chat", "💬 Suhbat", renderChat, "Asosiy"],
+  ["voice", "🎙 Ovozli suhbat", renderVoice, "Asosiy"],
+  ["mission", "🎯 Topshiriqlar", renderMissionControl, "Asosiy"],
+  ["approvals", "✅ Tasdiqlashlar", renderApprovals, "Asosiy"],
+  ["notifications", "🔔 Bildirishnomalar", renderNotifications, "Asosiy"],
+  ["brain", "🧠 3D miya", (v) => renderBrainHub(v, "brain"), "Miya va xotira"],
+  ["graph", "🌐 Bilimlar grafi", (v) => renderBrainHub(v, "graph"), "Miya va xotira"],
+  ["memx", "🗃 Xotira", renderMemoryExplorer, "Miya va xotira"],
+  ["semantic", "🔍 Ma'no bo'yicha qidiruv", renderSemantic, "Miya va xotira"],
+  ["memimport", "📥 ChatGPT xotirasini ko'chirish", renderMemoryImport, "Miya va xotira"],
+  ["knowledge", "📚 Bilim manbalari", renderKnowledge, "Miya va xotira"],
+  ["decisions", "⚖ Qarorlar jurnali", renderDecisions, "Miya va xotira"],
+  ["twin", "🪞 Raqamli egizak", renderTwin, "Miya va xotira"],
+  ["neural", "⚡ Jonli faollik", renderNeural, "Miya va xotira"],
+  ["office", "🏢 Agentlar ofisi", renderOffice, "Agentlar va AI"],
+  ["swarm", "🐝 Agentlar jamoasi", renderSwarm, "Agentlar va AI"],
+  ["tools", "🧰 Vositalar", renderTools, "Agentlar va AI"],
+  ["aihub", "🤖 AI provayderlar", renderProviderCenter, "Agentlar va AI"],
+  ["smartrouter", "🚦 AI tanlash va xarajat", renderSmartRouter, "Agentlar va AI"],
+  ["models", "📖 AI modellar", renderModelCatalog, "Agentlar va AI"],
+  ["connections", "🔌 Ulanishlar (sayt, POS, API)", renderConnections, "Ulanishlar va biznes"],
+  ["business", "📊 Biznes markazi", renderBusiness, "Ulanishlar va biznes"],
+  ["bi", "📈 Excel/CSV hisobotlar", renderBI, "Ulanishlar va biznes"],
+  ["pos", "🧾 POS hujjatlari", renderPOS, "Ulanishlar va biznes"],
+  ["telegram", "✈ Telegram", renderTelegram, "Ulanishlar va biznes"],
+  ["instagram", "📷 Instagram", renderInstagram, "Ulanishlar va biznes"],
+  ["files", "📁 Fayllar", renderFiles, "Fayllar va media"],
+  ["docintel", "📄 Hujjatlar tahlili", renderDocIntel, "Fayllar va media"],
+  ["assets", "🗂 Fayllarni tartiblash", renderAssets, "Fayllar va media"],
+  ["studio", "🎬 Rasm va video", renderStudio, "Fayllar va media"],
+  ["creative", "🎨 Media imkoniyatlari", renderCreative, "Fayllar va media"],
+  ["research", "🌍 Internetdan qidirish", renderResearch, "Fayllar va media"],
+  ["researcher", "🔎 Manbalarni solishtirish", renderResearcher, "Fayllar va media"],
+  ["browser", "🧭 Brauzer agenti", renderBrowser, "Fayllar va media"],
+  ["computeruse", "🖱 Sichqoncha va klaviatura", renderComputerUse, "Kompyuter"],
+  ["computer", "⌨ Buyruqlar (terminal)", renderComputer, "Kompyuter"],
+  ["simlab", "🧪 Sinov laboratoriyasi", renderSimLab, "Kompyuter"],
+  ["sandbox", "📦 Xavfsiz kod sinovi", renderSandbox, "Kompyuter"],
+  ["guardian", "🛡 Tizim holati va avtonomlik", renderGuardian, "Tizim va xavfsizlik"],
+  ["diagnostics", "🩺 Diagnostika", renderDiagnostics, "Tizim va xavfsizlik"],
+  ["errors", "❗ Xatolar", renderErrors, "Tizim va xavfsizlik"],
+  ["audit", "📜 Audit jurnali", renderAudit, "Tizim va xavfsizlik"],
+  ["security", "🔐 Xavfsizlik", renderSecurity, "Tizim va xavfsizlik"],
+  ["policy", "📋 Ruxsat qoidalari", renderPolicy, "Tizim va xavfsizlik"],
+  ["agentcmd", "🤝 Agent ruxsatlari", renderAgentCommand, "Tizim va xavfsizlik"],
+  ["devices", "📱 Qurilmalar", renderDevices, "Tizim va xavfsizlik"],
+  ["backups", "💾 Zaxira nusxalar", renderBackups, "Tizim va xavfsizlik"],
+  ["skills", "🧩 Ko'nikmalar fabrikasi", renderSkills, "Tizim va xavfsizlik"],
+  ["plugins", "🔧 Kengaytmalar", renderPlugins, "Tizim va xavfsizlik"],
+  ["tests", "🧪 Testlar va yaxshilash", renderTests, "Tizim va xavfsizlik"],
+  ["settings", "⚙ Sozlamalar", renderSettings, "Tizim va xavfsizlik"],
+  // Menyuda yo'q (boshqa bo'lim bilan bir xil ma'lumot) — eski havolalar ishlashi uchun qoldirilgan
+  ["agentmap", "Agentlar aloqalari", (v) => renderBrainHub(v, "graph", ["agents", "tasks", "skills", "apis"]), ""],
+  ["projmap", "Loyihalar xaritasi", (v) => renderBrainHub(v, "graph", ["projects", "memories", "files", "decisions", "tasks"]), ""],
+  ["kg", "Bilimlar grafi (2D)", renderKG, ""],
+  ["memory", "Xotira (oddiy ro'yxat)", renderMemory, ""],
+  ["agents", "Agentga vazifa berish", renderAgents, ""],
+  ["dag", "Vazifalar grafi", renderDag, ""],
+  ["router", "AI router (eski ko'rinish)", renderRouter, ""],
+  ["superbrain", "Miya boshqaruvi (umumiy)", renderSuperBrain, ""],
+  ["docs", "POS hujjatlari va rejalar", renderDocs, ""],
 ];
 const PLANNED = new Set();
 
 function buildMenu() {
-  $("#menu").innerHTML = SECTIONS.map(([id, name]) =>
-    `<a data-id="${id}">${name}${PLANNED.has(id) ? '<span class="tag">tez orada</span>' : ""}</a>`).join("");
+  const groups = [];
+  SECTIONS.forEach(([id, name, , g]) => { if (!g) return; let x = groups.find((y) => y.g === g); if (!x) groups.push(x = { g, items: [] }); x.items.push([id, name]); });
+  $("#menu").innerHTML = groups.map((x) => `<div class="mgroup">${esc(x.g)}</div>` + x.items.map(([id, name]) =>
+    `<a data-id="${id}">${name}${PLANNED.has(id) ? '<span class="tag">tez orada</span>' : ""}</a>`).join("")).join("");
   $("#menu").onclick = (e) => { const a = e.target.closest("a"); if (a && a.dataset.id) location.hash = a.dataset.id; };
   const theme = () => { try { return localStorage.getItem("theme") || "light"; } catch (er) { return "light"; } };
   const paint = () => { document.documentElement.dataset.theme = theme(); const t = document.getElementById("themetg"); if (t) t.textContent = theme() === "dark" ? "☀️ Och mavzu" : "🌙 Futuristik (qorong'i) mavzu"; };
@@ -156,29 +160,32 @@ async function renderDashboard(root) {
   const v = $("#dashmain");
   brainCompact($("#dashbrain"));
   let tick = 0;
+  const GS = { ok: ["ok", "yaxshi"], warn: ["warn", "e'tibor kerak"], bad: ["bad", "muammo bor"] };
   const draw = async () => {
     if (++tick % 3 === 0) brainCompact($("#dashbrain"));
-    const s = await api("/api/status");
-    const sys = s.system, active = s.agents.filter((a) => a.implemented);
+    const [s, g, p, ms] = await Promise.all([api("/api/status"), api("/api/guardian").catch(() => null), api("/api/proactive").catch(() => ({ items: [] })),
+      api("/api/missions").catch(() => [])]);
     $("#mode").innerHTML = (s.unread_notifications ? `<a href="#notifications" class="pill warn" style="margin-right:6px">🔔 ${s.unread_notifications}</a>` : "") + (s.settings.read_only_mode ? statusPill(true, "Faqat o'qish rejimi") : statusPill(false, "", "O'zgartirish rejimi"));
-    v.innerHTML = `<div class="grid">
-      <div class="card"><h3>AI holati</h3><div class="big">${esc(s.ai.provider)}</div>${statusPill(s.ai.available, "ishlayapti", "mavjud emas")}<div class="muted">${esc(s.ai.note)}</div></div>
-      <div class="card"><h3>Faol model</h3><div class="big">${esc(s.ai.model || "—")}</div></div>
-      <div class="card"><h3>RAM</h3><div class="big">${sys.ram_used_percent}%</div><div class="muted">jami ${sys.ram_total_gb} GB · CPU ${sys.cpu_percent}%</div></div>
-      <div class="card"><h3>Bo'sh disk</h3><div class="big">${sys.disk_free_gb} GB</div><div class="muted">${esc(sys.os)}</div></div>
-      <div class="card"><h3>Agentlar</h3><div class="big">${active.length} / ${s.agents.length}</div><div class="muted">ishlaydigan / jami (qolgani rejada)</div></div>
-      <div class="card"><h3>Kutilayotgan tasdiqlar</h3><div class="big ${s.pending_approvals ? "warn" : ""}">${s.pending_approvals}</div><a href="#approvals">ko'rish →</a></div>
-      <div class="card"><h3>Joriy vazifalar</h3>${s.current_tasks.length ? s.current_tasks.map((t) => `<div>#${t.id} ${esc(t.title)}</div>`).join("") : '<span class="muted">yo\'q</span>'}</div>
-      <div class="card"><h3>Ulanishlar</h3>${Object.entries(s.integrations).map(([k, val]) => `<div>${k}: <span class="muted">${esc(val)}</span></div>`).join("")}
-        <div>vositalar: ${Object.entries(sys.tools).map(([k, ok]) => `<span class="${ok ? "ok" : "muted"}">${k}</span>`).join(" · ")}</div></div>
-    </div>
-    <div class="grid" style="margin-top:14px;grid-template-columns:1fr 1fr">
-      <div class="card"><h3>Oxirgi amallar</h3>${table(s.recent_actions, ["ts", "agent", "action", "risk"])}</div>
-      <div class="card"><h3>Oxirgi xatolar</h3>${s.recent_errors.length ? table(s.recent_errors, ["ts", "module", "message"]) : '<span class="ok">Xato yo\'q</span>'}</div>
-    </div>`;
+    const active = ms.filter((m) => ["running", "paused", "waiting_approval", "needs_input", "pending"].includes(m.status));
+    const cost = g && g.checks.find((c) => c.key === "cost"), ram = g && g.checks.find((c) => c.key === "ram");
+    const tile = (href, title, value, note, cls = "") => `<a class="card tile" href="${href}"><div class="muted small">${title}</div><div class="big ${cls}">${esc(value)}</div><div class="muted small">${esc(note || "")}</div></a>`;
+    v.innerHTML = `<div class="tiles">
+        ${tile("#guardian", "Tizim holati", g ? GS[g.overall][1] : "—", ram ? `RAM ${ram.value}` : "", g ? GS[g.overall][0] : "")}
+        ${tile("#smartrouter", "AI", `${s.ai.provider}`, `${s.ai.model || ""} · ${s.ai.available ? "ishlayapti" : "mavjud emas"}`, s.ai.available ? "ok" : "warn")}
+        ${tile("#mission", "Faol topshiriqlar", active.length, active[0] ? active[0].goal.slice(0, 40) : "hozir yo'q")}
+        ${tile("#approvals", "Tasdiq kutmoqda", s.pending_approvals, s.pending_approvals ? "ko'rib chiqing" : "hammasi joyida", s.pending_approvals ? "warn" : "")}
+        ${tile("#smartrouter", "Bugungi AI xarajati", cost ? cost.value.split("·")[0].replace("bugun", "").trim() : "—", cost ? cost.note : "")}
+        ${tile("#memx", "Xotira", s.memory_count ?? "—", "yozuvlar")}
+      </div>
+      <div class="grid" style="margin-top:14px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr))">
+        <div class="card"><h3>💡 Nima qilish kerak</h3>${p.items.length ? p.items.slice(0, 6).map((i) => `<div class="kv"><span>${esc(i.title)}</span>${i.link ? `<a href="${i.link}">ochish</a>` : ""}</div>`).join("")
+          : '<p class="ok small">Hozircha e\'tibor talab qiladigan narsa yo\'q.</p>'}</div>
+        <div class="card"><h3>🕘 Oxirgi faollik</h3>${s.recent_actions.length ? s.recent_actions.slice(0, 8).map((a) => `<div class="kv small"><span>${esc(a.action)}</span><span class="muted">${esc(String(a.ts).slice(11, 16))}</span></div>`).join("") : '<span class="muted">yo\'q</span>'}</div>
+        ${s.recent_errors.length ? `<div class="card"><h3>❗ Oxirgi xatolar</h3>${s.recent_errors.slice(0, 5).map((e) => `<div class="small"><b>${esc(e.module)}</b>: ${esc(e.message.slice(0, 120))}</div>`).join("")}<a href="#errors">hammasi →</a></div>` : ""}
+      </div>`;
   };
   await draw();
-  timer = setInterval(draw, 5000);
+  timer = setInterval(draw, 8000);
 }
 
 function table(rows, cols) {
@@ -430,7 +437,7 @@ async function renderSecurity(v) {
     <div>Tasdiq talab qilinadi: <b class="ok">${s.require_approval ? "ha" : "yo'q"}</b></div>
     <div>O'qish ruxsati: ${s.allowed_read_dirs.map(esc).join(", ")}</div><div>Yozish ruxsati: ${s.allowed_write_dirs.map(esc).join(", ")}</div>
     <p class="muted">Bu kalitlar (${s.locked_keys.join(", ")}) dashboard yoki JARVIS tomonidan o'zgartirilmaydi — faqat siz settings.json faylini qo'lda tahrirlab.</p></div>
-    <div class="card"><h3>Dashboard PIN'ini almashtirish</h3><input id="pc1" type="password" placeholder="Joriy PIN"><input id="pc2" type="password" placeholder="Yangi PIN" style="margin-top:6px">
+    <div class="card"><h3>Kirish PIN'ini almashtirish</h3><input id="pc1" type="password" placeholder="Joriy PIN"><input id="pc2" type="password" placeholder="Yangi PIN" style="margin-top:6px">
       <div class="row" style="margin-top:8px"><button class="ghost" id="pcgo">Almashtirish</button></div><div id="pcm" class="muted">Almashtirilgach, boshqa barcha sessiyalar bekor bo'ladi.</div></div>
     <div class="card"><h3>Matnni tekshirish</h3><textarea id="t" placeholder="Matn yoki buyruq"></textarea><div class="row" style="margin-top:8px"><button id="c">Tekshirish</button></div><pre id="r" hidden></pre></div></div>`;
   $("#pcgo").onclick = async () => { try { await api("/api/auth/change", { method: "POST", body: { current: $("#pc1").value, new: $("#pc2").value } });

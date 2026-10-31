@@ -10,7 +10,7 @@ const NST = { done: "ok", reused: "ok", running: "ok", pending: "warn", waiting_
 async function renderMissionControl(v) {
   clearInterval(timer);                 // qayta chizishda eski kuzatuvchi taymer qolmasin
   const list = await api("/api/missions");
-  v.innerHTML = `<div class="card"><h3>🎯 Yangi missiya</h3>
+  v.innerHTML = `<div class="card"><h3>🎯 Yangi topshiriq</h3>
       <p class="small muted">Maqsadni yozing — JARVIS tushunadi, bosqichlarga ajratadi, har bosqich xavfini baholaydi. LOW bosqichlar avtomatik bajariladi;
         o'zgartiruvchi, tashqi yoki pullik amallar tasdiqsiz bajarilmaydi. "keyin" — ketma-ket, "hamda" — parallel.</p>
       <textarea id="mgoal" rows="2" placeholder="Masalan: fayllarni ko'rsat keyin savdo hisobotini ko'rsat hamda internetdan qidir: POS tizimlari"></textarea>
@@ -18,7 +18,7 @@ async function renderMissionControl(v) {
         <label class="small">Xarajat limiti</label><input id="mcost" type="number" min="0" step="0.01" value="0" style="max-width:90px">
         <label class="small">Urinishlar</label><input id="matt" type="number" min="1" max="5" value="2" style="max-width:70px">
         <label class="small"><input type="checkbox" id="mauto" checked> xavfsiz bo'lsa avtomatik boshlash</label><button id="mgo">Reja tuzish</button></div><div id="mmsg"></div></div>
-    <div class="card"><h3>Missiyalar</h3>${list.length ? `<table><tr><th>#</th><th>Maqsad</th><th>Holat</th><th>Jarayon</th><th>Yaratilgan</th><th></th></tr>${list.map((m) => `<tr>
+    <div class="card"><h3>Topshiriqlar</h3>${list.length ? `<table><tr><th>#</th><th>Maqsad</th><th>Holat</th><th>Jarayon</th><th>Yaratilgan</th><th></th></tr>${list.map((m) => `<tr>
       <td>${m.id}</td><td>${esc(m.goal.slice(0, 90))}</td><td><span class="pill ${MST[m.status] || ""}">${esc(m.status_label)}</span></td>
       <td><div class="vu" style="width:120px"><i style="width:${m.progress}%"></i></div> ${m.progress}%</td><td class="small">${esc(m.created_at)}</td>
       <td><button class="ghost" data-mo="${m.id}">Ochish</button></td></tr>`).join("")}</table>` : '<p class="muted">Hali missiya yo\'q.</p>'}</div>
@@ -47,7 +47,7 @@ async function mcDetail(el, v, quiet) {
     <div class="small muted">Reja: ${esc(m.plan_note || "")} · limitlar: ${m.max_minutes} daq., ${m.max_cost || "—"} xarajat, ${m.max_attempts} urinish</div>
     ${(m.questions || []).length && m.status === "needs_input" ? `<div class="card" style="margin-top:8px"><b>JARVIS savollari:</b><ul>${m.questions.map((q) => `<li>${esc(q)}</li>`).join("")}</ul>
       <div class="row"><input id="mans" placeholder="Javob / aniqlashtirish"><button id="mansgo">Yuborish va qayta rejalash</button></div></div>` : ""}
-    <div class="row" style="margin-top:8px">${canStart ? act("start", m.started_at ? "▶ Davom ettirish (checkpointdan)" : "▶ Boshlash", "") : ""}
+    <div class="row" style="margin-top:8px">${canStart ? act("start", m.started_at ? "▶ Davom ettirish (saqlangan nuqtadan)" : "▶ Boshlash", "") : ""}
       ${["running", "retrying"].includes(m.status) ? act("pause", "⏸ To'xtatish") : ""}${!["completed", "cancelled"].includes(m.status) ? act("cancel", "✖ Bekor qilish") : ""}
       ${m.status === "waiting_approval" ? '<a href="#approvals">→ Tasdiqlashlar</a>' : ""}</div><div id="mamsg"></div>
     <h3>Reja va bosqichlar</h3><table><tr><th>Bosqich</th><th>Agent</th><th>Xavf</th><th>Holat</th><th>Urinish</th><th>Tekshiruv</th><th></th></tr>
@@ -75,14 +75,14 @@ async function mcDetail(el, v, quiet) {
 async function mcLessons(el) {
   const ls = await api("/api/missions/lessons");
   if (!ls.length || !el.isConnected) return;
-  el.innerHTML = `<div class="card"><h3>🧠 O'rganilgan tajriba (tasdiq kutmoqda)</h3><p class="small muted">Tasdiqlangan xulosalar Procedural Memory'ga yoziladi. JARVIS o'z qoidalarini o'zi o'zgartirmaydi.</p>
+  el.innerHTML = `<div class="card"><h3>🧠 O'rganilgan tajriba (tasdiq kutmoqda)</h3><p class="small muted">Tasdiqlangan xulosalar tajriba xotirasiga yoziladi. JARVIS o'z qoidalarini o'zi o'zgartirmaydi.</p>
     ${ls.map((l) => `<div class="kv"><span>#${l.mission_id}: ${esc(l.content)}</span><span><button class="ghost" data-la="${l.id}" data-ok="1">✅</button><button class="ghost" data-la="${l.id}" data-ok="0">❌</button></span></div>`).join("")}</div>`;
   el.querySelectorAll("[data-la]").forEach((b) => { b.onclick = async () => { await post(`/api/missions/lessons/${b.dataset.la}?accept=${b.dataset.ok === "1"}`); mcLessons(el); }; });
 }
 
 async function renderAgentCommand(v) {
   const profs = await api("/api/permissions/agents");
-  v.innerHTML = `<div class="card"><h3>🤝 Agentlar va ruxsatlar (Permission Manager)</h3>
+  v.innerHTML = `<div class="card"><h3>🤝 Agentlar va ularning ruxsatlari</h3>
     <p class="small muted">Har agentning maksimal ruxsat darajasi, router orqali oladigan model turi, xotiraga kirishi va natijani tekshirish qoidasi.
       Agentlar bir-birining ruxsatini meros qilib ololmaydi; HIGH/CRITICAL amallar har doim tasdiq bilan.</p>
     ${table(profs.map((p) => ({ agent: p.title, kalit: p.key, holat: p.status, "maks. xavf": `${p.max_risk} (${p.max_level})`, amal: p.action, model: p.router_task,

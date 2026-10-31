@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from urllib.parse import urlparse
+import re
 import time
 from datetime import datetime, timezone
 
@@ -160,7 +162,7 @@ class IntegrationHub:
         for k, v in (secrets or {}).items():
             if v in (None, ""):
                 continue
-            if k not in SECRET_FIELDS:
+            if k not in SECRET_FIELDS and not re.fullmatch(r"f_[a-z0-9_]{1,30}", k):     # f_* — sayt tekshiruvi aniqlagan kirish maydonlari
                 raise IntegrationError(f"Noma'lum maxfiy maydon: {k}")
             self.vault.set(cid, k, str(v))
         if secrets and self.core.db.one("SELECT 1 FROM integrations WHERE id=? AND status='connected'", (cid,)):
@@ -451,6 +453,15 @@ class IntegrationHub:
                     except IntegrationError as e:
                         out.append({"conn": c["id"], "error": str(e)})
         return out
+
+    def probe_login(self, url: str) -> dict:
+        """Sayt havolasi → kirish sahifasi va kerakli maydonlar (faqat o'qish). Mos andoza (YesPOS/BITO ...) ham taklif qilinadi."""
+        from .login_probe import probe
+        r = probe(url)
+        dom = r["domain"].lower()
+        r["preset"] = next((k for k, p in PRESETS.items() if p.get("config", {}).get("base_url") and urlparse(p["config"]["base_url"]).netloc.split(".")[-2:] == dom.split(".")[-2:]), None)
+        self.core.audit.log("integration", f"Sayt kirish usuli tekshirildi: {dom} ({len(r['fields'])} maydon)", target=dom, risk="A")
+        return r
 
     def detect(self, **kw) -> dict:
         return detect(**kw)

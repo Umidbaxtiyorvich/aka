@@ -4,10 +4,10 @@ Mavjud modullar ustiga quriladi (takror yaratilmaydi):
 * Reja: Planner (AI faqat matnni bosqichlarga ajratadi, agent va payload qoidalar bilan tanlanadi) + Task Graph (DAG).
 * Bajarish: AgentManager agentlari; har bir xavfli amal agent ichida Approval Engine orqali tasdiq so'raydi.
 * Ruxsat: Permission Manager rejadagi har bir bosqichni oldindan baholaydi (LOW/MEDIUM/HIGH/CRITICAL).
-* Ishonchlilik: holat bazada (checkpoint = har tugagan bosqich), qayta urinish faqat idempotent agentlarda, dead-letter,
+* Ishonchlilik: holat bazada (checkpoint = har tugagan bosqich), qayta urinish faqat idempotent agentlarda, qo'lda ko'rish kerak,
   pauza/davom/bekor, vaqt va xarajat limiti, qayta ishga tushganda tiklash.
 * Tekshirish: har bosqich natijasi agent profilidagi qoida bo'yicha tekshiriladi; tekshirilmagan natija "bajarildi" deyilmaydi.
-* Refleksiya: missiyadan keyin xulosalar — foydalanuvchi tasdiqlasa Procedural Memory'ga yoziladi.
+* Refleksiya: missiyadan keyin xulosalar — foydalanuvchi tasdiqlasa tajriba xotirasiga yoziladi.
 
 Halollik: JARVIS hamma narsani qila olmaydi. Maxsus agenti yo'q bosqich (masalan "sayt dizaynini yarat") Boshqaruvchi
 agentga — AI maslahat/reja matniga tushadi va hisobotda "faqat tavsiya, amal bajarilmadi" deb ko'rsatiladi.
@@ -160,7 +160,7 @@ class MissionEngine:
         if int(self.core.settings.autonomy_level) <= 0:
             raise MissionError("Avtonomlik darajasi 0 (faqat maslahat) — missiya bajarilmaydi, faqat reja ko'rsatiladi")
         self._set(mid, status="running", started_at=m["started_at"] or _now(), stop_reason=None, finished_at=None)
-        self._log(mid, "bajarish", "boshlandi" if not m["started_at"] else "davom ettirildi (oxirgi checkpointdan)")
+        self._log(mid, "bajarish", "boshlandi" if not m["started_at"] else "davom ettirildi (oxirgi saqlangan nuqtadan)")
         self.core.audit.log("user", f"Missiya ishga tushirildi #{mid}", target=f"mission#{mid}", risk="B", approval_status="user_action")
         if background:
             th = threading.Thread(target=self._execute, args=(mid,), daemon=True)
@@ -173,7 +173,7 @@ class MissionEngine:
     def _stop_check(self, mid: int):
         def check():
             if getattr(self.core, "automation_paused", False):
-                return "favqulodda to'xtatish (Guardian / Telegram)"
+                return "favqulodda to'xtatish (Tizim qo'riqchisi / Telegram)"
             m = self.core.db.one("SELECT * FROM missions WHERE id=?", (mid,))
             if m["status"] in ("paused", "cancelled"):
                 return m["stop_reason"] or "foydalanuvchi to'xtatdi"
@@ -291,7 +291,7 @@ class MissionEngine:
             if rule == "sources" and not (res.get("sources") or res.get("results") or res.get("url")):
                 return False, "manba ko'rsatilmagan"
             if rule == "supervisor" and not (res.get("supervisor") or {}).get("ok"):
-                return False, "Supervisor tasdiqlamadi"
+                return False, "Nazoratchi tasdiqlamadi"
             if rule == "text" and not str(res.get("text") or res.get("answer") or "").strip():
                 return False, "javob matni bo'sh"
         return True, "tekshiruvdan o'tdi" + (" (AI maslahati — amal bajarilmagan)" if node["agent"] == "manager" else "")

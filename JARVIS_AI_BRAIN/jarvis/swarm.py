@@ -5,7 +5,7 @@ Qoidalar:
   ruxsatini boshqa agentga o'tkaza olmaydi va o'zi qila olmaydigan ishni boshqasi orqali "chetlab" qildira olmaydi —
   yuboruvchining ruxsat chegarasi ham tekshiriladi (ikkalasidan pasti amal qiladi).
 * Chuqurlik ≤ 3, bitta missiya/zanjir uchun ≤ 20 topshiriq, bir xil (agent, tool, argumentlar) takrori — sikl sifatida rad.
-* Supervisor har natijani tekshiradi: holat, bo'sh natija, xato, tool turiga xos qoida (manba, tasdiq so'rovi yaratilganmi).
+* Nazoratchi har natijani tekshiradi: holat, bo'sh natija, xato, tool turiga xos qoida (manba, tasdiq so'rovi yaratilganmi).
   Tekshiruvdan o'tmagan natija "bajarildi" deyilmaydi.
 * Agentlar o'zaro erkin suhbatlashmaydi (token sarfi yo'q): faqat aniq tool chaqiruvlari.
 """
