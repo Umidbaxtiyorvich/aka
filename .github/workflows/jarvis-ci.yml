@@ -88,6 +88,23 @@ jobs:
           if (-not $ok) { throw "server javob bermadi" }
           if (-not $r.enabled -or $r.pin_set) { throw "kutilmagan auth holati: $($r | ConvertTo-Json)" }
           "Server OK: $($r | ConvertTo-Json -Compress)"
+      - name: Update stops the old running server (venv launcher + its child)
+        shell: powershell
+        run: |
+          $d = "$env:RUNNER_TEMP\jarvis"
+          # Foydalanuvchi holati: server .venv\Scripts\pythonw.exe orqali ishlab turibdi (haqiqiy server — bola jarayon)
+          Start-Process -FilePath "$d\.venv\Scripts\pythonw.exe" -ArgumentList "-m","jarvis.api","--port","8765" -WorkingDirectory $d
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) { Start-Sleep 2; try { Invoke-RestMethod http://127.0.0.1:8765/api/auth/status | Out-Null; $ok = $true; break } catch {} }
+          if (-not $ok) { throw "server ishga tushmadi" }
+          $old = @(Get-NetTCPConnection -LocalPort 8765 -State Listen | ForEach-Object { $_.OwningProcess })
+          "Eski server PID: $old"
+          powershell -ExecutionPolicy Bypass -File JARVIS_AI_BRAIN\install.ps1 -Minimal -NoLaunch -InstallDir $d -Branch "${{ github.ref_name }}"
+          foreach ($p in $old) { if (Get-Process -Id $p -ErrorAction SilentlyContinue) { throw "eski server (PID $p) yangilashdan keyin ham ishlayapti" } }
+          $up = $true
+          try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 http://127.0.0.1:8765/api/auth/status | Out-Null } catch { $up = [bool]$_.Exception.Response }
+          if ($up) { throw "8765 portda eski server hali javob beryapti" }
+          "Eski server to'xtatildi OK"
       - name: Re-run installer keeps data
         shell: powershell
         run: |
@@ -150,4 +167,17 @@ jobs:
           $null = $p2.Handle
           if (-not $p2.WaitForExit(30000)) { throw "ikkinchi ishga tushirish tugamadi" }
           if ($p2.ExitCode -ne 0) { throw "ikkinchi ishga tushirish xato" }
+          if (-not $r.version) { throw "status'da version yo'q" }
+          # Yangilanishdan keyin eski server qolib ketgan holat: diskdagi versiya boshqa — JARVIS.exe serverni qayta ishga tushirishi kerak
+          $init = "$d\jarvis\__init__.py"
+          $orig = Get-Content $init -Raw
+          Set-Content $init ($orig -replace '__version__ = "[^"]+"', '__version__ = "9.9.9"') -NoNewline
+          $p3 = Start-Process "$d\JARVIS.exe" -ArgumentList "--no-browser" -PassThru
+          $null = $p3.Handle
+          if (-not $p3.WaitForExit(120000)) { throw "uchinchi ishga tushirish tugamadi" }
+          Set-Content $init $orig -NoNewline
+          if ($p3.ExitCode -ne 0) { Get-Content "$d\data\logs\server.log" -ErrorAction SilentlyContinue; throw "versiya almashgandan keyin JARVIS.exe kodi $($p3.ExitCode)" }
+          $r3 = Invoke-RestMethod http://127.0.0.1:8765/api/auth/status
+          if ($r3.version -ne "9.9.9") { throw "JARVIS.exe eski serverni almashtirmadi (versiya: $($r3.version))" }
+          "JARVIS.exe eski serverni yangisiga almashtirdi OK"
           Get-Process pythonw -ErrorAction SilentlyContinue | Stop-Process -Force

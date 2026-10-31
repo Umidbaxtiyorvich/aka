@@ -165,4 +165,5 @@ class AuthManager:
         self._meta.pop(token or "", None)
 
     def status(self, token: str | None) -> dict:
-        return {"enabled": self.core.settings.auth_enabled, "pin_set": self.has_pin(), "authenticated": self.check(token)}
+        from . import __version__              # JARVIS.exe / o'rnatuvchi: ishlayotgan server eski versiyami — shu bilan aniqlaydi
+        return {"enabled": self.core.settings.auth_enabled, "pin_set": self.has_pin(), "authenticated": self.check(token), "version": __version__}

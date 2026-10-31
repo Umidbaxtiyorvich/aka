@@ -302,6 +302,8 @@ def test_jarvis3_api(client, core):
     assert client.post("/api/skills", json={"name": "api_skill", "description": "API orqali"}).status_code == 200
     assert client.post("/api/skills/api_skill/test").json()["passed"]
     assert client.post("/api/devices/nope/revoke").status_code == 404
+    from jarvis import __version__
+    assert client.get("/api/auth/status").json()["version"] == __version__     # JARVIS.exe eski serverni shu orqali aniqlaydi
 
 
 def test_device_sessions_list_and_revoke(core):

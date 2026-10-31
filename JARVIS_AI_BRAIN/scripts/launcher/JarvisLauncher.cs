@@ -2,13 +2,16 @@
 // O'rnatuvchi uni Windows'dagi .NET Framework kompilyatori (csc.exe) bilan shu kompyuterning o'zida yig'adi.
 // Nima qiladi: Ollama ishlamayotgan bo'lsa yoqadi -> JARVIS serveri ishlamayotgan bo'lsa oynasiz ishga tushiradi ->
 // tayyor bo'lishini kutadi -> dasturdek alohida oynada (Edge/Chrome --app) ochadi.
+// Yangilangandan keyin eski server qolib ketgan bo'lsa (versiyasi diskdagi koddan farq qilsa) — uni to'xtatib, yangisini yoqadi.
 // Kalitlar: --no-browser (faqat serverni yoqish, CI uchun), --quiet (xato oynasini ko'rsatmaslik).
 // C# 5 (csc v4) bilan mos yozilgan.
 using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Management;
 using System.Net;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -32,6 +35,56 @@ static class JarvisLauncher
             return e.Response != null;
         }
         catch { return false; }
+    }
+
+    static string Get(string url, int timeoutMs)
+    {
+        try
+        {
+            HttpWebRequest r = (HttpWebRequest)WebRequest.Create(url);
+            r.Timeout = timeoutMs;
+            r.Proxy = null;
+            using (HttpWebResponse resp = (HttpWebResponse)r.GetResponse())
+            using (StreamReader sr = new StreamReader(resp.GetResponseStream())) { return sr.ReadToEnd(); }
+        }
+        catch (WebException e)
+        {
+            if (e.Response == null) return null;
+            using (StreamReader sr = new StreamReader(e.Response.GetResponseStream())) { return sr.ReadToEnd(); }
+        }
+        catch { return null; }
+    }
+
+    static string Field(string text, string pattern)
+    {
+        Match m = Regex.Match(text ?? "", pattern);
+        return m.Success ? m.Groups[1].Value : null;
+    }
+
+    // Diskdagi kod versiyasi (jarvis\__init__.py)
+    static string LocalVersion(string root)
+    {
+        try { return Field(File.ReadAllText(Path.Combine(root, @"jarvis\__init__.py")), "__version__\\s*=\\s*\"([^\"]+)\""); }
+        catch { return null; }
+    }
+
+    // Barcha JARVIS server jarayonlarini to'xtatadi (venv ishga tushiruvchisi ham, uning bola jarayoni — haqiqiy server ham)
+    static void StopServers()
+    {
+        try
+        {
+            using (ManagementObjectSearcher s = new ManagementObjectSearcher("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name LIKE 'python%'"))
+            {
+                foreach (ManagementObject o in s.Get())
+                {
+                    string cl = o["CommandLine"] as string;
+                    if (cl == null || cl.IndexOf("jarvis.api", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    try { Process.GetProcessById(Convert.ToInt32(o["ProcessId"])).Kill(); } catch { }
+                }
+            }
+        }
+        catch { }
+        for (int i = 0; i < 40 && Up(Url + "/api/auth/status", 500); i++) Thread.Sleep(250);
     }
 
     static void StartHidden(string exe, string args, string dir)
@@ -102,10 +155,17 @@ static class JarvisLauncher
         string root = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
         string pyw = Path.Combine(root, @".venv\Scripts\pythonw.exe");
 
-        if (Up(Url + "/api/auth/status", 1000))
+        string status = Get(Url + "/api/auth/status", 1500);
+        if (status != null)
         {
-            if (!noBrowser) OpenUi();
-            return 0;
+            string running = Field(status, "\"version\"\\s*:\\s*\"([^\"]+)\"");
+            string local = LocalVersion(root);
+            if (local == null || running == local)
+            {
+                if (!noBrowser) OpenUi();
+                return 0;
+            }
+            StopServers();          // eski versiya ishlayapti (yangilanishdan keyin qolib ketgan) — qayta ishga tushiriladi
         }
         if (!File.Exists(pyw))
         {

@@ -113,13 +113,31 @@ if ($UseGit -and -not (Test-Path (Join-Path $InstallDir ".git"))) {
     & git -C $wt add -A
     if (& git -C $wt status --porcelain) { & git -C $wt -c user.name=JARVIS -c user.email=jarvis@localhost commit -q -m "Yangilash ($Branch)" }
     G worktree remove --force $wt
+    # Yangilanish to'xtab qolsa — jimgina eski versiyada qolmaydi: sabab aniq aytiladi va (roziligingiz bilan)
+    # mahalliy o'zgarishlar alohida zaxira branch'ga saqlanib, GitHub versiyasiga o'tiladi.
+    function ForceUpdate($why) {
+        Say "DIQQAT: $why. Hozircha ESKI versiya qoldi." "Red"
+        if (Ask "Mahalliy o'zgarishlar zaxira branch'ga saqlanib, yangi versiyaga o'tilsinmi?") {
+            $b = "zaxira-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+            G checkout -q -b $b
+            G add -u
+            G commit -q -m "Yangilanishdan oldingi mahalliy o'zgarishlar (zaxira)"
+            G checkout -q -f main
+            G reset -q --hard upstream
+            $global:LASTEXITCODE = 0
+            Say "Yangilandi. Eski mahalliy o'zgarishlar '$b' branch'ida saqlandi." "Green"
+        } else {
+            Say "Yangilanmadi. Keyinroq 'JARVIS yangilash' ni qayta bosib, 'H' deb javob bersangiz yangilanadi." "Yellow"
+        }
+    }
     if (G status --porcelain --untracked-files=no) {
-        Say "Kodda saqlanmagan o'zgarishlar bor - yangilanish o'tkazilmadi (eski versiya ishlayveradi)." "Yellow"
+        G status --short --untracked-files=no | Out-Host
+        ForceUpdate "Kodda saqlanmagan o'zgarishlar bor (yuqoridagi fayllar)"
     } else {
         G merge -q --no-edit upstream
         if ($LASTEXITCODE -ne 0) {
             G merge --abort
-            Say "Yangilanish mahalliy o'zgarishlaringiz bilan to'qnashdi - o'tkazilmadi. Eski versiya ishlayveradi." "Yellow"
+            ForceUpdate "Yangilanish mahalliy o'zgarishlaringiz bilan to'qnashdi"
         }
     }
 } else {
@@ -133,10 +151,27 @@ Remove-Item -Recurse -Force $tmp
 Say "Kod: $InstallDir" "Green"
 
 # --- 3. Virtual muhit va kutubxonalar ---
-# Ishlab turgan eski JARVIS serveri to'xtatiladi: aks holda yangi kod ishlamaydi va .venv band bo'ladi
-Get-CimInstance Win32_Process -Filter "Name like 'python%'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -match "jarvis\.api" -and $_.ExecutablePath -like "$InstallDir*" } |
-    ForEach-Object { Say "Ishlab turgan JARVIS to'xtatilmoqda (PID $($_.ProcessId))..." "Yellow"; Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+# Ishlab turgan eski JARVIS serveri to'xtatiladi: aks holda yangi kod ishlamaydi (eski server javob berishda davom etadi).
+# Muhim: .venv\Scripts\pythonw.exe faqat ishga tushiruvchi — haqiqiy server uning BOLA jarayoni bo'lib, asosiy Python
+# yo'lidan ishlaydi (ExecutablePath o'rnatish papkasida emas). Shuning uchun bola jarayonlar va 8765 portni tinglovchi ham to'xtatiladi.
+function StopJarvis {
+    $all = @(Get-CimInstance Win32_Process -Filter "Name like 'python%'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "jarvis\.api" })
+    $ids = @($all | Where-Object { $_.ExecutablePath -like "$InstallDir*" -or $_.CommandLine -like "*$InstallDir*" } | ForEach-Object { $_.ProcessId })
+    $ids += @($all | Where-Object { $ids -contains $_.ParentProcessId } | ForEach-Object { $_.ProcessId })
+    $own = @()
+    try { $own = @(Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction Stop | ForEach-Object { $_.OwningProcess }) } catch {}
+    $ids += @($all | Where-Object { $own -contains $_.ProcessId } | ForEach-Object { $_.ProcessId })
+    foreach ($id in ($ids | Sort-Object -Unique)) {
+        Say "Ishlab turgan eski JARVIS to'xtatilmoqda (PID $id)..." "Yellow"
+        Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
+    }
+    for ($i = 0; $i -lt 20; $i++) {
+        try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 1 http://127.0.0.1:8765/api/auth/status | Out-Null } catch { if (-not $_.Exception.Response) { return } }
+        Start-Sleep -Milliseconds 500
+    }
+    Say "DIQQAT: 8765 portda boshqa JARVIS hali javob beryapti. Vazifalar menejeridan 'python'/'pythonw' jarayonlarini yoping yoki kompyuterni qayta yoqing." "Red"
+}
+StopJarvis
 Set-Location $InstallDir
 $parts = $Py.Split(" ")
 # Uzilib qolgan o'rnatishdan qolgan buzuq .venv'ni aniqlash va qayta yaratish
@@ -163,6 +198,7 @@ Say "Kutubxonalar o'rnatilmoqda (~60 MB, internetga qarab 2-10 daqiqa). Oynani y
 & $VPy -m pip install -r requirements.txt --disable-pip-version-check --progress-bar on
 if ($LASTEXITCODE -ne 0) { throw "Kutubxonalar o'rnatilmadi (internetni tekshiring)" }
 & $VPy -c "import jarvis.core; print('JARVIS', __import__('jarvis').__version__, 'tayyor')"
+$NewVersion = (& $VPy -c "import jarvis; print(jarvis.__version__)").Trim()
 if ($LASTEXITCODE -ne 0) { throw "JARVIS yuklanmadi" }
 
 # --- 4. Ixtiyoriy komponentlar ---
@@ -224,7 +260,7 @@ $exe = Join-Path $InstallDir "JARVIS.exe"
 if ($csc) {
     $iconArg = @()
     if (Test-Path $icon) { $iconArg = @("/win32icon:$icon") }
-    & $csc /nologo /optimize /target:winexe "/out:$exe" @iconArg /r:System.Windows.Forms.dll /r:System.Drawing.dll (Join-Path $InstallDir "scripts\launcher\JarvisLauncher.cs") | Out-Host
+    & $csc /nologo /optimize /target:winexe "/out:$exe" @iconArg /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll (Join-Path $InstallDir "scripts\launcher\JarvisLauncher.cs") | Out-Host
     if ($LASTEXITCODE -eq 0 -and (Test-Path $exe)) { $launcher = $exe; Say "JARVIS.exe yaratildi: $exe" "Green" }
     else { Say "JARVIS.exe yig'ilmadi - JARVIS.cmd ishlatiladi." "Yellow" }
     $global:LASTEXITCODE = 0
@@ -255,7 +291,7 @@ if (Ask "Windows'ga kirganda JARVIS avtomatik ishga tushsinmi?") {
 }
 
 Say ""
-Say "=== Tayyor ===" "Green"
+Say "=== Tayyor: JARVIS $NewVersion ===" "Green"
 Say "Ochish: ish stolidagi 'JARVIS' belgisi (yoki $launcher). Terminal kerak emas."
 Say "Birinchi kirishda PIN o'rnatasiz. YesPOS: POS ulanishi -> 'YesPOS sozlamasi' -> 'POS'ga kirish'."
 Say "Yangilash: shu buyruqni qayta ishga tushiring (xotira saqlanadi)."
