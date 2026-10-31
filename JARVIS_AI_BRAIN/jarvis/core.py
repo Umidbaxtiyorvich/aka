@@ -141,6 +141,10 @@ class JarvisCore:
         self.researcher = KnowledgeResearcher(self)
         self.business = BusinessCenter(self)
         self.creative = CreativeFactory(self)
+        from .command import CommandCenter
+        from .tools import ToolRegistry
+        self.tools = ToolRegistry(self)
+        self.command = CommandCenter(self)
         self.approvals.on_pending = self.telegram.on_approval_pending
         self.approvals.ttl_hours = int(self.settings.approval_ttl_hours or 0)
         self.approvals.events = self.events
@@ -283,6 +287,10 @@ class JarvisCore:
             intent, conf = intent_mod.detect(text)
         norm = intent_mod.normalize(text)
         out = {"intent": intent, "confidence": conf}
+        from .command import STATUS_RX, STOP_RX
+        if STOP_RX.match(text.strip()) or STATUS_RX.match(text.strip()):      # ovoz/chat: "jarvis to'xtat", "missiya holati"
+            r = self.command.run(text, source="chat")
+            return out | {"text": r["text"], "intent": f"command_{r['kind']}"}
         mm = re.match(r"(?is)^\s*(?:jarvis[,\s]+)?(?:missiya|mission)\s*[:\-]\s*(.+)$", text)
         if mm:                                           # Mission Engine: reja → (xavfsiz bo'lsa) avtomatik boshlash
             m = self.missions.create(mm.group(1), auto_start=True)

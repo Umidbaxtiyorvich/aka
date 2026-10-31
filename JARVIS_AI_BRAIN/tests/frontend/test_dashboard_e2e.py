@@ -401,3 +401,20 @@ def test_delayed_rerender_does_not_wipe_other_section(server, page, core):
     page.wait_for_timeout(2000)                       # BI'ning 1.5 s dagi qayta chizishi o'tib ketsin
     assert page.input_value("#goal") == "fayllarni ko'rsat"
     assert not page.errors, page.errors
+
+
+def test_global_command_bar_and_tools_page(server, page, core):
+    core.memory.add("Chilonzor filiali soat 9 da ochiladi", "knowledge", source="user")
+    page.goto(server + "#settings")
+    page.fill("#gcmd", "chilonzor")
+    page.wait_for_selector("#gres .gi:has-text('Chilonzor')")
+    page.fill("#gcmd", "/holat")
+    page.press("#gcmd", "Enter")
+    page.wait_for_selector("#gres:has-text('avtonomlik Level')")
+    page.goto(server + "#tools")
+    page.wait_for_selector("summary:has-text('Tizim holati')")
+    page.click("summary:has-text('Tizim holati')")
+    page.click("[data-tr='guardian.status']")
+    page.wait_for_selector("#to_guardian_status:has-text('checks')")
+    assert core.tools.calls()[0]["tool"] == "guardian.status"
+    assert not page.errors, page.errors

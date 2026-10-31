@@ -238,3 +238,20 @@ Foydalanuvchi tanlovi: hammasi, Safe siyosati → standart **Level 2**, HIGH ama
 
 Testlar: `tests/test_jarvis3.py` (23 ta) + brauzer testi. Barcha tashqi tizimlar mock; real POS/AI kalitlari bilan sinalmagan.
 Keyingi: Memory Brain (vektor), Computer Use (Windows'da real test), File Intelligence (DOCX/PPTX/OCR), Workflow Studio, bulut media adapterlari, HTTPS.
+
+---
+
+## 9. v1.1.1 — yangilash tuzatildi
+Windows'da `.venv\Scripts\pythonw.exe` faqat ishga tushiruvchi; haqiqiy server — uning bola jarayoni (asosiy Python yo'lidan).
+O'rnatuvchi faqat papka ichidagi jarayonni to'xtatardi → eski server ishlab qolardi, JARVIS.exe esa unga ulanib ESKI versiyani ochardi.
+Endi: ishga tushiruvchi + bola jarayon + 8765 port egasi to'xtatiladi; yangilanish o'tkazib yuborilsa — qizil xabar va zaxira branch bilan
+majburiy yangilash taklifi; `/api/auth/status` versiyani qaytaradi; JARVIS.exe versiya farq qilsa serverni qayta ishga tushiradi.
+Windows CI: "Update stops the old running server" va "JARVIS.exe eski serverni almashtiradi" qadamlari.
+
+## 10. v1.2.0 — Tool Registry va Personal Command Center
+| Modul | Fayl | Nima ishlaydi |
+|---|---|---|
+| Tool Registry | `tools.py` | 14 tool: id, sxema (tur/majburiy/noma'lum argument tekshiruvi), xavf darajasi, kim chaqira oladi (default deny), agent chegarasi, timeout, qayta urinish (faqat idempotent), daqiqalik limit, `tool_calls` audit (argumentlar maskalangan). C–E darajali tool faqat tasdiq so'rovini yaratadi (ro'yxatga olishda majburiy). Level 0 va favqulodda to'xtatishda cheklanadi |
+| Command Center | `command.py`, `dashboard/command.js` | har bo'lim tepasida buyruq satri (Ctrl+K): yozganda global qidiruv (xotira, missiya, vazifa, fayl, ulanish, bildirishnoma, graf, tool), Enter — `/qidir`, `/missiya`, `/holat`, `/to'xtat`, `/davom`, `/hisobot`, `/tool`, yoki oddiy matn → JARVIS chat. Chat/ovozda ham "jarvis to'xtat", "missiya holati" |
+
+Cheklov: agentlar hozircha o'z handlerlari orqali ishlaydi; Tool Registry orqali agentlararo topshiriq — keyingi bosqich (Agent Swarm).

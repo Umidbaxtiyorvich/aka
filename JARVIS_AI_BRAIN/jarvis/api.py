@@ -35,6 +35,7 @@ from .mission import MissionError
 from .assets import AssetError
 from .simlab import SimError
 from .workspace import WorkspaceError
+from .tools import ToolError
 from .memory_import import MAX_UPLOAD as MI_MAX, ImportError_ as MIError
 from .voice_pro import VoiceProError
 from .kgraph import KGError
@@ -52,7 +53,7 @@ from .voice import VoiceError
 
 USER_ERRORS = (ApprovalError, MemoryError_, FileAccessError, ValueError, KeyError, BIError, POSError, ResearchError,
                StudioError, InstagramError, TelegramError, TelephonyError, VoiceError, BrowserError, PlannerError, ImproveError,
-               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError, MissionError, AssetError, SimError, WorkspaceError)
+               DecisionError, SandboxError, BackupError, DagError, KGError, PluginError, ImageGenError, POSSyncError, MCPError, AIError, IntegrationError, VaultError, VoiceProError, HubError, MIError, MissionError, AssetError, SimError, WorkspaceError, ToolError)
 # Sozlamalar API orqali o'zgartirilishi mumkin bo'lgan (xavfsizlikka oid bo'lmagan) kalitlar
 EDITABLE = {"ai_provider", "ollama_url", "ollama_model", "internet_enabled", "browser_allowed_domains", "telegram_notify",
             "pos_site", "pos_connector", "low_stock_threshold", "save_voice_recordings",
@@ -429,6 +430,10 @@ class SkillIn(BaseModel):
     description: str
     permissions: list[str] = []
     use_ai: bool = False
+
+
+class ToolInvokeIn(BaseModel):
+    args: dict = {}
 
 
 class AskIn(BaseModel):
@@ -1321,6 +1326,30 @@ def create_app(core: JarvisCore | None = None) -> FastAPI:
         if not C().auth.revoke(sid):
             raise HTTPException(404, "Sessiya topilmadi")
         return {"ok": True}
+
+    # Tool Registry va Command Center
+    @app.get("/api/tools")
+    def tools_catalog(agent: str | None = None):
+        return C().tools.catalog(agent)
+
+    @app.get("/api/tools/calls")
+    def tools_calls(tool: str | None = None, limit: int = 100):
+        return C().tools.calls(min(limit, 500), tool)
+
+    @app.post("/api/tools/{tool_id}/invoke")
+    def tools_invoke(tool_id: str, body: ToolInvokeIn):
+        return guard(C().tools.invoke, tool_id, body.args, "user")
+
+    @app.get("/api/search")
+    def global_search(q: str = ""):
+        return C().command.search(q)
+
+    @app.post("/api/command")
+    def command(body: SimTextIn):
+        try:
+            return C().command.run(body.text)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
 
     @app.get("/api/permissions/agents")
     def perm_agents():

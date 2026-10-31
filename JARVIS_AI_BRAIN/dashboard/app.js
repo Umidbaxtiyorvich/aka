@@ -58,6 +58,7 @@ const SECTIONS = [
   ["projmap", "Projects Map", (v) => renderBrainHub(v, "graph", ["projects", "memories", "files", "decisions", "tasks"])],
   ["mission", "🎯 Mission Control", renderMissionControl],
   ["agentcmd", "🤝 Agent Command", renderAgentCommand],
+  ["tools", "🧰 Tool Registry", renderTools],
   ["guardian", "🛡 Guardian va Avtonomlik", renderGuardian],
   ["twin", "🪞 Digital Twin", renderTwin],
   ["superbrain", "⚡ Super Brain Control", renderSuperBrain],
